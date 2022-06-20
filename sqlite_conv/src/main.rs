@@ -1,6 +1,6 @@
 extern crate rusqlite;
-extern crate walkdir;
 extern crate tocs;
+extern crate walkdir;
 
 use tocs::cs3::tbl as cs3_tbl;
 use tocs::cs3::tbl::entry_data as cs3_entry_data;
