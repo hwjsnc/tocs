@@ -1,0 +1,23 @@
+[package]
+name = "tocs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "tocs"
+path = "src/lib.rs"
+
+[features]
+default = ["roundtriptest"]
+roundtriptest = [] # test bit-identical roundtrip (read -> write) for all original game tables.
+
+[dependencies]
+lazy_static = "1.4"
+blake2 = "0.10.4"
+hex-literal = "0.3.4"
+
+[dependencies.ioutil]
+path = "../tocs_internal/ioutil"
+
+[dev-dependencies]
+walkdir = "2.3"
