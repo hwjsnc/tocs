@@ -4,7 +4,6 @@ extern crate ioutil;
 extern crate lazy_static;
 extern crate tbl_serialize_derive;
 
-use ioutil::serialize_utf8cstring;
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
 use ioutil::{parse_bytes, parse_eof, parse_le_f32, parse_le_i16, parse_le_i32, parse_le_u16, parse_le_u32, parse_u8, parse_utf8cstring, ParseContext};
 
@@ -62,7 +61,7 @@ pub mod entry_data {
         pub value: i32,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Item {
         pub id: u16,
         pub character_restriction: u16,
@@ -101,7 +100,7 @@ pub mod entry_data {
         pub unknown_data: [u8; 8],
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Magic {
         pub id: u16,
         pub character_restriction: u16,
@@ -129,7 +128,7 @@ pub mod entry_data {
         pub description: String,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct MagicBo {
         pub id: u16,
         pub effects: [Effect; 5],
@@ -149,7 +148,7 @@ pub mod entry_data {
         pub mirage: u16,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Status {
         pub script: String,
         pub texture: String,
@@ -246,7 +245,7 @@ pub mod entry_data {
         pub description: String,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Voice {
         pub unknown_short_1: u16,
         pub unknown_byte: u8,
@@ -256,7 +255,7 @@ pub mod entry_data {
         pub unknown_data: std::vec::Vec<u8>,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Effect {
         pub id: u16,
         pub data: [i32; 3],
@@ -834,6 +833,7 @@ where
     )
     .map_err(SerializeError::WriteError)?;
     // data
+    // TODO: make a macro for this
     match entry {
         Entry::Generic(entry_data::Generic { data, .. }) => {
             out.write(data).map_err(SerializeError::WriteError)?;
@@ -844,358 +844,23 @@ where
         Entry::CompHelpData(data) => {
             data.serialize(out).map_err(SerializeError::WriteError)?;
         }
-        Entry::Item(entry_data::Item {
-            id,
-            character_restriction,
-            flags,
-            r#type,
-            subtype,
-            element,
-            slash,
-            thrust,
-            pierce,
-            strike,
-            unknown_byte,
-            target_type,
-            range,
-            area,
-            unknown_float_1,
-            unknown_float_2,
-            unknown_float_3,
-            effects,
-            str,
-            def,
-            ats,
-            adf,
-            acc,
-            eva,
-            spd,
-            mov,
-            hp,
-            ep,
-            price,
-            carry_limit,
-            sort_id,
-            unknown_short,
-            name,
-            description,
-            unknown_data,
-        }) => {
-            out.write(&id.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&character_restriction.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, flags).map_err(SerializeError::WriteError)?;
-            out.write(&r#type.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&subtype.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&element.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&slash.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&thrust.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&pierce.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&strike.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_byte.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&target_type.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&range.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&area.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_1.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_2.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_3.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            for eff in effects {
-                out.write(&eff.id.to_le_bytes()).map_err(SerializeError::WriteError)?;
-                for x in eff.data {
-                    out.write(&x.to_le_bytes()).map_err(SerializeError::WriteError)?;
-                }
-            }
-            out.write(&str.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&def.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&ats.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&adf.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&acc.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&eva.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&spd.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&mov.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&hp.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&ep.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&price.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&carry_limit.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&sort_id.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_short.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, name).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, description).map_err(SerializeError::WriteError)?;
-            for x in unknown_data {
-                out.write(&x.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            }
+        Entry::Item(data) => {
+            data.serialize(out).map_err(SerializeError::WriteError)?;
         }
-        Entry::Magic(entry_data::Magic {
-            id,
-            character_restriction,
-            flags,
-            category,
-            r#type,
-            element,
-            juna_specific,
-            target_type,
-            target_range,
-            target_size,
-            unknown_float_1,
-            unknown_float_2,
-            unknown_float_3,
-            effects,
-            cast_delay,
-            recovery_delay,
-            cost,
-            unbalance_bonus,
-            break_bonus,
-            level_learn,
-            sort_id,
-            animation,
-            name,
-            description,
-        }) => {
-            out.write(&id.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&character_restriction.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, flags).map_err(SerializeError::WriteError)?;
-            out.write(&category.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&r#type.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&element.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&juna_specific.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&target_type.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&target_range.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&target_size.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_1.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_2.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_3.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            for eff in effects {
-                out.write(&eff.id.to_le_bytes()).map_err(SerializeError::WriteError)?;
-                for x in eff.data {
-                    out.write(&x.to_le_bytes()).map_err(SerializeError::WriteError)?;
-                }
-            }
-            out.write(&cast_delay.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&recovery_delay.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&cost.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unbalance_bonus.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&break_bonus.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&level_learn.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&sort_id.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, animation).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, name).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, description).map_err(SerializeError::WriteError)?;
+        Entry::Magic(data) => {
+            data.serialize(out).map_err(SerializeError::WriteError)?;
         }
-        Entry::MagicBo(entry_data::MagicBo { id, effects, turns }) => {
-            out.write(&id.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            for eff in effects {
-                out.write(&eff.id.to_le_bytes()).map_err(SerializeError::WriteError)?;
-                for x in eff.data {
-                    out.write(&x.to_le_bytes()).map_err(SerializeError::WriteError)?;
-                }
-            }
-            out.write(&turns.to_le_bytes()).map_err(SerializeError::WriteError)?;
+        Entry::MagicBo(data) => {
+            data.serialize(out).map_err(SerializeError::WriteError)?;
         }
         Entry::SlotCost(data) => {
             data.serialize(out).map_err(SerializeError::WriteError)?;
         }
-        Entry::Status(entry_data::Status {
-            script,
-            texture,
-            model,
-            model_scale,
-            camera_pivot_height,
-            hitbox_size,
-            unknown_float_1,
-            unknown_float_2,
-            unknown_float_3,
-            unknown_float_4,
-            unknown_short_1,
-            unknown_short_2,
-            is_female,
-            level,
-            hp_base,
-            hp_growth,
-            max_ep,
-            start_ep,
-            max_cp,
-            start_cp,
-            str_base,
-            str_growth,
-            def_base,
-            def_growth,
-            ats_base,
-            ats_growth,
-            adf_base,
-            adf_growth,
-            dex_base,
-            dex_growth,
-            agl_base,
-            agl_growth,
-            eva,
-            spd_base,
-            spd_growth,
-            mov_base,
-            mov_growth,
-            exp_base,
-            exp_growth,
-            brk_mult_base,
-            brk_mult_growth,
-            earth_efficacy,
-            water_efficacy,
-            fire_efficacy,
-            wind_efficacy,
-            time_efficacy,
-            space_efficacy,
-            mirage_efficacy,
-            psn_efficacy,
-            seal_efficacy,
-            mute_efficacy,
-            blnd_efficacy,
-            slp_efficacy,
-            burn_efficacy,
-            frz_efficacy,
-            petr_efficacy,
-            fnt_efficacy,
-            conf_efficacy,
-            chrm_efficacy,
-            dblw_efficacy,
-            nmr_efficacy,
-            dlay_efficacy,
-            vnsh_efficacy,
-            s_dwn_efficacy,
-            slash_efficacy,
-            thrust_efficacy,
-            pierce_efficacy,
-            strike_efficacy,
-            earth_sepith_base,
-            water_sepith_base,
-            fire_sepith_base,
-            wind_sepith_base,
-            time_sepith_base,
-            space_sepith_base,
-            mirage_sepith_base,
-            sepith_mass_base,
-            earth_sepith_growth,
-            water_sepith_growth,
-            fire_sepith_growth,
-            wind_sepith_growth,
-            time_sepith_growth,
-            space_sepith_growth,
-            mirage_sepith_growth,
-            sepith_mass_growth,
-            drop_id_1,
-            drop_chance_1,
-            drop_id_2,
-            drop_chance_2,
-            unknown_float_5,
-            unknown_float_6,
-            flags,
-            name,
-            description,
-        }) => {
-            serialize_utf8cstring(out, script).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, texture).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, model).map_err(SerializeError::WriteError)?;
-            out.write(&model_scale.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&camera_pivot_height.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&hitbox_size.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_1.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_2.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_3.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_4.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_short_1.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_short_2.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&is_female.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&level.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&hp_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&hp_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&max_ep.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&start_ep.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&max_cp.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&start_cp.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&str_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&str_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&def_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&def_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&ats_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&ats_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&adf_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&adf_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&dex_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&dex_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&agl_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&agl_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&eva.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&spd_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&spd_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&mov_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&mov_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&exp_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&exp_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&brk_mult_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&brk_mult_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&earth_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&water_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&fire_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&wind_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&time_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&space_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&mirage_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&psn_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&seal_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&mute_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&blnd_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&slp_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&burn_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&frz_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&petr_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&fnt_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&conf_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&chrm_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&dblw_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&nmr_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&dlay_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&vnsh_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&s_dwn_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&slash_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&thrust_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&pierce_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&strike_efficacy.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&earth_sepith_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&water_sepith_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&fire_sepith_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&wind_sepith_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&time_sepith_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&space_sepith_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&mirage_sepith_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&sepith_mass_base.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&earth_sepith_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&water_sepith_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&fire_sepith_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&wind_sepith_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&time_sepith_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&space_sepith_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&mirage_sepith_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&sepith_mass_growth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&drop_id_1.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&drop_chance_1.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&drop_id_2.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&drop_chance_2.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_5.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float_6.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, flags).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, name).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, description).map_err(SerializeError::WriteError)?;
+        Entry::Status(data) => {
+            data.serialize(out).map_err(SerializeError::WriteError)?;
         }
-        Entry::Voice(entry_data::Voice {
-            unknown_short_1,
-            unknown_byte,
-            clip,
-            unknown_short_2,
-            unknown_float,
-            unknown_data,
-        }) => {
-            out.write(&unknown_short_1.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_byte.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            serialize_utf8cstring(out, clip).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_short_2.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&unknown_float.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(unknown_data).map_err(SerializeError::WriteError)?;
+        Entry::Voice(data) => {
+            data.serialize(out).map_err(SerializeError::WriteError)?;
         }
     }
     Ok(())

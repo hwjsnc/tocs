@@ -1,10 +1,10 @@
 extern crate ioutil;
 
 use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned};
 use quote::ToTokens as _;
+use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Fields, GenericParam, Generics, };
+use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Fields, GenericParam, Generics};
 
 #[proc_macro_derive(Serialize, attributes(expected_length))]
 pub fn derive_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -27,7 +27,8 @@ pub fn derive_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenStre
                 Ok(())
             }
         }
-    }.into()
+    }
+    .into()
 }
 
 fn add_trait_bounds(mut generics: Generics) -> Generics {
@@ -46,19 +47,17 @@ fn add_write_trait(mut generics: Generics) -> Generics {
 
 fn generate_serialize_statements(data: &Data) -> TokenStream {
     match *data {
-        Data::Struct(ref data) => {
-            match data.fields {
-                Fields::Named(ref fields) => {
-                    let names_with_span = fields.named.iter().map(|f| {
-                        let fieldname = f.ident.as_ref().expect("named identifier");
-                        let span = f.span();
-                        quote_spanned! {span=> self.#fieldname.serialize(out)?;}
-                    });
-                    quote! { #(#names_with_span);* }
-                }
-                _ => unimplemented!(),
+        Data::Struct(ref data) => match data.fields {
+            Fields::Named(ref fields) => {
+                let names_with_span = fields.named.iter().map(|f| {
+                    let fieldname = f.ident.as_ref().expect("named identifier");
+                    let span = f.span();
+                    quote_spanned! {span=> self.#fieldname.serialize(out)?;}
+                });
+                quote! { #(#names_with_span);* }
             }
-        }
+            _ => unimplemented!(),
+        },
         _ => unimplemented!(),
     }
 }

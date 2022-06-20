@@ -320,8 +320,53 @@ impl<W> Serialize<W> for i32 where W: std::io::Write {
     }
 }
 
+impl<W> Serialize<W> for f32 where W: std::io::Write {
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        out.write(&self.to_le_bytes()).map(|_| ())
+    }
+}
+
 impl<W> Serialize<W> for str where W: std::io::Write {
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
         crate::serialize_utf8cstring(out, self)
+    }
+}
+
+impl<W, T, const N: usize> Serialize<W> for &[T; N]
+where 
+    T: Serialize<W>,
+    W: std::io::Write,
+{
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        for x in self.iter() {
+            x.serialize(out)?;
+        }
+        Ok(())
+    }
+}
+
+impl<W, T, const N: usize> Serialize<W> for [T; N]
+where
+    T: Serialize<W>,
+    W: std::io::Write,
+{
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        for x in self.iter() {
+            x.serialize(out)?;
+        }
+        Ok(())
+    }
+}
+
+impl<W, T> Serialize<W> for std::vec::Vec<T>
+where
+    T: Serialize<W>,
+    W: std::io::Write,
+{
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        for x in self.iter() {
+            x.serialize(out)?;
+        }
+        Ok(())
     }
 }
