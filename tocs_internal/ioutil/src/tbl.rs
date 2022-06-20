@@ -445,9 +445,9 @@ impl SerializeLength for str {
     }
 }
 
-impl<T : SerializeLength, const N: usize> SerializeLength for [T; N] {
+impl<T: SerializeLength, const N: usize> SerializeLength for [T; N] {
     fn data_length(&self) -> Option<u16> {
-        let mut sum : Option<u16> = Some(0);
+        let mut sum: Option<u16> = Some(0);
         for x in self.iter() {
             sum = sum?.checked_add(x.data_length()?);
         }
@@ -455,9 +455,9 @@ impl<T : SerializeLength, const N: usize> SerializeLength for [T; N] {
     }
 }
 
-impl<T : SerializeLength> SerializeLength for std::vec::Vec<T> {
+impl<T: SerializeLength> SerializeLength for std::vec::Vec<T> {
     fn data_length(&self) -> Option<u16> {
-        let mut sum : Option<u16> = Some(0);
+        let mut sum: Option<u16> = Some(0);
         for x in self.iter() {
             sum = sum?.checked_add(x.data_length()?);
         }

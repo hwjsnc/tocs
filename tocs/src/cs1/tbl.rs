@@ -31,6 +31,7 @@ pub mod entry_data {
 
     #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Generic {
+        #[serialize(ignore)] // header is serialized separately
         pub header: String,
         pub data: Vec<u8>,
     }
