@@ -14,13 +14,15 @@ use blake2::Digest as _;
 
 use std::vec::Vec;
 
+use tbl_serialize_derive::Serialize;
+
 #[derive(Clone, Debug)]
 pub struct Tbl {
     pub headers: Vec<String>,
     pub entries: Vec<Entry>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Entry {
     Generic(entry_data::Generic),
     CharRevise(entry_data::CharRevise),
@@ -36,8 +38,9 @@ pub enum Entry {
 pub mod entry_data {
     use tbl_serialize_derive::Serialize;
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Generic {
+        #[serialize(ignore)] // we're serializing the header separately
         pub header: String,
         pub data: Vec<u8>,
     }
@@ -833,37 +836,7 @@ where
     )
     .map_err(SerializeError::WriteError)?;
     // data
-    // TODO: make a macro for this
-    match entry {
-        Entry::Generic(entry_data::Generic { data, .. }) => {
-            out.write(data).map_err(SerializeError::WriteError)?;
-        }
-        Entry::CharRevise(data) => {
-            data.serialize(out).map_err(SerializeError::WriteError)?;
-        }
-        Entry::CompHelpData(data) => {
-            data.serialize(out).map_err(SerializeError::WriteError)?;
-        }
-        Entry::Item(data) => {
-            data.serialize(out).map_err(SerializeError::WriteError)?;
-        }
-        Entry::Magic(data) => {
-            data.serialize(out).map_err(SerializeError::WriteError)?;
-        }
-        Entry::MagicBo(data) => {
-            data.serialize(out).map_err(SerializeError::WriteError)?;
-        }
-        Entry::SlotCost(data) => {
-            data.serialize(out).map_err(SerializeError::WriteError)?;
-        }
-        Entry::Status(data) => {
-            data.serialize(out).map_err(SerializeError::WriteError)?;
-        }
-        Entry::Voice(data) => {
-            data.serialize(out).map_err(SerializeError::WriteError)?;
-        }
-    }
-    Ok(())
+    entry.serialize(out).map_err(SerializeError::WriteError)
 }
 
 fn serialized_data_length(entry: &Entry) -> Option<u16> {

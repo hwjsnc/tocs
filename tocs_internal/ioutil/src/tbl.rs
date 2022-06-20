@@ -169,12 +169,18 @@ pub trait TblEntry {
 }
 
 /// Deserialization/parsing trait for entry data (not for higher-level structure)
-pub trait Deserialize where Self: Sized {
+pub trait Deserialize
+where
+    Self: Sized,
+{
     fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail>;
 }
 
 /// Serialization trait for entry data (not for higher-level structure)
-pub trait Serialize<W> where W: std::io::Write {
+pub trait Serialize<W>
+where
+    W: std::io::Write,
+{
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error>;
 }
 
@@ -290,50 +296,71 @@ impl Deserialize for String {
     }
 }
 
-impl<W> Serialize<W> for u8 where W: std::io::Write {
+impl<W> Serialize<W> for u8
+where
+    W: std::io::Write,
+{
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
         out.write(&[*self]).map(|_| ())
     }
 }
 
-impl<W> Serialize<W> for u16 where W: std::io::Write {
+impl<W> Serialize<W> for u16
+where
+    W: std::io::Write,
+{
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
         out.write(&self.to_le_bytes()).map(|_| ())
     }
 }
 
-impl<W> Serialize<W> for u32 where W: std::io::Write {
+impl<W> Serialize<W> for u32
+where
+    W: std::io::Write,
+{
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
         out.write(&self.to_le_bytes()).map(|_| ())
     }
 }
 
-impl<W> Serialize<W> for i16 where W: std::io::Write {
+impl<W> Serialize<W> for i16
+where
+    W: std::io::Write,
+{
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
         out.write(&self.to_le_bytes()).map(|_| ())
     }
 }
 
-impl<W> Serialize<W> for i32 where W: std::io::Write {
+impl<W> Serialize<W> for i32
+where
+    W: std::io::Write,
+{
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
         out.write(&self.to_le_bytes()).map(|_| ())
     }
 }
 
-impl<W> Serialize<W> for f32 where W: std::io::Write {
+impl<W> Serialize<W> for f32
+where
+    W: std::io::Write,
+{
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
         out.write(&self.to_le_bytes()).map(|_| ())
     }
 }
 
-impl<W> Serialize<W> for str where W: std::io::Write {
+impl<W> Serialize<W> for str
+where
+    W: std::io::Write,
+{
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
         crate::serialize_utf8cstring(out, self)
     }
 }
 
 impl<W, T, const N: usize> Serialize<W> for &[T; N]
-where 
+where
     T: Serialize<W>,
     W: std::io::Write,
 {
