@@ -17,9 +17,9 @@ roundtrip-cs3 = [] # test bit-identical roundtrip (read -> write) for cs3.
 lazy_static = "1.4"
 blake2 = "0.10.4"
 hex-literal = "0.3.4"
+ioutil = { path = "../tocs_internal/ioutil" }
+tbl_serialize_derive = { path = "../tocs_internal/tbl_serialize_derive" }
 
-[dependencies.ioutil]
-path = "../tocs_internal/ioutil"
 
 [dev-dependencies]
 walkdir = "2.3"

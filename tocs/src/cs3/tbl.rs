@@ -2,6 +2,7 @@ extern crate blake2;
 extern crate hex_literal;
 extern crate ioutil;
 extern crate lazy_static;
+extern crate tbl_serialize_derive;
 
 use ioutil::serialize_utf8cstring;
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
@@ -34,6 +35,7 @@ pub enum Entry {
 }
 
 pub mod entry_data {
+    use tbl_serialize_derive::Serialize;
 
     #[derive(Clone, Debug)]
     pub struct Generic {
@@ -134,7 +136,7 @@ pub mod entry_data {
         pub turns: u16,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct SlotCost {
         pub slot_position: u16,
         pub level: u16,
@@ -258,35 +260,6 @@ pub mod entry_data {
     pub struct Effect {
         pub id: u16,
         pub data: [i32; 3],
-    }
-
-    impl<W> ioutil::tbl::Serialize<W> for SlotCost
-    where
-        W: std::io::Write,
-    {
-        fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
-            let SlotCost {
-                slot_position,
-                level,
-                earth,
-                water,
-                fire,
-                wind,
-                time,
-                space,
-                mirage,
-            } = self;
-            out.write(&slot_position.to_le_bytes())?;
-            out.write(&level.to_le_bytes())?;
-            out.write(&earth.to_le_bytes())?;
-            out.write(&water.to_le_bytes())?;
-            out.write(&fire.to_le_bytes())?;
-            out.write(&wind.to_le_bytes())?;
-            out.write(&time.to_le_bytes())?;
-            out.write(&space.to_le_bytes())?;
-            out.write(&mirage.to_le_bytes())?;
-            Ok(())
-        }
     }
 }
 
