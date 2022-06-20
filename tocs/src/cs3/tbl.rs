@@ -993,11 +993,6 @@ mod test {
     extern crate walkdir;
 
     #[test]
-    fn test() {
-        todo!("test each individual table header type?");
-    }
-
-    #[test]
     #[cfg(feature = "roundtrip-cs3")]
     fn test_roundtrip() {
         let cwd = std::env::current_dir().unwrap();

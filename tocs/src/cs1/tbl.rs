@@ -1,7 +1,17 @@
 extern crate ioutil;
+extern crate tbl_serialize_derive;
+extern crate tbl_serialize_length_derive;
+
 use ioutil::parse_eof;
 use ioutil::serialize_utf8cstring;
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
+
+use ioutil::tbl::Deserialize as _;
+use ioutil::tbl::Serialize as _;
+use ioutil::tbl::SerializeLength as _;
+
+use tbl_serialize_derive::Serialize;
+use tbl_serialize_length_derive::SerializeLength;
 
 use std::vec::Vec;
 
@@ -10,13 +20,16 @@ pub struct Tbl {
     pub entries: Vec<Entry>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, SerializeLength)]
 pub enum Entry {
     Generic(entry_data::Generic),
 }
 
 pub mod entry_data {
-    #[derive(Clone, Debug)]
+    use tbl_serialize_derive::Serialize;
+    use tbl_serialize_length_derive::SerializeLength;
+
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Generic {
         pub header: String,
         pub data: Vec<u8>,
@@ -88,36 +101,21 @@ where
     // header name and size
     serialize_utf8cstring(out, entry.header_name()).map_err(SerializeError::WriteError)?;
     out.write(
-        &serialized_data_length(entry)
+        &entry
+            .data_length()
             .ok_or_else(|| SerializeError::EntryTooLong {
                 header: entry.header_name().to_string(),
             })?
             .to_le_bytes(),
     )
     .map_err(SerializeError::WriteError)?;
-    match entry {
-        Entry::Generic(entry_data::Generic { data, .. }) => {
-            out.write(data).map_err(SerializeError::WriteError)?;
-        }
-    }
-    Ok(())
-}
-
-fn serialized_data_length(entry: &Entry) -> Option<u16> {
-    match entry {
-        Entry::Generic(entry_data::Generic { data, .. }) => data.len().try_into().ok(),
-    }
+    entry.serialize(out).map_err(SerializeError::WriteError)
 }
 
 #[cfg(test)]
 mod test {
-    use super::load;
+    use super::{load, store};
     extern crate walkdir;
-
-    #[test]
-    fn test() {
-        todo!("test each individual table header type?");
-    }
 
     #[test]
     #[cfg(feature = "roundtrip-cs1")]
@@ -131,11 +129,9 @@ mod test {
                 println!("{}", path.display());
                 let original = std::fs::read(path).unwrap();
                 // TODO: fix data files
-                let _tbl = load(&original)/*.unwrap()*/;
-                /*
+                let tbl = load(&original).unwrap();
                 let serialized = store(&tbl).unwrap();
                 assert_eq!(original, serialized);
-                */
             }
         }
     }
