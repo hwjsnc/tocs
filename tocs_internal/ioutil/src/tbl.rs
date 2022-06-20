@@ -184,6 +184,11 @@ where
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error>;
 }
 
+/// Trait for the length of entry data
+pub trait SerializeLength {
+    fn data_length(&self) -> Option<u16>;
+}
+
 pub type EntryParseFun<E> = fn(ParseContext) -> Result<(E, ParseContext), ParseErrorDetail>;
 
 /// Parse tbl entries using the provided functions.
@@ -395,5 +400,67 @@ where
             x.serialize(out)?;
         }
         Ok(())
+    }
+}
+
+impl SerializeLength for u8 {
+    fn data_length(&self) -> Option<u16> {
+        std::mem::size_of::<Self>().try_into().ok()
+    }
+}
+
+impl SerializeLength for u16 {
+    fn data_length(&self) -> Option<u16> {
+        std::mem::size_of::<Self>().try_into().ok()
+    }
+}
+
+impl SerializeLength for u32 {
+    fn data_length(&self) -> Option<u16> {
+        std::mem::size_of::<Self>().try_into().ok()
+    }
+}
+
+impl SerializeLength for i16 {
+    fn data_length(&self) -> Option<u16> {
+        std::mem::size_of::<Self>().try_into().ok()
+    }
+}
+
+impl SerializeLength for i32 {
+    fn data_length(&self) -> Option<u16> {
+        std::mem::size_of::<Self>().try_into().ok()
+    }
+}
+
+impl SerializeLength for f32 {
+    fn data_length(&self) -> Option<u16> {
+        std::mem::size_of::<Self>().try_into().ok()
+    }
+}
+
+impl SerializeLength for str {
+    fn data_length(&self) -> Option<u16> {
+        1_u16.checked_add(self.len().try_into().ok()?)
+    }
+}
+
+impl<T : SerializeLength, const N: usize> SerializeLength for [T; N] {
+    fn data_length(&self) -> Option<u16> {
+        let mut sum : Option<u16> = Some(0);
+        for x in self.iter() {
+            sum = sum?.checked_add(x.data_length()?);
+        }
+        sum
+    }
+}
+
+impl<T : SerializeLength> SerializeLength for std::vec::Vec<T> {
+    fn data_length(&self) -> Option<u16> {
+        let mut sum : Option<u16> = Some(0);
+        for x in self.iter() {
+            sum = sum?.checked_add(x.data_length()?);
+        }
+        sum
     }
 }

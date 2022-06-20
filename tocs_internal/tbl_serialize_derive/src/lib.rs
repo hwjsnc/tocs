@@ -45,30 +45,28 @@ fn add_write_trait(mut generics: Generics) -> Generics {
     generics
 }
 
+fn attr_ignore(attr: &syn::Attribute) -> bool {
+    let token_serialize = Ident::new("serialize", Span::call_site());
+    let token_ignore = Ident::new("ignore", Span::call_site());
+
+    let path_ignore = |nested_meta: &syn::NestedMeta| matches!(nested_meta, syn::NestedMeta::Meta(m) if m.path().get_ident() == Some(&token_ignore));
+
+    let meta = attr.parse_meta().expect("attribute meta");
+    match meta {
+        Meta::List(list) => list.path.get_ident() == Some(&token_serialize) && list.nested.iter().any(path_ignore),
+        Meta::Path(_) => unimplemented!(),
+        Meta::NameValue(_) => unimplemented!(),
+    }
+}
+
 fn generate_serialize_statements(data: &Data) -> TokenStream {
     match *data {
         Data::Struct(ref data) => match data.fields {
             Fields::Named(ref fields) => {
-                let token_serialize = Ident::new("serialize", Span::call_site());
-                let token_ignore = Ident::new("ignore", Span::call_site());
-                let ignore = |attr: &syn::Attribute| {
-                    let meta = attr.parse_meta().expect("attribute");
-                    match meta {
-                        Meta::List(list) => {
-                            list.path.get_ident() == Some(&token_serialize)
-                                && list
-                                    .nested
-                                    .iter()
-                                    .any(|nested| matches!(nested, syn::NestedMeta::Meta(m) if m.path().get_ident() == Some(&token_ignore)))
-                        }
-                        Meta::Path(_) => unimplemented!(),
-                        Meta::NameValue(_) => unimplemented!(),
-                    }
-                };
                 let names_with_span = fields.named.iter().filter_map(|f| {
                     let fieldname = f.ident.as_ref().expect("named identifier");
                     let span = f.span();
-                    if f.attrs.iter().any(ignore) {
+                    if f.attrs.iter().any(attr_ignore) {
                         None
                     } else {
                         Some(quote_spanned! {span=> self.#fieldname.serialize(out)?;})
@@ -97,3 +95,58 @@ fn generate_serialize_statements(data: &Data) -> TokenStream {
         _ => unimplemented!(),
     }
 }
+
+/*
+fn generate_data_length_expr(data: &Data) -> TokenStream {
+    match *data {
+        Data::Struct(ref data) => match data.fields {
+            Fields::Named(ref fields) => {
+                let token_serialize = Ident::new("serialize", Span::call_site());
+                let token_ignore = Ident::new("ignore", Span::call_site());
+                let ignore = |attr: &syn::Attribute| {
+                    let meta = attr.parse_meta().expect("attribute");
+                    match meta {
+                        Meta::List(list) => {
+                            list.path.get_ident() == Some(&token_serialize)
+                                && list
+                                    .nested
+                                    .iter()
+                                    .any(|nested| matches!(nested, syn::NestedMeta::Meta(m) if m.path().get_ident() == Some(&token_ignore)))
+                        }
+                        Meta::Path(_) => unimplemented!(),
+                        Meta::NameValue(_) => unimplemented!(),
+                    }
+                };
+                let add_statements = fields.named.iter().filter_map(|f| {
+                    let fieldname = f.ident.as_ref().expect("named identifier");
+                    let span = f.span();
+                    if f.attrs.iter().any(ignore) {
+                        None
+                    } else {
+                        Some(quote_spanned! {span=> sum = sum?.checked_add(self.#fieldname.data_length()?);})
+                    }
+                });
+                quote! { let mut sum : Option<u16> = Some(0); #(#add_statements);* sum }
+            }
+            _ => unimplemented!(),
+        },
+        Data::Enum(ref data) => {
+            // Note: we don't try to serialize general enums.
+            // We only care about the general "Entry" enum which is a tagged union of all entry types (e.g. "item", "magic", "voice", "char_revise").
+            // The tbl serialization code must add a header (header name and entry length), which is outside the scope of this macro.
+            // The macro only "peeks" into each variant and calls .serialize() on the variant field (singular).
+            let names_with_spans = data.variants.iter().map(|f| {
+                let variantname = &f.ident;
+                let span = f.span();
+                quote_spanned! {span=> #variantname}
+            });
+            quote! {
+                match self {
+                    #(Self::#names_with_spans(data) => data.data_length()),*
+                }
+            }
+        }
+        _ => unimplemented!(),
+    }
+}
+*/

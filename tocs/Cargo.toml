@@ -19,6 +19,7 @@ blake2 = "0.10.4"
 hex-literal = "0.3.4"
 ioutil = { path = "../tocs_internal/ioutil" }
 tbl_serialize_derive = { path = "../tocs_internal/tbl_serialize_derive" }
+tbl_serialize_length_derive = { path = "../tocs_internal/tbl_serialize_length_derive" }
 
 
 [dev-dependencies]

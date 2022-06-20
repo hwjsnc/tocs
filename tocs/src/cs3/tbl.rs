@@ -3,18 +3,21 @@ extern crate hex_literal;
 extern crate ioutil;
 extern crate lazy_static;
 extern crate tbl_serialize_derive;
+extern crate tbl_serialize_length_derive;
 
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
 use ioutil::{parse_bytes, parse_eof, parse_le_f32, parse_le_i16, parse_le_i32, parse_le_u16, parse_le_u32, parse_u8, parse_utf8cstring, ParseContext};
 
 use ioutil::tbl::Deserialize as _;
 use ioutil::tbl::Serialize as _;
+use ioutil::tbl::SerializeLength as _;
 
 use blake2::Digest as _;
 
 use std::vec::Vec;
 
 use tbl_serialize_derive::Serialize;
+use tbl_serialize_length_derive::SerializeLength;
 
 #[derive(Clone, Debug)]
 pub struct Tbl {
@@ -22,7 +25,7 @@ pub struct Tbl {
     pub entries: Vec<Entry>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, SerializeLength)]
 pub enum Entry {
     Generic(entry_data::Generic),
     CharRevise(entry_data::CharRevise),
@@ -37,15 +40,16 @@ pub enum Entry {
 
 pub mod entry_data {
     use tbl_serialize_derive::Serialize;
+    use tbl_serialize_length_derive::SerializeLength;
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Generic {
         #[serialize(ignore)] // we're serializing the header separately
         pub header: String,
         pub data: Vec<u8>,
     }
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct CharRevise {
         pub char: String,
         pub hp: u16,
@@ -57,14 +61,14 @@ pub mod entry_data {
         pub brk: u16,
     }
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct CompHelpData {
         pub r#type: u16,
         pub text: String,
         pub value: i32,
     }
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Item {
         pub id: u16,
         pub character_restriction: u16,
@@ -103,7 +107,7 @@ pub mod entry_data {
         pub unknown_data: [u8; 8],
     }
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Magic {
         pub id: u16,
         pub character_restriction: u16,
@@ -131,14 +135,14 @@ pub mod entry_data {
         pub description: String,
     }
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct MagicBo {
         pub id: u16,
         pub effects: [Effect; 5],
         pub turns: u16,
     }
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct SlotCost {
         pub slot_position: u16,
         pub level: u16,
@@ -151,7 +155,7 @@ pub mod entry_data {
         pub mirage: u16,
     }
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Status {
         pub script: String,
         pub texture: String,
@@ -248,7 +252,7 @@ pub mod entry_data {
         pub description: String,
     }
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Voice {
         pub unknown_short_1: u16,
         pub unknown_byte: u8,
@@ -258,7 +262,7 @@ pub mod entry_data {
         pub unknown_data: std::vec::Vec<u8>,
     }
 
-    #[derive(Clone, Debug, Serialize)]
+    #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Effect {
         pub id: u16,
         pub data: [i32; 3],
@@ -825,10 +829,12 @@ fn serialize_entry<W>(out: &mut W, entry: &Entry) -> Result<(), SerializeError>
 where
     W: std::io::Write,
 {
-    // header name & size
+    // header name
     ioutil::serialize_utf8cstring(out, entry.header_name()).map_err(SerializeError::WriteError)?;
+    // data length
     out.write(
-        &serialized_data_length(entry)
+        &entry
+            .data_length()
             .ok_or_else(|| SerializeError::EntryTooLong {
                 header: entry.header_name().to_string(),
             })?
@@ -837,34 +843,6 @@ where
     .map_err(SerializeError::WriteError)?;
     // data
     entry.serialize(out).map_err(SerializeError::WriteError)
-}
-
-fn serialized_data_length(entry: &Entry) -> Option<u16> {
-    match entry {
-        Entry::Generic(entry_data::Generic { data, .. }) => data.len().try_into().ok(),
-        Entry::CharRevise(entry_data::CharRevise { char, .. }) => char.len().try_into().ok().and_then(|n: u16| n.checked_add(15)),
-        Entry::CompHelpData(entry_data::CompHelpData { text, .. }) => text.len().try_into().ok().and_then(|n: u16| n.checked_add(7)),
-        Entry::Item(entry_data::Item { flags, name, description, .. }) => [flags.len(), name.len(), description.len()].iter().fold(Some(142), |sum, n| sum?.checked_add((*n).try_into().ok()?)),
-        Entry::Magic(entry_data::Magic {
-            flags, animation, name, description, ..
-        }) => [flags.len(), animation.len(), name.len(), description.len()]
-            .iter()
-            .fold(Some(110), |sum, n| sum?.checked_add((*n).try_into().ok()?)),
-        Entry::MagicBo(_) => Some(74),
-        Entry::SlotCost(_) => Some(18),
-        Entry::Status(entry_data::Status {
-            script,
-            texture,
-            model,
-            flags,
-            name,
-            description,
-            ..
-        }) => [script.len(), texture.len(), model.len(), flags.len(), name.len(), description.len()]
-            .iter()
-            .fold(Some(203), |sum, n| sum?.checked_add((*n).try_into().ok()?)),
-        Entry::Voice(entry_data::Voice { clip, unknown_data, .. }) => [clip.len(), unknown_data.len()].iter().fold(Some(10), |sum, n| sum?.checked_add((*n).try_into().ok()?)),
-    }
 }
 
 pub fn fix(data: &[u8]) -> std::vec::Vec<u8> {

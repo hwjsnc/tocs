@@ -122,6 +122,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tbl_serialize_length_derive"
+version = "0.1.0"
+dependencies = [
+ "ioutil",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "tocs"
 version = "0.1.0"
 dependencies = [
@@ -130,6 +140,7 @@ dependencies = [
  "ioutil",
  "lazy_static",
  "tbl_serialize_derive",
+ "tbl_serialize_length_derive",
  "walkdir",
 ]
 
