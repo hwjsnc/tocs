@@ -43,7 +43,7 @@ pub mod entry_data {
         pub data: Vec<u8>,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct CharRevise {
         pub char: String,
         pub hp: u16,
@@ -55,7 +55,7 @@ pub mod entry_data {
         pub brk: u16,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct CompHelpData {
         pub r#type: u16,
         pub text: String,
@@ -838,29 +838,11 @@ where
         Entry::Generic(entry_data::Generic { data, .. }) => {
             out.write(data).map_err(SerializeError::WriteError)?;
         }
-        Entry::CharRevise(entry_data::CharRevise {
-            char,
-            hp,
-            str,
-            def,
-            ats,
-            adf,
-            spd,
-            brk,
-        }) => {
-            ioutil::serialize_utf8cstring(out, char).map_err(SerializeError::WriteError)?;
-            out.write(&hp.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&str.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&def.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&ats.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&adf.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&spd.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&brk.to_le_bytes()).map_err(SerializeError::WriteError)?;
+        Entry::CharRevise(data) => {
+            data.serialize(out).map_err(SerializeError::WriteError)?;
         }
-        Entry::CompHelpData(entry_data::CompHelpData { r#type, text, value }) => {
-            out.write(&r#type.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            ioutil::serialize_utf8cstring(out, text).map_err(SerializeError::WriteError)?;
-            out.write(&value.to_le_bytes()).map_err(SerializeError::WriteError)?;
+        Entry::CompHelpData(data) => {
+            data.serialize(out).map_err(SerializeError::WriteError)?;
         }
         Entry::Item(entry_data::Item {
             id,
