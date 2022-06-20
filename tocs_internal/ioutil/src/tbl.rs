@@ -168,6 +168,16 @@ pub trait TblEntry {
     fn new_generic(header_name: &str, data: &[u8]) -> Self;
 }
 
+/// Deserialization/parsing trait for entry data (not for higher-level structure)
+pub trait Deserialize where Self: Sized {
+    fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail>;
+}
+
+/// Serialization trait for entry data (not for higher-level structure)
+pub trait Serialize<W> where W: std::io::Write {
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error>;
+}
+
 pub type EntryParseFun<E> = fn(ParseContext) -> Result<(E, ParseContext), ParseErrorDetail>;
 
 /// Parse tbl entries using the provided functions.
@@ -242,4 +252,76 @@ pub fn parse_entries<'a, E: TblEntry>(
         ctx = entry_ctx;
     }
     Ok((entries, ctx))
+}
+
+impl Deserialize for u8 {
+    fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail> {
+        crate::parse_u8(ctx).map_err(ParseErrorDetail::Primitive)
+    }
+}
+
+impl Deserialize for u16 {
+    fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail> {
+        crate::parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)
+    }
+}
+
+impl Deserialize for u32 {
+    fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail> {
+        crate::parse_le_u32(ctx).map_err(ParseErrorDetail::Primitive)
+    }
+}
+
+impl Deserialize for i16 {
+    fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail> {
+        crate::parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)
+    }
+}
+
+impl Deserialize for i32 {
+    fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail> {
+        crate::parse_le_i32(ctx).map_err(ParseErrorDetail::Primitive)
+    }
+}
+
+impl Deserialize for String {
+    fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail> {
+        crate::parse_utf8cstring(ctx).map(|(s, ctx)| (s.into_owned(), ctx)).map_err(ParseErrorDetail::Primitive)
+    }
+}
+
+impl<W> Serialize<W> for u8 where W: std::io::Write {
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        out.write(&[*self]).map(|_| ())
+    }
+}
+
+impl<W> Serialize<W> for u16 where W: std::io::Write {
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        out.write(&self.to_le_bytes()).map(|_| ())
+    }
+}
+
+impl<W> Serialize<W> for u32 where W: std::io::Write {
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        out.write(&self.to_le_bytes()).map(|_| ())
+    }
+}
+
+impl<W> Serialize<W> for i16 where W: std::io::Write {
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        out.write(&self.to_le_bytes()).map(|_| ())
+    }
+}
+
+impl<W> Serialize<W> for i32 where W: std::io::Write {
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        out.write(&self.to_le_bytes()).map(|_| ())
+    }
+}
+
+impl<W> Serialize<W> for str where W: std::io::Write {
+    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+        crate::serialize_utf8cstring(out, self)
+    }
 }

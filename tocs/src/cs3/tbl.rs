@@ -7,6 +7,9 @@ use ioutil::serialize_utf8cstring;
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
 use ioutil::{parse_bytes, parse_eof, parse_le_f32, parse_le_i16, parse_le_i32, parse_le_u16, parse_le_u32, parse_u8, parse_utf8cstring, ParseContext};
 
+use ioutil::tbl::Deserialize as _;
+use ioutil::tbl::Serialize as _;
+
 use blake2::Digest as _;
 
 use std::vec::Vec;
@@ -256,6 +259,35 @@ pub mod entry_data {
         pub id: u16,
         pub data: [i32; 3],
     }
+
+    impl<W> ioutil::tbl::Serialize<W> for SlotCost
+    where
+        W: std::io::Write,
+    {
+        fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
+            let SlotCost {
+                slot_position,
+                level,
+                earth,
+                water,
+                fire,
+                wind,
+                time,
+                space,
+                mirage,
+            } = self;
+            out.write(&slot_position.to_le_bytes())?;
+            out.write(&level.to_le_bytes())?;
+            out.write(&earth.to_le_bytes())?;
+            out.write(&water.to_le_bytes())?;
+            out.write(&fire.to_le_bytes())?;
+            out.write(&wind.to_le_bytes())?;
+            out.write(&time.to_le_bytes())?;
+            out.write(&space.to_le_bytes())?;
+            out.write(&mirage.to_le_bytes())?;
+            Ok(())
+        }
+    }
 }
 
 impl Entry {
@@ -365,10 +397,10 @@ fn parse_CompHelpData_data(ctx: ParseContext) -> Result<(Entry, ParseContext), P
 }
 
 fn parse_item_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
-    let (id, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (character_restriction, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (flags, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (r#type, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
+    let (id, ctx) = u16::deserialize(ctx)?;
+    let (character_restriction, ctx) = u16::deserialize(ctx)?;
+    let (flags, ctx) = String::deserialize(ctx)?;
+    let (r#type, ctx) = u16::deserialize(ctx)?;
     let (subtype, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (element, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (slash, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
@@ -404,12 +436,12 @@ fn parse_item_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErro
     for x in unknown_data.iter_mut() {
         (*x, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
         /*
-        TODO: unknown content error
-        if ctx.strict && *x != 0 {
-        if *x != 0
-            return nom::combinator::fail(rest); // TODO: proper error code
-        }}
-        */
+                TODO: unknown content error
+                if ctx.strict && *x != 0 {
+                if *x != 0
+        n           return nom::combinator::fail(rest); // TODO: proper error code
+                }}
+                */
     }
     Ok((
         Entry::Item(entry_data::Item {
@@ -1003,26 +1035,8 @@ where
             }
             out.write(&turns.to_le_bytes()).map_err(SerializeError::WriteError)?;
         }
-        Entry::SlotCost(entry_data::SlotCost {
-            slot_position,
-            level,
-            earth,
-            water,
-            fire,
-            wind,
-            time,
-            space,
-            mirage,
-        }) => {
-            out.write(&slot_position.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&level.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&earth.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&water.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&fire.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&wind.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&time.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&space.to_le_bytes()).map_err(SerializeError::WriteError)?;
-            out.write(&mirage.to_le_bytes()).map_err(SerializeError::WriteError)?;
+        Entry::SlotCost(data) => {
+            data.serialize(out).map_err(SerializeError::WriteError)?;
         }
         Entry::Status(entry_data::Status {
             script,
