@@ -1,7 +1,7 @@
 extern crate ioutil;
+use ioutil::parse_eof;
+use ioutil::serialize_utf8cstring;
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
-use ioutil::{parse_eof};
-use ioutil::{serialize_utf8cstring};
 
 use std::vec::Vec;
 
@@ -116,11 +116,11 @@ mod test {
 
     #[test]
     fn test() {
-        // TODO: test each individual table header type
+        todo!("test each individual table header type?");
     }
 
     #[test]
-    #[cfg(feature = "roundtriptest")]
+    #[cfg(feature = "roundtrip-cs1")]
     fn test_roundtrip() {
         let cwd = std::env::current_dir().unwrap();
         let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs1/data/text/"));

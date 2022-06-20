@@ -1,11 +1,11 @@
 extern crate blake2;
 extern crate hex_literal;
-extern crate lazy_static;
 extern crate ioutil;
+extern crate lazy_static;
 
-use ioutil::{parse_bytes, parse_eof, parse_le_f32, parse_le_i16, parse_le_i32, parse_le_u16, parse_le_u32, parse_u8, parse_utf8cstring, ParseContext};
-use ioutil::{ serialize_utf8cstring };
+use ioutil::serialize_utf8cstring;
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
+use ioutil::{parse_bytes, parse_eof, parse_le_f32, parse_le_i16, parse_le_i32, parse_le_u16, parse_le_u32, parse_u8, parse_utf8cstring, ParseContext};
 
 use blake2::Digest as _;
 
@@ -1409,11 +1409,11 @@ mod test {
 
     #[test]
     fn test() {
-        // TODO: test each individual table header type
+        todo!("test each individual table header type?");
     }
 
     #[test]
-    #[cfg(feature = "roundtriptest")]
+    #[cfg(feature = "roundtrip-cs3")]
     fn test_roundtrip() {
         let cwd = std::env::current_dir().unwrap();
         let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs3/data/text/"));

@@ -8,8 +8,10 @@ name = "tocs"
 path = "src/lib.rs"
 
 [features]
-default = ["roundtriptest"]
-roundtriptest = [] # test bit-identical roundtrip (read -> write) for all original game tables.
+default = ["roundtrip-cs1", "roundtrip-cs2", "roundtrip-cs3"]
+roundtrip-cs1 = [] # test bit-identical roundtrip (read -> write) for cs1.
+roundtrip-cs2 = [] # test bit-identical roundtrip (read -> write) for cs2.
+roundtrip-cs3 = [] # test bit-identical roundtrip (read -> write) for cs3.
 
 [dependencies]
 lazy_static = "1.4"
