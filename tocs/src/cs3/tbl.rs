@@ -106,7 +106,8 @@ pub mod entry_data {
         pub unknown_short: u16,
         pub name: String,
         pub description: String,
-        pub unknown_data: [u8; 8],
+        #[deserialize(length = 8)]
+        pub unknown_data: std::vec::Vec<u8>,
     }
 
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
@@ -311,14 +312,14 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
     type ParseFun = ioutil::tbl::EntryParseFun<Entry>;
     lazy_static::lazy_static! {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [
-                ("char_revise", (|ctx| entry_data::CharRevise::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::CharRevise(data), ctx)))) as ParseFun),
-                ("CompHelpData", (|ctx| entry_data::CompHelpData::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::CompHelpData(data), ctx)))) as ParseFun),
-                ("item", (|ctx| entry_data::Item::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::Item(data), ctx)))) as ParseFun),
-                ("magic", (|ctx| entry_data::Magic::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::Magic(data), ctx)))) as ParseFun),
-                ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::MagicBo(data), ctx)))) as ParseFun),
-                ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::SlotCost(data), ctx)))) as ParseFun),
-                ("status", (|ctx| entry_data::Status::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::Status(data), ctx)))) as ParseFun),
-                ("voice", (|ctx| entry_data::Voice::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::Voice(data), ctx)))) as ParseFun),
+                ("char_revise", (|ctx| entry_data::CharRevise::deserialize(ctx).map(|(data, ctx)| (Entry::CharRevise(data), ctx))) as ParseFun),
+                ("CompHelpData", (|ctx| entry_data::CompHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::CompHelpData(data), ctx))) as ParseFun),
+                ("item", (|ctx| entry_data::Item::deserialize(ctx).map(|(data, ctx)| (Entry::Item(data), ctx))) as ParseFun),
+                ("magic", (|ctx| entry_data::Magic::deserialize(ctx).map(|(data, ctx)| (Entry::Magic(data), ctx))) as ParseFun),
+                ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).map(|(data, ctx)| (Entry::MagicBo(data), ctx))) as ParseFun),
+                ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).map(|(data, ctx)| (Entry::SlotCost(data), ctx))) as ParseFun),
+                ("status", (|ctx| entry_data::Status::deserialize(ctx).map(|(data, ctx)| (Entry::Status(data), ctx))) as ParseFun),
+                ("voice", (|ctx| entry_data::Voice::deserialize(ctx).map(|(data, ctx)| (Entry::Voice(data), ctx))) as ParseFun),
             ].into_iter().collect();
     }
 

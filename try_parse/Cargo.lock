@@ -112,6 +112,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tbl_deserialize_derive"
+version = "0.1.0"
+dependencies = [
+ "ioutil",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "tbl_serialize_derive"
 version = "0.1.0"
 dependencies = [
@@ -139,6 +149,7 @@ dependencies = [
  "hex-literal",
  "ioutil",
  "lazy_static",
+ "tbl_deserialize_derive",
  "tbl_serialize_derive",
  "tbl_serialize_length_derive",
 ]
