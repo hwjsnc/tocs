@@ -295,6 +295,12 @@ impl Deserialize for i32 {
     }
 }
 
+impl Deserialize for f32 {
+    fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail> {
+        crate::parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)
+    }
+}
+
 impl Deserialize for String {
     fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail> {
         crate::parse_utf8cstring(ctx).map(|(s, ctx)| (s.into_owned(), ctx)).map_err(ParseErrorDetail::Primitive)

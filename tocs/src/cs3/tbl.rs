@@ -2,9 +2,9 @@ extern crate blake2;
 extern crate hex_literal;
 extern crate ioutil;
 extern crate lazy_static;
+extern crate tbl_deserialize_derive;
 extern crate tbl_serialize_derive;
 extern crate tbl_serialize_length_derive;
-extern crate tbl_deserialize_derive;
 
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
 use ioutil::{parse_bytes, parse_eof, parse_le_f32, parse_le_i16, parse_le_i32, parse_le_u16, parse_le_u32, parse_u8, parse_utf8cstring, ParseContext};
@@ -255,13 +255,14 @@ pub mod entry_data {
         pub description: String,
     }
 
-    #[derive(Clone, Debug, Serialize, SerializeLength)]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Voice {
         pub unknown_short_1: u16,
         pub unknown_byte: u8,
         pub clip: String,
         pub unknown_short_2: u16,
         pub unknown_float: f32,
+        #[deserialize(length = 12)]
         pub unknown_data: std::vec::Vec<u8>,
     }
 
@@ -318,7 +319,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("magicbo", parse_magicbo_data as ParseFun),
                 ("SlotCost", parse_SlotCost_data as ParseFun),
                 ("status", parse_status_data as ParseFun),
-                ("voice", parse_voice_data as ParseFun),
+                ("voice", (|ctx| entry_data::Voice::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::Voice(data), ctx)))) as ParseFun),
             ].into_iter().collect();
     }
 
@@ -747,26 +748,6 @@ fn parse_status_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseEr
             flags: flags.into_owned(),
             name: name.into_owned(),
             description: description.into_owned(),
-        }),
-        ctx,
-    ))
-}
-
-fn parse_voice_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
-    let (unknown_short_1, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_byte, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (clip, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_short_2, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_data, ctx) = parse_bytes(ctx, 12).map_err(ParseErrorDetail::Primitive)?;
-    Ok((
-        Entry::Voice(entry_data::Voice {
-            unknown_short_1,
-            unknown_byte,
-            clip: clip.to_string(),
-            unknown_short_2,
-            unknown_float,
-            unknown_data: unknown_data.to_vec(),
         }),
         ctx,
     ))
