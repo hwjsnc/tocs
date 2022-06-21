@@ -7,7 +7,7 @@ extern crate tbl_serialize_derive;
 extern crate tbl_serialize_length_derive;
 
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
-use ioutil::{parse_bytes, parse_eof, parse_le_f32, parse_le_i16, parse_le_i32, parse_le_u16, parse_le_u32, parse_u8, parse_utf8cstring, ParseContext};
+use ioutil::{parse_eof, ParseContext};
 
 use ioutil::tbl::Deserialize as _;
 use ioutil::tbl::Serialize as _;
@@ -17,7 +17,6 @@ use blake2::Digest as _;
 
 use std::vec::Vec;
 
-use tbl_deserialize_derive::Deserialize;
 use tbl_serialize_derive::Serialize;
 use tbl_serialize_length_derive::SerializeLength;
 
@@ -52,7 +51,7 @@ pub mod entry_data {
         pub data: Vec<u8>,
     }
 
-    #[derive(Clone, Debug, Serialize, SerializeLength)]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct CharRevise {
         pub char: String,
         pub hp: u16,
@@ -64,14 +63,14 @@ pub mod entry_data {
         pub brk: u16,
     }
 
-    #[derive(Clone, Debug, Serialize, SerializeLength)]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct CompHelpData {
         pub r#type: u16,
         pub text: String,
         pub value: i32,
     }
 
-    #[derive(Clone, Debug, Serialize, SerializeLength)]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Item {
         pub id: u16,
         pub character_restriction: u16,
@@ -110,7 +109,7 @@ pub mod entry_data {
         pub unknown_data: [u8; 8],
     }
 
-    #[derive(Clone, Debug, Serialize, SerializeLength)]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Magic {
         pub id: u16,
         pub character_restriction: u16,
@@ -138,14 +137,14 @@ pub mod entry_data {
         pub description: String,
     }
 
-    #[derive(Clone, Debug, Serialize, SerializeLength)]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct MagicBo {
         pub id: u16,
         pub effects: [Effect; 5],
         pub turns: u16,
     }
 
-    #[derive(Clone, Debug, Serialize, SerializeLength)]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct SlotCost {
         pub slot_position: u16,
         pub level: u16,
@@ -158,7 +157,7 @@ pub mod entry_data {
         pub mirage: u16,
     }
 
-    #[derive(Clone, Debug, Serialize, SerializeLength)]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Status {
         pub script: String,
         pub texture: String,
@@ -312,13 +311,13 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
     type ParseFun = ioutil::tbl::EntryParseFun<Entry>;
     lazy_static::lazy_static! {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [
-                ("char_revise", parse_char_revise_data as ParseFun),
-                ("CompHelpData", parse_CompHelpData_data as ParseFun),
-                ("item", parse_item_data as ParseFun),
-                ("magic", parse_magic_data as ParseFun),
-                ("magicbo", parse_magicbo_data as ParseFun),
-                ("SlotCost", parse_SlotCost_data as ParseFun),
-                ("status", parse_status_data as ParseFun),
+                ("char_revise", (|ctx| entry_data::CharRevise::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::CharRevise(data), ctx)))) as ParseFun),
+                ("CompHelpData", (|ctx| entry_data::CompHelpData::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::CompHelpData(data), ctx)))) as ParseFun),
+                ("item", (|ctx| entry_data::Item::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::Item(data), ctx)))) as ParseFun),
+                ("magic", (|ctx| entry_data::Magic::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::Magic(data), ctx)))) as ParseFun),
+                ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::MagicBo(data), ctx)))) as ParseFun),
+                ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::SlotCost(data), ctx)))) as ParseFun),
+                ("status", (|ctx| entry_data::Status::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::Status(data), ctx)))) as ParseFun),
                 ("voice", (|ctx| entry_data::Voice::deserialize(ctx).and_then(|(data, ctx)| Ok((Entry::Voice(data), ctx)))) as ParseFun),
             ].into_iter().collect();
     }
@@ -338,419 +337,6 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
         entries,
     };
     Ok(tbl)
-}
-
-fn parse_char_revise_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
-    let (char, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (hp, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (str, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (def, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (ats, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (adf, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (spd, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (brk, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    Ok((
-        Entry::CharRevise(entry_data::CharRevise {
-            char: char.to_string(),
-            hp,
-            str,
-            def,
-            ats,
-            adf,
-            spd,
-            brk,
-        }),
-        ctx,
-    ))
-}
-
-#[allow(non_snake_case)]
-fn parse_CompHelpData_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
-    let (r#type, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (text, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (value, ctx) = parse_le_i32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    Ok((
-        Entry::CompHelpData(entry_data::CompHelpData {
-            r#type,
-            text: text.to_string(),
-            value,
-        }),
-        ctx,
-    ))
-}
-
-fn parse_item_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
-    let (id, ctx) = u16::deserialize(ctx)?;
-    let (character_restriction, ctx) = u16::deserialize(ctx)?;
-    let (flags, ctx) = String::deserialize(ctx)?;
-    let (r#type, ctx) = u16::deserialize(ctx)?;
-    let (subtype, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (element, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (slash, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (thrust, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (pierce, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (strike, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_byte, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (target_type, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (range, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (area, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_1, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_2, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_3, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (effects, ctx) = <[entry_data::Effect; 5]>::deserialize(ctx)?;
-    let (str, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (def, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (ats, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (adf, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (acc, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (eva, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (spd, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (mov, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (hp, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (ep, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (price, ctx) = parse_le_u32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (carry_limit, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (sort_id, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_short, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (name, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (description, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let mut ctx = ctx;
-    let mut unknown_data: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 0]; // TODO: replace with vector
-    for x in unknown_data.iter_mut() {
-        (*x, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-        /*
-                TODO: unknown content error
-                if ctx.strict && *x != 0 {
-                if *x != 0
-        n           return nom::combinator::fail(rest); // TODO: proper error code
-                }}
-                */
-    }
-    Ok((
-        Entry::Item(entry_data::Item {
-            id,
-            character_restriction,
-            flags: flags.to_string(),
-            r#type,
-            subtype,
-            element,
-            slash,
-            thrust,
-            pierce,
-            strike,
-            unknown_byte,
-            target_type,
-            range,
-            area,
-            unknown_float_1,
-            unknown_float_2,
-            unknown_float_3,
-            effects,
-            str,
-            def,
-            ats,
-            adf,
-            acc,
-            eva,
-            spd,
-            mov,
-            hp,
-            ep,
-            price,
-            carry_limit,
-            sort_id,
-            unknown_short,
-            name: name.to_string(),
-            description: description.to_string(),
-            unknown_data,
-        }),
-        ctx,
-    ))
-}
-
-fn parse_magic_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
-    let (id, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (character_restriction, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (flags, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (category, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (r#type, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (element, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (juna_specific, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (target_type, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (target_range, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (target_size, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_1, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_2, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_3, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (effects, ctx) = <[entry_data::Effect; 5]>::deserialize(ctx)?;
-    let (cast_delay, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (recovery_delay, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (cost, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unbalance_bonus, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (break_bonus, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (level_learn, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (sort_id, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (animation, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (name, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (description, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    Ok((
-        Entry::Magic(entry_data::Magic {
-            id,
-            character_restriction,
-            flags: flags.to_string(),
-            category,
-            r#type,
-            element,
-            juna_specific,
-            target_type,
-            target_range,
-            target_size,
-            unknown_float_1,
-            unknown_float_2,
-            unknown_float_3,
-            effects,
-            cast_delay,
-            recovery_delay,
-            cost,
-            unbalance_bonus,
-            break_bonus,
-            level_learn,
-            sort_id,
-            animation: animation.to_string(),
-            name: name.to_string(),
-            description: description.to_string(),
-        }),
-        ctx,
-    ))
-}
-
-fn parse_magicbo_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
-    let (id, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (effects, ctx) = <[entry_data::Effect; 5]>::deserialize(ctx)?;
-    let (turns, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    Ok((Entry::MagicBo(entry_data::MagicBo { id, effects, turns }), ctx))
-}
-
-#[allow(non_snake_case)]
-fn parse_SlotCost_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
-    let (slot_position, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (level, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (earth, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (water, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (fire, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (wind, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (time, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (space, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (mirage, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    Ok((
-        Entry::SlotCost(entry_data::SlotCost {
-            slot_position,
-            level,
-            earth,
-            water,
-            fire,
-            wind,
-            time,
-            space,
-            mirage,
-        }),
-        ctx,
-    ))
-}
-
-fn parse_status_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
-    let (script, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (texture, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (model, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (model_scale, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (camera_pivot_height, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (hitbox_size, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_1, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_2, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_3, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_4, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_short_1, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_short_2, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (is_female, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (level, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (hp_base, ctx) = parse_le_u32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (hp_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (max_ep, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (start_ep, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (max_cp, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (start_cp, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (str_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (str_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (def_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (def_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (ats_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (ats_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (adf_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (adf_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (dex_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (dex_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (agl_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (agl_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (eva, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (spd_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (spd_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (mov_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (mov_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (exp_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (exp_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (brk_mult_base, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (brk_mult_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (earth_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (water_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (fire_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (wind_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (time_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (space_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (mirage_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (psn_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (seal_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (mute_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (blnd_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (slp_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (burn_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (frz_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (petr_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (fnt_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (conf_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (chrm_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (dblw_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (nmr_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (dlay_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (vnsh_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (s_dwn_efficacy, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (slash_efficacy, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (thrust_efficacy, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (pierce_efficacy, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (strike_efficacy, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (earth_sepith_base, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (water_sepith_base, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (fire_sepith_base, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (wind_sepith_base, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (time_sepith_base, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (space_sepith_base, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (mirage_sepith_base, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (sepith_mass_base, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (earth_sepith_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (water_sepith_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (fire_sepith_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (wind_sepith_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (time_sepith_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (space_sepith_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (mirage_sepith_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (sepith_mass_growth, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (drop_id_1, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (drop_chance_1, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (drop_id_2, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (drop_chance_2, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_5, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (unknown_float_6, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (flags, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (name, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (description, ctx) = parse_utf8cstring(ctx).map_err(ParseErrorDetail::Primitive)?;
-
-    Ok((
-        Entry::Status(entry_data::Status {
-            script: script.into_owned(),
-            texture: texture.into_owned(),
-            model: model.into_owned(),
-            model_scale,
-            camera_pivot_height,
-            hitbox_size,
-            unknown_float_1,
-            unknown_float_2,
-            unknown_float_3,
-            unknown_float_4,
-            unknown_short_1,
-            unknown_short_2,
-            is_female,
-            level,
-            hp_base,
-            hp_growth,
-            max_ep,
-            start_ep,
-            max_cp,
-            start_cp,
-            str_base,
-            str_growth,
-            def_base,
-            def_growth,
-            ats_base,
-            ats_growth,
-            adf_base,
-            adf_growth,
-            dex_base,
-            dex_growth,
-            agl_base,
-            agl_growth,
-            eva,
-            spd_base,
-            spd_growth,
-            mov_base,
-            mov_growth,
-            exp_base,
-            exp_growth,
-            brk_mult_base,
-            brk_mult_growth,
-            earth_efficacy,
-            water_efficacy,
-            fire_efficacy,
-            wind_efficacy,
-            time_efficacy,
-            space_efficacy,
-            mirage_efficacy,
-            psn_efficacy,
-            seal_efficacy,
-            mute_efficacy,
-            blnd_efficacy,
-            slp_efficacy,
-            burn_efficacy,
-            frz_efficacy,
-            petr_efficacy,
-            fnt_efficacy,
-            conf_efficacy,
-            chrm_efficacy,
-            dblw_efficacy,
-            nmr_efficacy,
-            dlay_efficacy,
-            vnsh_efficacy,
-            s_dwn_efficacy,
-            slash_efficacy,
-            thrust_efficacy,
-            pierce_efficacy,
-            strike_efficacy,
-            earth_sepith_base,
-            water_sepith_base,
-            fire_sepith_base,
-            wind_sepith_base,
-            time_sepith_base,
-            space_sepith_base,
-            mirage_sepith_base,
-            sepith_mass_base,
-            earth_sepith_growth,
-            water_sepith_growth,
-            fire_sepith_growth,
-            wind_sepith_growth,
-            time_sepith_growth,
-            space_sepith_growth,
-            mirage_sepith_growth,
-            sepith_mass_growth,
-            drop_id_1,
-            drop_chance_1,
-            drop_id_2,
-            drop_chance_2,
-            unknown_float_5,
-            unknown_float_6,
-            flags: flags.into_owned(),
-            name: name.into_owned(),
-            description: description.into_owned(),
-        }),
-        ctx,
-    ))
 }
 
 pub fn store(tbl: &Tbl) -> Result<std::vec::Vec<u8>, SerializeError> {
