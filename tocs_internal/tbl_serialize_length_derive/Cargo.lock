@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tbl_serialize_derive"
+name = "tbl_serialize_length_derive"
 version = "0.1.0"
 dependencies = [
  "ioutil",

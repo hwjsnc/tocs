@@ -4,6 +4,7 @@ extern crate ioutil;
 extern crate lazy_static;
 extern crate tbl_serialize_derive;
 extern crate tbl_serialize_length_derive;
+extern crate tbl_deserialize_derive;
 
 use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
 use ioutil::{parse_bytes, parse_eof, parse_le_f32, parse_le_i16, parse_le_i32, parse_le_u16, parse_le_u32, parse_u8, parse_utf8cstring, ParseContext};
@@ -16,6 +17,7 @@ use blake2::Digest as _;
 
 use std::vec::Vec;
 
+use tbl_deserialize_derive::Deserialize;
 use tbl_serialize_derive::Serialize;
 use tbl_serialize_length_derive::SerializeLength;
 
@@ -39,6 +41,7 @@ pub enum Entry {
 }
 
 pub mod entry_data {
+    use tbl_deserialize_derive::Deserialize;
     use tbl_serialize_derive::Serialize;
     use tbl_serialize_length_derive::SerializeLength;
 
@@ -262,7 +265,7 @@ pub mod entry_data {
         pub unknown_data: std::vec::Vec<u8>,
     }
 
-    #[derive(Clone, Debug, Serialize, SerializeLength)]
+    #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, SerializeLength)]
     pub struct Effect {
         pub id: u16,
         pub data: [i32; 3],
@@ -393,7 +396,7 @@ fn parse_item_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErro
     let (unknown_float_1, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (unknown_float_2, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (unknown_float_3, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (effects, ctx) = parse_effects(ctx)?;
+    let (effects, ctx) = <[entry_data::Effect; 5]>::deserialize(ctx)?;
     let (str, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (def, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (ats, ctx) = parse_le_i16(ctx).map_err(ParseErrorDetail::Primitive)?;
@@ -478,7 +481,7 @@ fn parse_magic_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErr
     let (unknown_float_1, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (unknown_float_2, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (unknown_float_3, ctx) = parse_le_f32(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (effects, ctx) = parse_effects(ctx)?;
+    let (effects, ctx) = <[entry_data::Effect; 5]>::deserialize(ctx)?;
     let (cast_delay, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (recovery_delay, ctx) = parse_u8(ctx).map_err(ParseErrorDetail::Primitive)?;
     let (cost, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
@@ -522,7 +525,7 @@ fn parse_magic_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErr
 
 fn parse_magicbo_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErrorDetail> {
     let (id, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-    let (effects, ctx) = parse_effects(ctx)?;
+    let (effects, ctx) = <[entry_data::Effect; 5]>::deserialize(ctx)?;
     let (turns, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
     Ok((Entry::MagicBo(entry_data::MagicBo { id, effects, turns }), ctx))
 }
@@ -767,24 +770,6 @@ fn parse_voice_data(ctx: ParseContext) -> Result<(Entry, ParseContext), ParseErr
         }),
         ctx,
     ))
-}
-
-fn parse_effects(ctx: ParseContext) -> Result<([entry_data::Effect; 5], ParseContext), ParseErrorDetail> {
-    let mut ctx = ctx;
-    let mut effects = [
-        entry_data::Effect { id: 0, data: [0, 0, 0] },
-        entry_data::Effect { id: 0, data: [0, 0, 0] },
-        entry_data::Effect { id: 0, data: [0, 0, 0] },
-        entry_data::Effect { id: 0, data: [0, 0, 0] },
-        entry_data::Effect { id: 0, data: [0, 0, 0] },
-    ];
-    for eff in &mut effects {
-        (eff.id, ctx) = parse_le_u16(ctx).map_err(ParseErrorDetail::Primitive)?;
-        for x in &mut eff.data {
-            (*x, ctx) = parse_le_i32(ctx).map_err(ParseErrorDetail::Primitive)?;
-        }
-    }
-    Ok((effects, ctx))
 }
 
 pub fn store(tbl: &Tbl) -> Result<std::vec::Vec<u8>, SerializeError> {

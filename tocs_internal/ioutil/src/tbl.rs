@@ -301,6 +301,17 @@ impl Deserialize for String {
     }
 }
 
+impl<T: Deserialize + Default + Copy, const N: usize> Deserialize for [T; N] {
+    fn deserialize(ctx: ParseContext) -> Result<(Self, ParseContext), ParseErrorDetail> {
+        let mut ctx = ctx;
+        let mut arr = [T::default(); N];
+        for x in arr.iter_mut() {
+            (*x, ctx) = T::deserialize(ctx)?;
+        }
+        Ok((arr, ctx))
+    }
+}
+
 impl<W> Serialize<W> for u8
 where
     W: std::io::Write,
@@ -361,19 +372,6 @@ where
 {
     fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
         crate::serialize_utf8cstring(out, self)
-    }
-}
-
-impl<W, T, const N: usize> Serialize<W> for &[T; N]
-where
-    T: Serialize<W>,
-    W: std::io::Write,
-{
-    fn serialize(&self, out: &mut W) -> Result<(), std::io::Error> {
-        for x in self.iter() {
-            x.serialize(out)?;
-        }
-        Ok(())
     }
 }
 
