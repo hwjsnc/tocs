@@ -2,7 +2,6 @@ extern crate ioutil;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
-use quote::ToTokens as _;
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Fields, GenericParam, Generics, Ident, Lit, Meta, NestedMeta};
