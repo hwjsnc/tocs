@@ -6,6 +6,113 @@ use tocs::cs3::tbl as cs3_tbl;
 use tocs::cs3::tbl::entry_data as cs3_entry_data;
 use tocs::cs3::tbl::Entry as CS3Entry;
 
+#[cfg(test)]
+pub mod test {
+    extern crate sqliteio;
+    use sqliteio::SqliteIO as _;
+    extern crate sqliteio_derive;
+    use sqliteio_derive::SqliteIO;
+
+    pub fn sqlite_schema<T: sqliteio::SqliteIO>() -> String {
+        let s = format!(
+            "create table {} (\n{}\n)",
+            T::sqlite_table(),
+            T::sqlite_columns().iter().map(|c| format!("  '{c}'")).collect::<std::vec::Vec<_>>().join(",\n")
+        );
+        println!("{s}");
+        s
+    }
+
+    pub fn insert_unsafe(db: &rusqlite::Connection, table: &str, values: &[&dyn rusqlite::ToSql]) -> rusqlite::Result<usize> {
+        // WARNING: The following could be extremely dangerous in a general settings:
+        // We are interpolating the 'table' string directly into the sql statement, without sanitization.
+        // This bears the risk of SQL injection.
+        // Since the table names all come from an attribute which we supply ourselves in the source code, this should not become a problem.
+        let s = format!(
+            "insert into {} values ({})",
+            table,
+            (0..values.len()).map(|i| format!("?{}", i + 1)).collect::<std::vec::Vec<_>>().join(", ")
+        );
+        db.execute(&s, values)
+    }
+
+    pub fn select_one_unsafe<T: sqliteio::SqliteIO>(db: &rusqlite::Connection) -> rusqlite::Result<T> {
+        let s = format!("select * from {}", T::sqlite_table());
+        db.query_row(&s, [], |row| Ok(T::sqlite_row_read(row, 0)?.0))
+    }
+
+    #[derive(Debug, PartialEq, SqliteIO)]
+    #[sqlite(table = "[test table]")]
+    struct Test {
+        a: u32,
+        foo: std::vec::Vec<u8>,
+        bars: [f32; 4],
+        z: String,
+    }
+
+    #[test]
+    fn test() {
+        assert_eq!(Test::sqlite_table(), "[test table]");
+        assert_eq!(Test::sqlite_columns(), vec!["a", "foo", "bars (1)", "bars (2)", "bars (3)", "bars (4)", "z",]);
+
+        let db = rusqlite::Connection::open(":memory:").unwrap();
+        db.execute(&sqlite_schema::<Test>(), []).unwrap();
+
+        let x = Test {
+            a: 17,
+            foo: vec![1, 2, 3, 4, 5],
+            bars: [0.1, 0.2, 0.3, 0.4],
+            z: "hallo welt".into(),
+        };
+        insert_unsafe(&db, Test::sqlite_table(), &x.sqlite_to_tup()).unwrap();
+        let y = select_one_unsafe::<Test>(&db).unwrap();
+        assert_eq!(x, y);
+    }
+
+    #[test]
+    fn test2() {
+        let x = [1, 2, 3, 4];
+        assert_eq!(<[u8; 4]>::sqlite_columns(), vec!["(1)", "(2)", "(3)", "(4)"])
+    }
+
+    #[derive(Clone, Copy, Default, SqliteIO)]
+    #[sqlite(table = "")]
+    struct Data {
+        id: u16,
+        args: [u8; 3],
+    }
+
+    #[derive(SqliteIO)]
+    #[sqlite(table = "second_test_table")]
+    struct Foo {
+        id: u32,
+        data: [Data; 2],
+        more_data: std::vec::Vec<u8>,
+        float: f32,
+    }
+
+    #[test]
+    fn test3() {
+        assert_eq!(Foo::sqlite_table(), "second_test_table");
+        assert_eq!(
+            Foo::sqlite_columns(),
+            vec![
+                "id",
+                "data (1) id",
+                "data (1) args (1)",
+                "data (1) args (2)",
+                "data (1) args (3)",
+                "data (2) id",
+                "data (2) args (1)",
+                "data (2) args (2)",
+                "data (2) args (3)",
+                "more_data",
+                "float",
+            ]
+        );
+    }
+}
+
 pub fn main() {
     let mut db = rusqlite::Connection::open("cs3tbl.db").unwrap();
 

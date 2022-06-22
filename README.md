@@ -17,7 +17,14 @@ Here's a short overview:
   If you want to programmatically modify tbl files in Rust, this is what you want.
 - `tocs_internal` contains support libraries used internally by `tocs`.
   You should not use them directly, they are only separate due to a technical limitation in rust.
-- `sqlite_conv` is a converter from tbls to a sqlite database.
+  - `ioutil`: Traits and utility functions for parsing and serializing the data
+  - `tbl_serialize_derive`: Macro that generates a function that serializes tbl entry data given its definition (serializing each field in order)
+  - `tbl_serialize_length_derive`: Macro that can generate a function which returns the length of the entry data after serialization (without doing the serialization)
+  - `tbl_deserialize_derive`: Macro that generates a parser for tbl entry data given its definition (parsing each field in order)
+  - `sqliteio`: Traits and functions for converting tbls to/from sqlite databases.
+    This is separate from `ioutil` so we only pull in the comparatively heavy dependency on `rusqlite` where it's necessary.
+  - `sqliteio_derive`: Derive functions to convert entries to/from sql rows, and functions to help generate table schemas, etc.
+- `sqlite_conv` is a converter from tbls to a sqlite database for analysis and editing (e.g. with [sqlitebrowser](https://sqlitebrowser.org/)).
   Currently only CS3 and tbl->sql is supported so it can be used for analysis of this game's tbls.
   I want to add support for other games and for sql->tbl.
   Once this is done, it should be much easier to edit tbl files.

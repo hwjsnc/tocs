@@ -218,8 +218,27 @@ name = "sql_conv"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
+ "sqliteio",
+ "sqliteio_derive",
  "tocs",
  "walkdir",
+]
+
+[[package]]
+name = "sqliteio"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+]
+
+[[package]]
+name = "sqliteio_derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "sqliteio",
+ "syn",
 ]
 
 [[package]]

@@ -12,8 +12,6 @@ path = "src/main.rs"
 [dependencies]
 rusqlite = "0.27"
 walkdir = "2.3"
-
-[dependencies.tocs]
-path = "../tocs"
-
-[dev-dependencies]
+tocs = { path = "../tocs" }
+sqliteio = { path = "../tocs_internal/sqliteio" }
+sqliteio_derive = { path = "../tocs_internal/sqliteio_derive" }
