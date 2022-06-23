@@ -237,6 +237,7 @@ version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
+ "rusqlite",
  "sqliteio",
  "syn",
 ]
@@ -296,6 +297,9 @@ dependencies = [
  "hex-literal",
  "ioutil",
  "lazy_static",
+ "rusqlite",
+ "sqliteio",
+ "sqliteio_derive",
  "tbl_deserialize_derive",
  "tbl_serialize_derive",
  "tbl_serialize_length_derive",
