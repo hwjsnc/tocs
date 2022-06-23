@@ -124,67 +124,37 @@ fn sqlite_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filen
     insert.execute(&*vals)
 }
 
-fn to_tbl() {
-    #[rustfmt::skip]
-    let file_headers: std::collections::HashMap<&'static str, std::vec::Vec<&'static str>> = [
-        ("t_active.tbl", vec!["ActiveVoiceTableData"]),
-        ("t_assetcache.tbl", vec!["AssetCache"]),
-        ("t_attach.tbl", vec!["AttachTableData"]),
-        ("t_battle.tbl", vec!["BattleUIData"]),
-        ("t_bgm.tbl", vec!["bgm"]),
-        ("t_btlsys.tbl", vec!["TacticalBonus", "MissionText", "MissionData", "#struct OverRisePoint", "AtBonus", "BattleVoiceData_A", "BattleVoiceData_B", "BattleVoiceData_C", "BattleVoiceData_D", "BattleVoiceData_E", "BattleVoiceData_F", "BattleVoiceData_G", "BattleVoiceData_H", "BattleVoiceData_I"]),
-        ("t_chrdata.tbl", vec!["CharData", "CheckEquipFlag", "KisinPilotData", "KisinPartnerData", "CharVoiceData"]),
-        ("t_evtable.tbl", vec!["EventTableData"]),
-        ("t_face.tbl", vec!["PopupMsgFaceCharData", "CutinCharData", "CutinCharDetailData"]),
-        ("t_fish.tbl", vec!["fish_pnt", "rod_lst", "text_lst", "rod_base", "rod_parts", "fish_voice", "fish_chr"]),
-        ("t_footstep.tbl", vec!["FootStepData"]),
-        ("t_hikitugi.tbl", vec!["hkitugi_lst"]),
-        ("t_horse.tbl", vec!["HorseData"]),
-        ("t_item_en.tbl", vec!["item", "item_q"]),
-        ("t_item_fr.tbl", vec!["item", "item_q"]),
-        ("t_itemhelp.tbl", vec!["ItemHelpData", "CompHelpData"]),
-        ("t_item.tbl", vec!["item", "item_q"]),
-        ("t_jump.tbl", vec!["MapJumpData"]),
-        ("t_likelv.tbl", vec!["LikeChara", "LikeLevelExp"]),
-        ("t_linkab.tbl", vec!["LinkAbList", "LinkAbText", "LinkLevelExp", "LinkAbRateA", "LinkAbRateB"]),
-        ("t_magic.tbl", vec!["magic", "magicbo", "btcalc"]),
-        ("t_mapbgm.tbl", vec!["MapBgmTableData"]),
-        ("t_marker.tbl", vec!["MarkerTableData"]),
-        ("t_mg07.tbl", vec!["text_lst", "MG07PlayerList", "MG07ChrData"]),
-        ("t_mg08.tbl", vec!["MG08Title", "MG08PlyMsg", "MG08CharMsg", "MG08PresetDeck", "MG08Card", "MG08Text", "MG08EnemyAi"]),
-        ("t_mons.tbl", vec!["status", "char_revise"]),
-        ("t_mstqrt.tbl", vec!["MasterQuartzStatus", "MasterQuartzBase", "MasterQuartzData", "MasterQuartzMemo", "MasterQuartzDummy", "#struct MasterQuartzDummy2"]),
-        ("t_name.tbl", vec!["NameTableData"]),
-        ("t_namevis.tbl", vec!["NameVis"]),
-        ("t_naviicon.tbl", vec!["NaviIconTableData"]),
-        ("t_navi.tbl", vec!["QSChapter", "NaviTextData"]),
-        ("t_notebook.tbl", vec!["QSChapter", "QSBook"]),
-        ("t_notecard.tbl", vec!["QSChapter", "QSCard"]),
-        ("t_notechar.tbl", vec!["TopPageData", "QSChapter", "QSChar"]),
-        ("t_notecook.tbl", vec!["QSCook", "QSCoolVoice"]),
-        ("t_notefish.tbl", vec!["QSFish"]),
-        ("t_notehelp.tbl", vec!["QSChapter", "QSHelp"]),
-        ("t_notemons.tbl", vec!["QSChapter", "QSMons"]),
-        ("t_notesynp.tbl", vec!["QSBookScp", "QSChapter", "QSBook"]),
-        ("t_orb.tbl", vec!["BaseList", "OrbLineList"]),
-        ("t_partysele.tbl", vec!["PTBadTerm"]),
-        ("t_place.tbl", vec!["PlaceTableData"]),
-        ("t_qu_cost.tbl", vec!["QuartzCost"]),
-        ("t_quest.tbl", vec!["QSChapter", "QSPartResultAP", "QSTitle", "QSText", "QSRank", "SchoolGrade", "QSTrophyCheck"]),
-        ("t_reverb.tbl", vec!["preset"]),
-        ("t_se.tbl", vec!["se"]),
-        ("t_shop.tbl", vec!["ShopGoods", "ShopTitle", "ShopConv", "ShopItem", "FPointItem"]),
-        ("t_slot.tbl", vec!["SlotEp", "SlotCost"]),
-        ("t_status.tbl", vec!["status_p", "status_revise", "char_revise", "game_difficulty", "field_attack_data"]),
-        ("t_text.tbl", vec!["TextTableData"]),
-        ("t_title.tbl", vec!["TitleData"]),
-        ("t_trade.tbl", vec!["trade"]),
-        ("t_vctiming_jp.tbl", vec!["VoiceTimingInfo", "VoiceTiming"]),
-        ("t_vctiming.tbl", vec!["VoiceTimingInfo", "VoiceTiming"]),
-        ("t_vctiming_us.tbl", vec!["VoiceTimingInfo", "VoiceTiming"]),
-        ("t_voice.tbl", vec!["voice"]),
-    ]
-    .into_iter()
-    .collect();
+fn sqlite_read_unsafe_or_panic<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filename: &str) -> std::vec::Vec<T> {
+    let s = format!("select * from {} where file = ?", T::sqlite_table());
+    let mut stmt = tx.prepare(&s).expect("statement");
+    let rows = stmt.query_map([filename], |row| {
+        let (e, next_column_index) = T::sqlite_row_read(row, 0)?;
+        match row.get::<usize, rusqlite::types::Value>(next_column_index) {
+            Ok(_) => panic!("Unexpected table schema (too many values)"),
+            Err(_) => Ok(e)
+        }
+    }).expect("query");
+    rows.into_iter().enumerate().map(|(n, row)| match row {
+        Ok(x) => x,
+        Err(e) => panic!("read error at row {}: {}", n+1, e)
+    }).collect()
+}
 
+fn to_tbl() {
+    // TODO:
+    // open db
+    // initialize empty hashmap (file -> tbl)
+    // read table generic, for each entry:
+    //   hashmap[file].entries.push(entry) (create if hashmap doesn't have entry)
+    //   add entry header to file if it's not present yet
+    // for all (other) tables in sqlite_schema:
+    //   for each entry of the corresponding table:
+    //     hashmap[file].entries.push(entry) (create if hashmap doesn't have entry)
+    //   if any entry exists, add entry header to file
+    // once all data has been read, add entry headers to tbl headers
+    // serialize each tbl
+    // write the tbls
+    //
+    // this won't give us bit-exact roundtrips (for example we drop headers without entries and we may reorder entries)
+    // it remains to be seen if this leads to problems or not (i very much hope it doesn't).
 }
