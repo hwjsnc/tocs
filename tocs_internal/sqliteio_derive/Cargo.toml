@@ -13,3 +13,4 @@ proc-macro2 = "1"
 quote = "1"
 syn = { version = "1", features = ["extra-traits"] }
 sqliteio = { path = "../sqliteio" }
+rusqlite = "0.27"

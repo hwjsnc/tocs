@@ -40,10 +40,16 @@ pub enum Entry {
 }
 
 pub mod entry_data {
+    #[cfg(feature = "sqliteio")]
+    extern crate sqliteio_derive;
+    #[cfg(feature = "sqliteio")]
+    use sqliteio_derive::SqliteIO;
+
     use tbl_deserialize_derive::Deserialize;
     use tbl_serialize_derive::Serialize;
     use tbl_serialize_length_derive::SerializeLength;
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "generic"))]
     #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Generic {
         #[serialize(ignore)] // we're serializing the header separately
@@ -51,6 +57,7 @@ pub mod entry_data {
         pub data: Vec<u8>,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "char_revise"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct CharRevise {
         pub char: String,
@@ -63,6 +70,7 @@ pub mod entry_data {
         pub brk: u16,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "CompHelpData"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct CompHelpData {
         pub r#type: u16,
@@ -70,6 +78,7 @@ pub mod entry_data {
         pub value: i32,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "item"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Item {
         pub id: u16,
@@ -110,6 +119,7 @@ pub mod entry_data {
         pub unknown_data: std::vec::Vec<u8>,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "magic"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Magic {
         pub id: u16,
@@ -138,6 +148,7 @@ pub mod entry_data {
         pub description: String,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "magicbo"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct MagicBo {
         pub id: u16,
@@ -145,6 +156,7 @@ pub mod entry_data {
         pub turns: u16,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "SlotCost"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct SlotCost {
         pub slot_position: u16,
@@ -158,6 +170,7 @@ pub mod entry_data {
         pub mirage: u16,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "status"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Status {
         pub script: String,
@@ -255,6 +268,7 @@ pub mod entry_data {
         pub description: String,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "voice"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Voice {
         pub unknown_short_1: u16,
@@ -266,6 +280,7 @@ pub mod entry_data {
         pub unknown_data: std::vec::Vec<u8>,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = ""))]
     #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, SerializeLength)]
     pub struct Effect {
         pub id: u16,

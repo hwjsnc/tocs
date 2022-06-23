@@ -13,6 +13,9 @@ default = ["roundtrip-cs3"]
 roundtrip-cs1 = [] # test bit-identical roundtrip (read -> write) for cs1.
 roundtrip-cs2 = [] # test bit-identical roundtrip (read -> write) for cs2.
 roundtrip-cs3 = [] # test bit-identical roundtrip (read -> write) for cs3.
+rusqlite = ["dep:sqliteio", "dep:sqliteio", "dep:rusqlite"]
+sqliteio_derive = ["dep:sqliteio", "dep:sqliteio", "dep:rusqlite"]
+sqliteio = ["dep:sqliteio", "dep:sqliteio_derive", "dep:rusqlite"]
 
 [dependencies]
 lazy_static = "1.4"
@@ -22,6 +25,9 @@ ioutil = { path = "../tocs_internal/ioutil" }
 tbl_deserialize_derive = { path = "../tocs_internal/tbl_deserialize_derive" }
 tbl_serialize_derive = { path = "../tocs_internal/tbl_serialize_derive" }
 tbl_serialize_length_derive = { path = "../tocs_internal/tbl_serialize_length_derive" }
+sqliteio = { path = "../tocs_internal/sqliteio", optional = true }
+sqliteio_derive = { path = "../tocs_internal/sqliteio_derive", optional = true }
+rusqlite = { version = "0.27", optional = true }
 
 
 [dev-dependencies]

@@ -4,7 +4,7 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Fields, GenericParam, Generics, Ident, Lit, Meta, NestedMeta};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Lit, Meta, NestedMeta};
 
 #[proc_macro_derive(SqliteIO, attributes(sqlite))]
 pub fn derive_sqliteio(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -12,9 +12,6 @@ pub fn derive_sqliteio(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
 
-    // Add a bound `T: Deserialize` to type parameters
-    //let generics = add_trait_bounds(input.generics);
-    //let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let table_name_str = get_attr_table_name(&input.attrs);
@@ -46,15 +43,6 @@ pub fn derive_sqliteio(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
         }
     }
     .into()
-}
-
-fn add_trait_bounds(mut generics: Generics) -> Generics {
-    for param in &mut generics.params {
-        if let GenericParam::Type(ref mut type_param) = *param {
-            type_param.bounds.push(parse_quote!(sqlite::SqliteIO));
-        }
-    }
-    generics
 }
 
 fn get_attr_table_name(attrs: &[syn::Attribute]) -> Lit {
@@ -117,7 +105,6 @@ fn generate_value_statements(data: &Data) -> TokenStream {
             Fields::Named(ref fields) => {
                 let value_statements = fields.named.iter().map(|f| {
                     let fieldname = f.ident.as_ref().expect("named identifier");
-                    let t = &f.ty;
                     let span = f.span();
                     quote_spanned! {span=> tup.extend_from_slice(&self.#fieldname.sqlite_to_tup()); }
                 });
