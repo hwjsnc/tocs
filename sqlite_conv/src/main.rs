@@ -36,7 +36,6 @@ pub fn main() {
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
             println!("{}", path.display());
             let path_for_db = path.strip_prefix(&base_path).unwrap().display().to_string();
-            // TODO: 'r#type' -> 'type' in derive(SqliteIO)
             let data = cs3_tbl::fix(&std::fs::read(path).unwrap());
             let tbl = cs3_tbl::load(&data).unwrap();
             for tblentry in tbl.entries.iter() {

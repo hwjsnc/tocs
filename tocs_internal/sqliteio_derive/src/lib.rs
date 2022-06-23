@@ -79,7 +79,7 @@ fn generate_column_names_statements(data: &Data) -> TokenStream {
                     let fieldname = f.ident.as_ref().expect("named identifier");
                     let t = &f.ty;
                     let span = f.span();
-                    let fieldname_string = fieldname.to_string().escape_default().to_string();
+                    let fieldname_string = fieldname.to_string().trim_start_matches("r#").escape_default().to_string();
                     quote_spanned! {span=>
                         for column in <#t>::sqlite_columns().iter() {
                             let s = #fieldname_string;
