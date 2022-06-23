@@ -3,7 +3,6 @@ extern crate tocs;
 extern crate walkdir;
 
 extern crate sqliteio;
-use sqliteio::SqliteIO as _;
 
 use tocs::cs3::tbl as cs3_tbl;
 use tocs::cs3::tbl::entry_data as cs3_entry_data;
@@ -27,17 +26,16 @@ pub fn main() {
 
     let cwd = std::env::current_dir().unwrap();
     let base_path = cwd.join(std::path::Path::new("private-test-data/cs3/data/text/"));
-    for (file_id, direntry) in walkdir::WalkDir::new(&base_path).into_iter().enumerate() {
+    for direntry in walkdir::WalkDir::new(&base_path).into_iter() {
         let direntry = direntry.unwrap();
         let path = direntry.path();
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
             println!("{}", path.display());
-            let path_components: std::vec::Vec<_> = path.components().collect();
             let path_for_db = path.strip_prefix(&base_path).unwrap().display().to_string();
             // TODO: 'r#type' -> 'type' in derive(SqliteIO)
             let data = cs3_tbl::fix(&std::fs::read(path).unwrap());
             let tbl = cs3_tbl::load(&data).unwrap();
-            for (n, tblentry) in tbl.entries.iter().enumerate() {
+            for tblentry in tbl.entries.iter() {
                 match tblentry {
                     CS3Entry::Generic(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                     CS3Entry::CharRevise(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
