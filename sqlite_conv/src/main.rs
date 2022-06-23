@@ -84,7 +84,10 @@ pub fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         }
     }
 
-    tx.commit().unwrap()
+    match tx.commit() {
+        Ok(_) => (),
+        Err(e) => panic!("couldn't commit database transaction: {e}"),
+    };
 }
 
 // WARNING: The following functions could be extremely dangerous in a general settings:
