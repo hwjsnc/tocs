@@ -12,7 +12,7 @@ pub fn main() {
     to_new_db(std::path::Path::new("../private-test-data/cs3/data/text/"), std::path::Path::new("cs3tbl.db"));
 }
 
-pub fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
+fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
     if dbpath.exists() {
         panic!("Database output path {} exists, refusing to overwrite", dbpath.display());
     }
@@ -62,22 +62,22 @@ pub fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
             };
             for (n, tblentry) in tbl.entries.iter().enumerate() {
                 let insert_result = match tblentry {
-                    CS3Entry::Generic(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::ActiveVoiceTableData(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::CharRevise(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::CompHelpData(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::GameDifficulty(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::Item(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::Magic(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MagicBo(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MasterQuartzDummy(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::SE(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::SlotCost(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::Status(data) => do_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::Voice(data) => do_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::Generic(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::ActiveVoiceTableData(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::CharRevise(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::CompHelpData(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::GameDifficulty(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::Item(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::Magic(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MagicBo(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MasterQuartzDummy(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::SE(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::SlotCost(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::Status(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::Voice(data) =>sqlite_insert_unsafe(&tx, &path_for_db, data),
                 };
                 match insert_result {
-                    Ok(()) => (),
+                    Ok(_) => (),
                     Err(e) => panic!("Couldn't insert entry {} of {} into table: {}", n + 1, tbl.entries.len(), e),
                 };
             }
@@ -94,7 +94,7 @@ pub fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
 // We are interpolating the 'table' string directly into the sql statement, without sanitization.
 // This bears the risk of SQL injection.
 // Since the table names all come from an attribute which we supply ourselves in the source code, this should not become a problem.
-pub fn sqlite_schema_unsafe<T: sqliteio::SqliteIO>() -> String {
+fn sqlite_schema_unsafe<T: sqliteio::SqliteIO>() -> String {
     let s = format!(
         "create table {} (\nfile,\n{}\n)",
         T::sqlite_table(),
@@ -103,33 +103,28 @@ pub fn sqlite_schema_unsafe<T: sqliteio::SqliteIO>() -> String {
     s
 }
 
-pub fn sqlite_recreate_table_destroy_if_exists_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction) -> rusqlite::Result<()> {
+fn sqlite_recreate_table_destroy_if_exists_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction) -> rusqlite::Result<()> {
     tx.execute(&format!("drop table if exists {}", T::sqlite_table()), [])?;
     tx.execute(&sqlite_schema_unsafe::<T>(), [])?;
     Ok(())
 }
 
-pub fn insert_unsafe(tx: &rusqlite::Transaction, table: &str, values: &[&dyn rusqlite::ToSql]) -> rusqlite::Result<usize> {
-    let s = format!(
-        "insert into {} values ({})",
-        table,
-        (0..values.len()).map(|i| format!("?{}", i + 1)).collect::<std::vec::Vec<_>>().join(", ")
-    );
-    let mut insert = tx.prepare_cached(&s)?;
-    insert.execute(values)
-}
-
-pub fn do_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filename: &str, x: &T) -> rusqlite::Result<()> {
+fn sqlite_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filename: &str, x: &T) -> rusqlite::Result<usize> {
     let mut vals : std::vec::Vec::<&dyn rusqlite::ToSql> = vec![&filename];
     let x_vals = x.sqlite_to_tup();
     for e in x_vals.iter() {
         vals.push(e.as_ref());
     }
-    insert_unsafe(tx, T::sqlite_table(), &vals)?;
-    Ok(())
+    let s = format!(
+        "insert into {} values ({})",
+        T::sqlite_table(),
+        (0..vals.len()).map(|i| format!("?{}", i + 1)).collect::<std::vec::Vec<_>>().join(", ")
+    );
+    let mut insert = tx.prepare_cached(&s)?;
+    insert.execute(&*vals)
 }
 
-pub fn to_tbl() {
+fn to_tbl() {
     #[rustfmt::skip]
     let file_headers: std::collections::HashMap<&'static str, std::vec::Vec<&'static str>> = [
         ("t_active.tbl", vec!["ActiveVoiceTableData"]),
@@ -191,4 +186,5 @@ pub fn to_tbl() {
     ]
     .into_iter()
     .collect();
+
 }
