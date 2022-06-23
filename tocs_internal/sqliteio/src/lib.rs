@@ -32,15 +32,20 @@ pub trait SqliteIO {
     /// On success, returns the value corresponding to the values in the row, and the index of the column after the last read column.
     /// (This index may or may not equal one past the final column).
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)>
-    where Self: Sized;
+    where
+        Self: Sized;
 }
 
 // Blanket implementations for primitive types
 // Should not be used directly.
 // This is only here so that the derive macro has something to work with.
 impl SqliteIO for u8 {
-    fn sqlite_table() -> &'static str { "" }
-    fn sqlite_columns() -> std::vec::Vec<String> { vec!["".to_string()] }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
+    fn sqlite_columns() -> std::vec::Vec<String> {
+        vec!["".to_string()]
+    }
     fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
         vec![self]
     }
@@ -50,8 +55,12 @@ impl SqliteIO for u8 {
 }
 
 impl SqliteIO for u16 {
-    fn sqlite_table() -> &'static str { "" }
-    fn sqlite_columns() -> std::vec::Vec<String> { vec!["".to_string()] }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
+    fn sqlite_columns() -> std::vec::Vec<String> {
+        vec!["".to_string()]
+    }
     fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
         vec![self]
     }
@@ -61,8 +70,12 @@ impl SqliteIO for u16 {
 }
 
 impl SqliteIO for u32 {
-    fn sqlite_table() -> &'static str { "" }
-    fn sqlite_columns() -> std::vec::Vec<String> { vec!["".to_string()] }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
+    fn sqlite_columns() -> std::vec::Vec<String> {
+        vec!["".to_string()]
+    }
     fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
         vec![self]
     }
@@ -72,8 +85,12 @@ impl SqliteIO for u32 {
 }
 
 impl SqliteIO for i8 {
-    fn sqlite_table() -> &'static str { "" }
-    fn sqlite_columns() -> std::vec::Vec<String> { vec!["".to_string()] }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
+    fn sqlite_columns() -> std::vec::Vec<String> {
+        vec!["".to_string()]
+    }
     fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
         vec![self]
     }
@@ -83,8 +100,12 @@ impl SqliteIO for i8 {
 }
 
 impl SqliteIO for i16 {
-    fn sqlite_table() -> &'static str { "" }
-    fn sqlite_columns() -> std::vec::Vec<String> { vec!["".to_string()] }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
+    fn sqlite_columns() -> std::vec::Vec<String> {
+        vec!["".to_string()]
+    }
     fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
         vec![self]
     }
@@ -94,8 +115,12 @@ impl SqliteIO for i16 {
 }
 
 impl SqliteIO for i32 {
-    fn sqlite_table() -> &'static str { "" }
-    fn sqlite_columns() -> std::vec::Vec<String> { vec!["".to_string()] }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
+    fn sqlite_columns() -> std::vec::Vec<String> {
+        vec!["".to_string()]
+    }
     fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
         vec![self]
     }
@@ -105,8 +130,12 @@ impl SqliteIO for i32 {
 }
 
 impl SqliteIO for f32 {
-    fn sqlite_table() -> &'static str { "" }
-    fn sqlite_columns() -> std::vec::Vec<String> { vec!["".to_string()] }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
+    fn sqlite_columns() -> std::vec::Vec<String> {
+        vec!["".to_string()]
+    }
     fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
         vec![self]
     }
@@ -116,8 +145,12 @@ impl SqliteIO for f32 {
 }
 
 impl SqliteIO for String {
-    fn sqlite_table() -> &'static str { "" }
-    fn sqlite_columns() -> std::vec::Vec<String> { vec!["".to_string()] }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
+    fn sqlite_columns() -> std::vec::Vec<String> {
+        vec!["".to_string()]
+    }
     fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
         vec![self]
     }
@@ -127,8 +160,12 @@ impl SqliteIO for String {
 }
 
 impl SqliteIO for std::vec::Vec<u8> {
-    fn sqlite_table() -> &'static str { "" }
-    fn sqlite_columns() -> std::vec::Vec<String> { vec!["".to_string()] }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
+    fn sqlite_columns() -> std::vec::Vec<String> {
+        vec!["".to_string()]
+    }
     fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
         vec![self]
     }
@@ -138,19 +175,15 @@ impl SqliteIO for std::vec::Vec<u8> {
 }
 
 impl<T: SqliteIO + Default + Copy, const N: usize> SqliteIO for [T; N] {
-    fn sqlite_table() -> &'static str { "" }
+    fn sqlite_table() -> &'static str {
+        ""
+    }
     fn sqlite_columns() -> std::vec::Vec<String> {
         let t_columns = T::sqlite_columns();
         let mut columns = std::vec::Vec::<String>::new();
         for i in 0..N {
             for column in t_columns.iter() {
-                columns.push(
-                    if column.is_empty() {
-                        format!("({})", i+1)
-                    } else {
-                        format!("({}) {}", i+1, column)
-                    }
-                );
+                columns.push(if column.is_empty() { format!("({})", i + 1) } else { format!("({}) {}", i + 1, column) });
             }
         }
         columns
