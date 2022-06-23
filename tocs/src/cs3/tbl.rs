@@ -31,9 +31,11 @@ pub enum Entry {
     Generic(entry_data::Generic),
     CharRevise(entry_data::CharRevise),
     CompHelpData(entry_data::CompHelpData),
+    GameDifficulty(entry_data::GameDifficulty),
     Item(entry_data::Item),
     Magic(entry_data::Magic),
     MagicBo(entry_data::MagicBo),
+    MasterQuartzDummy(entry_data::MasterQuartzDummy),
     SlotCost(entry_data::SlotCost),
     Status(entry_data::Status),
     Voice(entry_data::Voice),
@@ -76,6 +78,13 @@ pub mod entry_data {
         pub r#type: u16,
         pub text: String,
         pub value: i32,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "game_difficulty"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct GameDifficulty {
+        pub difficulty: u16,
+        pub modifier: i16,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "item"))]
@@ -154,6 +163,13 @@ pub mod entry_data {
         pub id: u16,
         pub effects: [Effect; 5],
         pub turns: u16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MasterQuartzDummy"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MasterQuartzDummy {
+        pub dummy_id: u16,
+        pub original_id: u16,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "SlotCost"))]
@@ -294,9 +310,11 @@ impl Entry {
             Self::Generic(entry_data::Generic { header, .. }) => header,
             Self::CharRevise(_) => "char_revise",
             Self::CompHelpData(_) => "CompHelpData",
+            Self::GameDifficulty(_) => "game_difficulty",
             Self::Item(_) => "item",
             Self::Magic(_) => "magic",
             Self::MagicBo(_) => "magicbo",
+            Self::MasterQuartzDummy(_) => "MasterQuartzDummy",
             Self::SlotCost(_) => "SlotCost",
             Self::Status(_) => "status",
             Self::Voice(_) => "voice",
@@ -329,9 +347,11 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [
                 ("char_revise", (|ctx| entry_data::CharRevise::deserialize(ctx).map(|(data, ctx)| (Entry::CharRevise(data), ctx))) as ParseFun),
                 ("CompHelpData", (|ctx| entry_data::CompHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::CompHelpData(data), ctx))) as ParseFun),
+                ("game_difficulty", (|ctx| entry_data::GameDifficulty::deserialize(ctx).map(|(data, ctx)| (Entry::GameDifficulty(data), ctx))) as ParseFun),
                 ("item", (|ctx| entry_data::Item::deserialize(ctx).map(|(data, ctx)| (Entry::Item(data), ctx))) as ParseFun),
                 ("magic", (|ctx| entry_data::Magic::deserialize(ctx).map(|(data, ctx)| (Entry::Magic(data), ctx))) as ParseFun),
                 ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).map(|(data, ctx)| (Entry::MagicBo(data), ctx))) as ParseFun),
+                ("MasterQuartzDummy", (|ctx| entry_data::MasterQuartzDummy::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzDummy(data), ctx))) as ParseFun),
                 ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).map(|(data, ctx)| (Entry::SlotCost(data), ctx))) as ParseFun),
                 ("status", (|ctx| entry_data::Status::deserialize(ctx).map(|(data, ctx)| (Entry::Status(data), ctx))) as ParseFun),
                 ("voice", (|ctx| entry_data::Voice::deserialize(ctx).map(|(data, ctx)| (Entry::Voice(data), ctx))) as ParseFun),

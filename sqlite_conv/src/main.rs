@@ -17,9 +17,11 @@ pub fn main() {
     sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Generic>(&tx).unwrap();
     sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CharRevise>(&tx).unwrap();
     sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CompHelpData>(&tx).unwrap();
+    sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::GameDifficulty>(&tx).unwrap();
     sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Item>(&tx).unwrap();
     sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Magic>(&tx).unwrap();
     sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MagicBo>(&tx).unwrap();
+    sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzDummy>(&tx).unwrap();
     sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SlotCost>(&tx).unwrap();
     sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Status>(&tx).unwrap();
     sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Voice>(&tx).unwrap();
@@ -40,9 +42,11 @@ pub fn main() {
                     CS3Entry::Generic(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                     CS3Entry::CharRevise(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                     CS3Entry::CompHelpData(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::GameDifficulty(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                     CS3Entry::Item(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                     CS3Entry::Magic(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                     CS3Entry::MagicBo(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::MasterQuartzDummy(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                     CS3Entry::SlotCost(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                     CS3Entry::Status(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                     CS3Entry::Voice(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
