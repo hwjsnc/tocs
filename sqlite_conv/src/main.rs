@@ -27,34 +27,27 @@ pub fn main() {
 
     let cwd = std::env::current_dir().unwrap();
     let base_path = cwd.join(std::path::Path::new("private-test-data/cs3/data/text/"));
-    for (file_id, direntry) in walkdir::WalkDir::new(base_path).into_iter().enumerate() {
+    for (file_id, direntry) in walkdir::WalkDir::new(&base_path).into_iter().enumerate() {
         let direntry = direntry.unwrap();
         let path = direntry.path();
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
             println!("{}", path.display());
-/*
             let path_components: std::vec::Vec<_> = path.components().collect();
-            let dbpath = (path_components.split_at(path_components.len() - 4).1)
-                .iter()
-                .fold(std::path::PathBuf::new(), |a, b| a.join(b.as_os_str()));
-            tx.execute("insert into files (id, path) values (?1, ?2)", rusqlite::params![file_id, dbpath.display().to_string()])
-                .unwrap();
-*/
-            // TODO: add paths
+            let path_for_db = path.strip_prefix(&base_path).unwrap().display().to_string();
             // TODO: 'r#type' -> 'type' in derive(SqliteIO)
             let data = cs3_tbl::fix(&std::fs::read(path).unwrap());
             let tbl = cs3_tbl::load(&data).unwrap();
             for (n, tblentry) in tbl.entries.iter().enumerate() {
                 match tblentry {
-                    CS3Entry::Generic(data) => do_insert_unsafe(&tx, data).unwrap(),
-                    CS3Entry::CharRevise(data) => do_insert_unsafe(&tx, data).unwrap(),
-                    CS3Entry::CompHelpData(data) => do_insert_unsafe(&tx, data).unwrap(),
-                    CS3Entry::Item(data) => do_insert_unsafe(&tx, data).unwrap(),
-                    CS3Entry::Magic(data) => do_insert_unsafe(&tx, data).unwrap(),
-                    CS3Entry::MagicBo(data) => do_insert_unsafe(&tx, data).unwrap(),
-                    CS3Entry::SlotCost(data) => do_insert_unsafe(&tx, data).unwrap(),
-                    CS3Entry::Status(data) => do_insert_unsafe(&tx, data).unwrap(),
-                    CS3Entry::Voice(data) => do_insert_unsafe(&tx, data).unwrap(),
+                    CS3Entry::Generic(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::CharRevise(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::CompHelpData(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::Item(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::Magic(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::MagicBo(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::SlotCost(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::Status(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
+                    CS3Entry::Voice(data) => do_insert_unsafe(&tx, &path_for_db, data).unwrap(),
                 }
             }
         }
@@ -69,7 +62,7 @@ pub fn main() {
 // Since the table names all come from an attribute which we supply ourselves in the source code, this should not become a problem.
 pub fn sqlite_schema_unsafe<T: sqliteio::SqliteIO>() -> String {
     let s = format!(
-        "create table {} (\n{}\n)",
+        "create table {} (\nfile,\n{}\n)",
         T::sqlite_table(),
         T::sqlite_columns().iter().map(|c| format!("  '{c}'")).collect::<std::vec::Vec<_>>().join(",\n")
     );
@@ -97,7 +90,10 @@ pub fn select_one_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction) -> r
     tx.query_row(&s, [], |row| Ok(T::sqlite_row_read(row, 0)?.0))
 }
 
-pub fn do_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, x: &T) -> rusqlite::Result<()> {
-    insert_unsafe(&tx, T::sqlite_table(), &x.sqlite_to_tup())?;
+pub fn do_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filename: &str, x: &T) -> rusqlite::Result<()> {
+    let mut vals = std::vec::Vec::<&dyn rusqlite::ToSql>::new();
+    vals.push(&filename);
+    vals.extend_from_slice(&x.sqlite_to_tup());
+    insert_unsafe(&tx, T::sqlite_table(), &vals)?;
     Ok(())
 }
