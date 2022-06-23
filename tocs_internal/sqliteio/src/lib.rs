@@ -1,5 +1,7 @@
 extern crate rusqlite;
 
+use std::str::FromStr as _;
+
 pub trait SqliteIO {
     /*
     Ideally we'd want to use arrays here, like:
@@ -26,7 +28,7 @@ pub trait SqliteIO {
     fn sqlite_columns() -> std::vec::Vec<String>;
 
     /// Converts entry data into a sqlite tuple following the schema from the `columns` function
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql>;
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>>;
 
     /// Attempts to convert values from an sql row starting at a given column index.
     /// On success, returns the value corresponding to the values in the row, and the index of the column after the last read column.
@@ -46,8 +48,8 @@ impl SqliteIO for u8 {
     fn sqlite_columns() -> std::vec::Vec<String> {
         vec!["".to_string()]
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        vec![self]
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        vec![Box::new(self.clone())]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -61,8 +63,8 @@ impl SqliteIO for u16 {
     fn sqlite_columns() -> std::vec::Vec<String> {
         vec!["".to_string()]
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        vec![self]
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        vec![Box::new(self.clone())]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -76,8 +78,8 @@ impl SqliteIO for u32 {
     fn sqlite_columns() -> std::vec::Vec<String> {
         vec!["".to_string()]
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        vec![self]
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        vec![Box::new(self.clone())]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -91,8 +93,8 @@ impl SqliteIO for i8 {
     fn sqlite_columns() -> std::vec::Vec<String> {
         vec!["".to_string()]
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        vec![self]
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        vec![Box::new(self.clone())]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -106,8 +108,8 @@ impl SqliteIO for i16 {
     fn sqlite_columns() -> std::vec::Vec<String> {
         vec!["".to_string()]
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        vec![self]
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        vec![Box::new(self.clone())]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -121,8 +123,8 @@ impl SqliteIO for i32 {
     fn sqlite_columns() -> std::vec::Vec<String> {
         vec!["".to_string()]
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        vec![self]
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        vec![Box::new(self.clone())]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -136,8 +138,12 @@ impl SqliteIO for f32 {
     fn sqlite_columns() -> std::vec::Vec<String> {
         vec!["".to_string()]
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        vec![self]
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        // sqlite only supports double precision floats.
+        // for many common fractions (0.9, 1.1, 0.4, etc.) converting these from single precision directly to the closest double will introduce rounding artifacts which look ugly, e.g. 0.9_f32 -> 0.899999976158142_f64.
+        // by converting to a string first (which rounds to a 'clean' decimal fraction where possible), we can end up with a double that's closer to the true decimal fraction without losing precision when we convert back to single precision (at least that's what i think).
+        // TODO: need to test if a perfect roundtrip of tbls is possible
+        vec![Box::new(f64::from_str(&format!("{self}")).expect("f32 should be representable as f64"))]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -151,8 +157,8 @@ impl SqliteIO for String {
     fn sqlite_columns() -> std::vec::Vec<String> {
         vec!["".to_string()]
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        vec![self]
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        vec![Box::new(self.clone())]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -166,8 +172,8 @@ impl SqliteIO for std::vec::Vec<u8> {
     fn sqlite_columns() -> std::vec::Vec<String> {
         vec!["".to_string()]
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        vec![self]
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        vec![Box::new(self.clone())]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -188,10 +194,10 @@ impl<T: SqliteIO + Default + Copy, const N: usize> SqliteIO for [T; N] {
         }
         columns
     }
-    fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-        let mut vals = std::vec::Vec::<&dyn rusqlite::ToSql>::new();
+    fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+        let mut vals = std::vec::Vec::<Box<dyn rusqlite::ToSql>>::new();
         for x in self {
-            vals.extend_from_slice(&x.sqlite_to_tup());
+            vals.extend(x.sqlite_to_tup());
         }
         vals
     }

@@ -30,8 +30,8 @@ pub fn derive_sqliteio(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
                 columns
             }
 
-            fn sqlite_to_tup(&self) -> std::vec::Vec<&dyn rusqlite::ToSql> {
-                let mut tup = std::vec::Vec::<&dyn rusqlite::ToSql>::new();
+            fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
+                let mut tup = std::vec::Vec::<Box<dyn rusqlite::ToSql>>::new();
                 #add_values_to_tup_statements
                 tup
             }
@@ -106,7 +106,7 @@ fn generate_value_statements(data: &Data) -> TokenStream {
                 let value_statements = fields.named.iter().map(|f| {
                     let fieldname = f.ident.as_ref().expect("named identifier");
                     let span = f.span();
-                    quote_spanned! {span=> tup.extend_from_slice(&self.#fieldname.sqlite_to_tup()); }
+                    quote_spanned! {span=> tup.extend(self.#fieldname.sqlite_to_tup()); }
                 });
                 quote! { #(#value_statements)* }
             }

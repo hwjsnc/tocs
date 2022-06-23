@@ -95,7 +95,10 @@ pub fn select_one_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction) -> r
 pub fn do_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filename: &str, x: &T) -> rusqlite::Result<()> {
     let mut vals = std::vec::Vec::<&dyn rusqlite::ToSql>::new();
     vals.push(&filename);
-    vals.extend_from_slice(&x.sqlite_to_tup());
+    let x_vals = x.sqlite_to_tup();
+    for e in x_vals.iter() {
+        vals.push(e.as_ref());
+    }
     insert_unsafe(&tx, T::sqlite_table(), &vals)?;
     Ok(())
 }
