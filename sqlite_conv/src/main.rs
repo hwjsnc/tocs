@@ -2,6 +2,8 @@ extern crate rusqlite;
 extern crate tocs;
 extern crate walkdir;
 
+use std::str::FromStr as _;
+
 extern crate sqliteio;
 
 use tocs::cs3::tbl as cs3_tbl;
@@ -10,7 +12,7 @@ use tocs::cs3::tbl::Entry as CS3Entry;
 
 pub fn main() {
     //to_new_db(std::path::Path::new("../private-test-data/cs3/data/text/"), std::path::Path::new("cs3tbl.db"));
-    to_tbl(std::path::Path::new("cs3tbl.db"));
+    to_tbl(std::path::Path::new("cs3tbl.db"), std::path::Path::new("/home/user/installed_games/tocs3-modded/drive_c/GOG Games/ToCS3/data/"));
 }
 
 fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
@@ -154,7 +156,7 @@ fn sqlite_read_table_unsafe_or_panic<T: sqliteio::SqliteIO>(tx: &rusqlite::Trans
         .collect()
 }
 
-fn to_tbl(dbpath: &std::path::Path) {
+fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path) {
     let mut db = match rusqlite::Connection::open(dbpath) {
         Ok(x) => x,
         Err(e) => panic!("couldn't open db file: {e}"),
@@ -257,10 +259,30 @@ fn to_tbl(dbpath: &std::path::Path) {
     }
     drop(stmt);
 
+    let mut serialized = std::collections::HashMap::<std::path::PathBuf, std::vec::Vec<u8>>::new();
+    for (filename, entries) in all_entries.into_iter() {
+            let headers = entries
+                .iter()
+                .map(|e| e.header_name())
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .map(|s| s.to_string())
+                .collect::<std::vec::Vec<_>>();
+            let tbl = cs3_tbl::Tbl { headers, entries };
+        let data = match cs3_tbl::store(&tbl) {
+            Ok(x) => x,
+            Err(e) => panic!("couldn't generate tbl {}: {:?}", filename, e) // TODO: non-debug error message
+        };
+        let relpath = std::path::PathBuf::from_str(&filename).expect("infallible");
+        if relpath.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            panic!("file {} has a parent", filename);
+        };
+        let path = output_path.join(relpath);
+        serialized.insert(path, data);
+    }
+
     // TODO:
-    // once all data has been read, add entry headers to tbl headers
-    // serialize each tbl
-    // check that file names are ok: convertible to OsString and they don't escape the file path, (i.e. no '..')
+    // convertible to OsString and they don't escape the file path, (i.e. no '..')
     // write the tbls
     //
     // this won't give us bit-exact roundtrips (for example we drop headers without entries and we may reorder entries)
