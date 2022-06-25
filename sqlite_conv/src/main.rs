@@ -1,9 +1,11 @@
+extern crate clap;
 extern crate rusqlite;
 extern crate tocs;
 extern crate walkdir;
 
-use std::str::FromStr as _;
+use clap::Parser;
 use std::io::Write as _;
+use std::str::FromStr as _;
 
 extern crate sqliteio;
 
@@ -11,10 +13,41 @@ use tocs::cs3::tbl as cs3_tbl;
 use tocs::cs3::tbl::entry_data as cs3_entry_data;
 use tocs::cs3::tbl::Entry as CS3Entry;
 
+#[allow(non_camel_case_types)]
+#[derive(Debug, Parser)]
+enum Args {
+    /// Convert a folder of tbl files to a sqlite database
+    To_Sql {
+        /// path of the folder containing the tbls
+        #[clap(long)]
+        tbl_path: std::path::PathBuf,
+        /// path of the new database file
+        #[clap(long)]
+        db_path: std::path::PathBuf,
+    },
+    /// Read data from a sqlite database and generate corresponding tbl files
+    To_Tbl {
+        /// path of the database file from which data should be read
+        #[clap(long)]
+        db_path: std::path::PathBuf,
+        /// path to the directory that the tbls should be written to
+        #[clap(long)]
+        tbl_path: std::path::PathBuf,
+        /// overwrite any existing tbl files
+        #[clap(short, long)]
+        force: bool,
+    },
+}
+
 pub fn main() {
-    //to_new_db(std::path::Path::new("../private-test-data/cs3/data/text/"), std::path::Path::new("cs3tbl.db"));
-    let force = false;
-    to_tbl(std::path::Path::new("cs3tbl.db"), std::path::Path::new("/home/user/installed_games/tocs3-modded/drive_c/GOG Games/ToCS3/data/text/"), force);
+    match Args::parse() {
+        Args::To_Sql { tbl_path, db_path } => {
+            to_new_db(&tbl_path, &db_path);
+        }
+        Args::To_Tbl { db_path, tbl_path, force } => {
+            to_tbl(&db_path, &tbl_path, force);
+        }
+    }
 }
 
 fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
@@ -55,7 +88,7 @@ fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         };
         let path = direntry.path();
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            println!("{}", path.display());
+            println!("Reading {}", path.display());
             let path_for_db = path.strip_prefix(tblpath).expect("child path should have parent as prefix").display().to_string();
             let data = match std::fs::read(path).map(|data| cs3_tbl::fix(&data)) {
                 Ok(x) => x,
@@ -264,17 +297,17 @@ fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path, force: bool) 
     // serialize data
     let mut serialized = std::collections::HashMap::<std::path::PathBuf, std::vec::Vec<u8>>::new();
     for (filename, entries) in all_entries.into_iter() {
-            let headers = entries
-                .iter()
-                .map(|e| e.header_name())
-                .collect::<std::collections::HashSet<_>>()
-                .into_iter()
-                .map(|s| s.to_string())
-                .collect::<std::vec::Vec<_>>();
-            let tbl = cs3_tbl::Tbl { headers, entries };
+        let headers = entries
+            .iter()
+            .map(|e| e.header_name())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect::<std::vec::Vec<_>>();
+        let tbl = cs3_tbl::Tbl { headers, entries };
         let data = match cs3_tbl::store(&tbl) {
             Ok(x) => x,
-            Err(e) => panic!("couldn't generate tbl {}: {:?}", filename, e) // TODO: non-debug error message
+            Err(e) => panic!("couldn't generate tbl {}: {:?}", filename, e), // TODO: non-debug error message
         };
         let relpath = std::path::PathBuf::from_str(&filename).expect("infallible");
         if relpath.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
