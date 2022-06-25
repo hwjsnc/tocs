@@ -3,6 +3,7 @@ extern crate tocs;
 extern crate walkdir;
 
 use std::str::FromStr as _;
+use std::io::Write as _;
 
 extern crate sqliteio;
 
@@ -12,7 +13,8 @@ use tocs::cs3::tbl::Entry as CS3Entry;
 
 pub fn main() {
     //to_new_db(std::path::Path::new("../private-test-data/cs3/data/text/"), std::path::Path::new("cs3tbl.db"));
-    to_tbl(std::path::Path::new("cs3tbl.db"), std::path::Path::new("/home/user/installed_games/tocs3-modded/drive_c/GOG Games/ToCS3/data/"));
+    let force = false;
+    to_tbl(std::path::Path::new("cs3tbl.db"), std::path::Path::new("/home/user/installed_games/tocs3-modded/drive_c/GOG Games/ToCS3/data/text/"), force);
 }
 
 fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
@@ -156,17 +158,15 @@ fn sqlite_read_table_unsafe_or_panic<T: sqliteio::SqliteIO>(tx: &rusqlite::Trans
         .collect()
 }
 
-fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path) {
+fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path, force: bool) {
+    // load data from db
     let mut db = match rusqlite::Connection::open(dbpath) {
         Ok(x) => x,
         Err(e) => panic!("couldn't open db file: {e}"),
     };
     db.execute("pragma foreign_keys = on", []).unwrap();
-
     let tx = db.transaction().unwrap();
-
     let mut all_entries = std::collections::HashMap::<String, std::vec::Vec<CS3Entry>>::new();
-
     let mut stmt = tx.prepare("select name from sqlite_schema").expect("sqlite_schema query");
     let tables: std::vec::Vec<String> = stmt
         .query_map([], |row| row.get::<usize, String>(0))
@@ -258,7 +258,10 @@ fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path) {
         }
     }
     drop(stmt);
+    drop(tx);
+    drop(db);
 
+    // serialize data
     let mut serialized = std::collections::HashMap::<std::path::PathBuf, std::vec::Vec<u8>>::new();
     for (filename, entries) in all_entries.into_iter() {
             let headers = entries
@@ -275,18 +278,38 @@ fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path) {
         };
         let relpath = std::path::PathBuf::from_str(&filename).expect("infallible");
         if relpath.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
-            panic!("file {} has a parent", filename);
+            panic!("file {} has a parent component. bailing out to avoid accidently clobbering random files.", filename);
         };
         let path = output_path.join(relpath);
         serialized.insert(path, data);
     }
 
-    // TODO:
-    // convertible to OsString and they don't escape the file path, (i.e. no '..')
     // write the tbls
-    //
-    // this won't give us bit-exact roundtrips (for example we drop headers without entries and we may reorder entries)
-    // it remains to be seen if this leads to problems or not (i very much hope it doesn't).
+    for (filename, data) in serialized.into_iter() {
+        println!("Writing {}", filename.display());
+        if let Some(parent) = filename.parent() {
+            match std::fs::create_dir_all(parent) {
+                Ok(()) => (),
+                Err(e) => println!("Couldn't create parent path of tbl {}: {}", filename.display(), e),
+            };
+        }
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true);
+        if force {
+            options.create(true).truncate(true)
+        } else {
+            options.create_new(true)
+        };
+        let mut file = match options.open(&filename) {
+            Ok(f) => f,
+            Err(e) => panic!("couldn't open file {}: {}", filename.display(), e),
+        };
+        match file.write_all(&data) {
+            Ok(()) => (),
+            Err(e) => panic!("Couldn't write data to {}: {}", filename.display(), e),
+        };
+    }
 
-    tx.commit();
+    // note: we're not getting bit-exact roundtrips because we drop headers without entries and we may reorder entries
+    // it remains to be seen if this leads to problems or not (i very much hope it doesn't).
 }
