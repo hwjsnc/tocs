@@ -63,7 +63,9 @@ fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
     let create_tables = || -> rusqlite::Result<()> {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Generic>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ActiveVoiceTableData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AtBonus>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CharRevise>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CharData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CompHelpData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::GameDifficulty>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Item>(&tx)?;
@@ -73,6 +75,7 @@ fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SE>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SlotCost>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Status>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::StatusP>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Voice>(&tx)?;
         Ok(())
     };
@@ -102,7 +105,9 @@ fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                 let insert_result = match tblentry {
                     CS3Entry::Generic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::ActiveVoiceTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::AtBonus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::CharRevise(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::CharData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::CompHelpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::GameDifficulty(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Item(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
@@ -112,6 +117,7 @@ fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::SE(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::SlotCost(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Status(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::StatusP(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Voice(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                 };
                 match insert_result {
@@ -172,7 +178,7 @@ fn sqlite_read_table_unsafe_or_panic<T: sqliteio::SqliteIO>(tx: &rusqlite::Trans
     columns.extend(T::sqlite_columns());
     let s = format!(
         "select\n{}\nfrom {}",
-        columns.iter().map(|(cname, ctype)| format!("  [{cname}]")).collect::<std::vec::Vec<String>>().join(",\n"),
+        columns.iter().map(|(cname, _ctype)| format!("  [{cname}]")).collect::<std::vec::Vec<String>>().join(",\n"),
         T::sqlite_table()
     );
     let mut stmt = match tx.prepare(&s) {
@@ -225,9 +231,21 @@ fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path, force: bool) 
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
                 }
             }
+            "AtBonus" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::AtBonus>(&tx, table) {
+                    let e = CS3Entry::AtBonus(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                }
+            }
             "char_revise" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::CharRevise>(&tx, table) {
                     let e = CS3Entry::CharRevise(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                }
+            }
+            "CharData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::CharData>(&tx, table) {
+                    let e = CS3Entry::CharData(e);
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
                 }
             }
@@ -282,6 +300,12 @@ fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path, force: bool) 
             "status" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::Status>(&tx, table) {
                     let e = CS3Entry::Status(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                }
+            }
+            "status_p" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::StatusP>(&tx, table) {
+                    let e = CS3Entry::StatusP(e);
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
                 }
             }

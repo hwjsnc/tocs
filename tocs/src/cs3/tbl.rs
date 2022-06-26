@@ -30,7 +30,9 @@ pub struct Tbl {
 pub enum Entry {
     Generic(entry_data::Generic),
     ActiveVoiceTableData(entry_data::ActiveVoiceTableData),
+    AtBonus(entry_data::AtBonus),
     CharRevise(entry_data::CharRevise),
+    CharData(entry_data::CharData),
     CompHelpData(entry_data::CompHelpData),
     GameDifficulty(entry_data::GameDifficulty),
     Item(entry_data::Item),
@@ -40,6 +42,7 @@ pub enum Entry {
     SE(entry_data::SE),
     SlotCost(entry_data::SlotCost),
     Status(entry_data::Status),
+    StatusP(entry_data::StatusP),
     Voice(entry_data::Voice),
 }
 
@@ -77,6 +80,36 @@ pub mod entry_data {
         pub unknown_data_2: std::vec::Vec<u8>,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "AtBonus"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct AtBonus {
+        unknown_int: u32,
+        inverse_chance: u8,
+        hp_10_perc: u8,
+        hp_30_perc: u8,
+        hp_50_perc: u8,
+        ep_10_perc: u8,
+        ep_30_perc: u8,
+        ep_50_perc: u8,
+        cp_10: u8,
+        cp_30: u8,
+        cp_50: u8,
+        cp_100: u8,
+        bp_1: u8,
+        bp_3: u8,
+        bp_5: u8,
+        crit: u8,
+        sepith_up: u8,
+        zero_art: u8,
+        zero_order: u8,
+        guard_break: u8,
+        status_attack: u8,
+        deathblow: u8,
+        vanish: u8,
+        cp_200: u8,
+        cp_0: u8,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "char_revise"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct CharRevise {
@@ -88,6 +121,15 @@ pub mod entry_data {
         pub adf: u16,
         pub spd: u16,
         pub brk: u16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "CharData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct CharData {
+        pub unknown_shorts: [u16; 3],
+        pub unknown_floats: [f32; 5],
+        #[deserialize(length = 12)]
+        pub unknown_data: std::vec::Vec<u8>,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "CompHelpData"))]
@@ -113,12 +155,11 @@ pub mod entry_data {
         pub flags: String,
         pub r#type: u16,
         pub subtype: u16,
-        pub element: u8,
+        pub element: u16,
         pub slash: u8,
         pub thrust: u8,
         pub pierce: u8,
         pub strike: u8,
-        pub unknown_byte: u8,
         pub target_type: u8,
         pub range: f32,
         pub area: u8,
@@ -317,6 +358,105 @@ pub mod entry_data {
         pub description: String,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "status_p"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct StatusP {
+        pub id: u16,
+        pub script: String,
+        pub texture: String,
+        pub model: String,
+        pub model_scale: f32,
+        pub camera_pivot_height: f32,
+        pub hitbox_size: f32,
+        pub unknown_float_1: f32,
+        pub unknown_float_2: f32,
+        pub unknown_float_3: f32,
+        pub unknown_float_4: f32,
+        pub unknown_short_1: u16,
+        pub unknown_short_2: u16,
+        pub is_female: u8,
+        pub level: u8,
+        pub hp_base: u32,
+        pub hp_growth: f32,
+        pub max_ep: u16,
+        pub start_ep: u16,
+        pub max_cp: u16,
+        pub start_cp: u16,
+        pub str_base: u16,
+        pub str_growth: f32,
+        pub def_base: u16,
+        pub def_growth: f32,
+        pub ats_base: u16,
+        pub ats_growth: f32,
+        pub adf_base: u16,
+        pub adf_growth: f32,
+        pub dex_base: u16,
+        pub dex_growth: f32,
+        pub agl_base: u16,
+        pub agl_growth: f32,
+        pub eva: u16,
+        pub spd_base: u16,
+        pub spd_growth: f32,
+        pub mov_base: u16,
+        pub mov_growth: f32,
+        pub exp_base: u16,
+        pub exp_growth: f32,
+        pub brk_mult_base: u16,
+        pub brk_mult_growth: f32,
+        pub earth_efficacy: u8,
+        pub water_efficacy: u8,
+        pub fire_efficacy: u8,
+        pub wind_efficacy: u8,
+        pub time_efficacy: u8,
+        pub space_efficacy: u8,
+        pub mirage_efficacy: u8,
+        pub psn_efficacy: u8,
+        pub seal_efficacy: u8,
+        pub mute_efficacy: u8,
+        pub blnd_efficacy: u8,
+        pub slp_efficacy: u8,
+        pub burn_efficacy: u8,
+        pub frz_efficacy: u8,
+        pub petr_efficacy: u8,
+        pub fnt_efficacy: u8,
+        pub conf_efficacy: u8,
+        pub chrm_efficacy: u8,
+        pub dblw_efficacy: u8,
+        pub nmr_efficacy: u8,
+        pub dlay_efficacy: u8,
+        pub vnsh_efficacy: u8,
+        pub s_dwn_efficacy: u8,
+        pub slash_efficacy: u16,
+        pub thrust_efficacy: u16,
+        pub pierce_efficacy: u16,
+        pub strike_efficacy: u16,
+        pub earth_sepith_base: u8,
+        pub water_sepith_base: u8,
+        pub fire_sepith_base: u8,
+        pub wind_sepith_base: u8,
+        pub time_sepith_base: u8,
+        pub space_sepith_base: u8,
+        pub mirage_sepith_base: u8,
+        pub sepith_mass_base: u8,
+        pub earth_sepith_growth: f32,
+        pub water_sepith_growth: f32,
+        pub fire_sepith_growth: f32,
+        pub wind_sepith_growth: f32,
+        pub time_sepith_growth: f32,
+        pub space_sepith_growth: f32,
+        pub mirage_sepith_growth: f32,
+        pub sepith_mass_growth: f32,
+        pub drop_id_1: u16,
+        pub drop_chance_1: u8,
+        pub drop_id_2: u16,
+        pub drop_chance_2: u8,
+        pub stat_variation_min: f32,
+        pub stat_variation_max: f32,
+        pub flags: String,
+        pub name: String,
+        pub description: String,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "voice"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Voice {
@@ -342,7 +482,9 @@ impl Entry {
         match self {
             Self::Generic(entry_data::Generic { header, .. }) => header,
             Self::ActiveVoiceTableData(_) => "ActiveVoiceTableData",
+            Self::AtBonus(_) => "AtBonus",
             Self::CharRevise(_) => "char_revise",
+            Self::CharData(_) => "CharData",
             Self::CompHelpData(_) => "CompHelpData",
             Self::GameDifficulty(_) => "game_difficulty",
             Self::Item(_) => "item",
@@ -352,6 +494,7 @@ impl Entry {
             Self::SE(_) => "se",
             Self::SlotCost(_) => "SlotCost",
             Self::Status(_) => "status",
+            Self::StatusP(_) => "status_p",
             Self::Voice(_) => "voice",
         }
     }
@@ -381,7 +524,9 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
     lazy_static::lazy_static! {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [
                 ("ActiveVoiceTableData", (|ctx| entry_data::ActiveVoiceTableData::deserialize(ctx).map(|(data, ctx)| (Entry::ActiveVoiceTableData(data), ctx))) as ParseFun),
+                ("AtBonus", (|ctx| entry_data::AtBonus::deserialize(ctx).map(|(data, ctx)| (Entry::AtBonus(data), ctx))) as ParseFun),
                 ("char_revise", (|ctx| entry_data::CharRevise::deserialize(ctx).map(|(data, ctx)| (Entry::CharRevise(data), ctx))) as ParseFun),
+                ("CharData", (|ctx| entry_data::CharData::deserialize(ctx).map(|(data, ctx)| (Entry::CharData(data), ctx))) as ParseFun),
                 ("CompHelpData", (|ctx| entry_data::CompHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::CompHelpData(data), ctx))) as ParseFun),
                 ("game_difficulty", (|ctx| entry_data::GameDifficulty::deserialize(ctx).map(|(data, ctx)| (Entry::GameDifficulty(data), ctx))) as ParseFun),
                 ("item", (|ctx| entry_data::Item::deserialize(ctx).map(|(data, ctx)| (Entry::Item(data), ctx))) as ParseFun),
@@ -391,6 +536,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("se", (|ctx| entry_data::SE::deserialize(ctx).map(|(data, ctx)| (Entry::SE(data), ctx))) as ParseFun),
                 ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).map(|(data, ctx)| (Entry::SlotCost(data), ctx))) as ParseFun),
                 ("status", (|ctx| entry_data::Status::deserialize(ctx).map(|(data, ctx)| (Entry::Status(data), ctx))) as ParseFun),
+                ("status_p", (|ctx| entry_data::StatusP::deserialize(ctx).map(|(data, ctx)| (Entry::StatusP(data), ctx))) as ParseFun),
                 ("voice", (|ctx| entry_data::Voice::deserialize(ctx).map(|(data, ctx)| (Entry::Voice(data), ctx))) as ParseFun),
             ].into_iter().collect();
     }
