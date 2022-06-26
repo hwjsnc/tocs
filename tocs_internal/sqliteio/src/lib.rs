@@ -17,7 +17,7 @@ pub trait SqliteIO {
     /// Generic entries with no known structure go in the "generic" table, other to tables that are named after the respective headers, e.g. table item for "item" entries.
     fn sqlite_table() -> &'static str;
 
-    /// Column names, one for each entry attribute/struct
+    /// Column names and types, one for each entry attribute/struct
     /// E.g. for item, this would be vec!["id", "character_restriction", "flags", ...]
     ///
     /// Special care must be taken for repeated attributes, like effects. These must have differently named columns for each member of the sequence.
@@ -25,7 +25,7 @@ pub trait SqliteIO {
     /// E.g. the single struct field `effects: [Effect; 5]` is turned into several columns, named "effects[0] id", "effects[0] data[0]", "effects[0] data[1]", "effects[0] data[2]", "effects[1] id", "effects[1] data[1]", etc.
     ///
     /// The following column names are illegal: file, rowid
-    fn sqlite_columns() -> std::vec::Vec<String>;
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)>;
 
     /// Converts entry data into a sqlite tuple following the schema from the `columns` function
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>>;
@@ -45,8 +45,8 @@ impl SqliteIO for u8 {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
-        vec!["".to_string()]
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+        vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
         vec![Box::new(self.clone())]
@@ -60,8 +60,8 @@ impl SqliteIO for u16 {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
-        vec!["".to_string()]
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+        vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
         vec![Box::new(self.clone())]
@@ -75,8 +75,8 @@ impl SqliteIO for u32 {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
-        vec!["".to_string()]
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+        vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
         vec![Box::new(self.clone())]
@@ -90,8 +90,8 @@ impl SqliteIO for i8 {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
-        vec!["".to_string()]
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+        vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
         vec![Box::new(self.clone())]
@@ -105,8 +105,8 @@ impl SqliteIO for i16 {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
-        vec!["".to_string()]
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+        vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
         vec![Box::new(self.clone())]
@@ -120,8 +120,8 @@ impl SqliteIO for i32 {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
-        vec!["".to_string()]
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+        vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
         vec![Box::new(self.clone())]
@@ -135,8 +135,8 @@ impl SqliteIO for f32 {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
-        vec!["".to_string()]
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+        vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
         // sqlite only supports double precision floats.
@@ -154,8 +154,8 @@ impl SqliteIO for String {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
-        vec!["".to_string()]
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+        vec![("".to_string(), "text")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
         vec![Box::new(self.clone())]
@@ -169,8 +169,8 @@ impl SqliteIO for std::vec::Vec<u8> {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
-        vec!["".to_string()]
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+        vec![("".to_string(), "blob")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
         vec![Box::new(self.clone())]
@@ -184,12 +184,12 @@ impl<T: SqliteIO + Default + Copy, const N: usize> SqliteIO for [T; N] {
     fn sqlite_table() -> &'static str {
         ""
     }
-    fn sqlite_columns() -> std::vec::Vec<String> {
+    fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
         let t_columns = T::sqlite_columns();
-        let mut columns = std::vec::Vec::<String>::new();
+        let mut columns = std::vec::Vec::<(String, &'static str)>::new();
         for i in 0..N {
-            for column in t_columns.iter() {
-                columns.push(if column.is_empty() { format!("({})", i + 1) } else { format!("({}) {}", i + 1, column) });
+            for (cname, ctype) in t_columns.iter() {
+                columns.push((if cname.is_empty() { format!("({})", i + 1) } else { format!("({}) {}", i + 1, cname) }, ctype));
             }
         }
         columns

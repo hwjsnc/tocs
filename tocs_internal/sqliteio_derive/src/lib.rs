@@ -24,8 +24,8 @@ pub fn derive_sqliteio(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
         impl #impl_generics sqliteio::SqliteIO for #name #ty_generics #where_clause {
             fn sqlite_table() -> &'static str { #table_name_str }
 
-            fn sqlite_columns() -> std::vec::Vec<String> {
-                let mut columns = std::vec::Vec::<String>::new();
+            fn sqlite_columns() -> std::vec::Vec<(String, &'static str)> {
+                let mut columns = std::vec::Vec::<(String, &'static str)>::new();
                 #add_column_names_statements
                 columns
             }
@@ -81,12 +81,12 @@ fn generate_column_names_statements(data: &Data) -> TokenStream {
                     let span = f.span();
                     let fieldname_string = fieldname.to_string().trim_start_matches("r#").escape_default().to_string();
                     quote_spanned! {span=>
-                        for column in <#t>::sqlite_columns().iter() {
+                        for (cname, ctype) in <#t>::sqlite_columns().iter() {
                             let s = #fieldname_string;
-                            if column.is_empty() {
-                                columns.push(format!("{}", s))
+                            if cname.is_empty() {
+                                columns.push((format!("{}", s), ctype))
                             } else {
-                                columns.push(format!("{} {}", s, column))
+                                columns.push((format!("{} {}", s, cname), ctype))
                             }
                         }
                     }

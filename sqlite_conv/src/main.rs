@@ -136,7 +136,11 @@ fn sqlite_schema_unsafe<T: sqliteio::SqliteIO>() -> String {
     let s = format!(
         "create table {} (\nfile,\n{}\n)",
         T::sqlite_table(),
-        T::sqlite_columns().iter().map(|c| format!("  '{c}'")).collect::<std::vec::Vec<_>>().join(",\n")
+        T::sqlite_columns()
+            .iter()
+            .map(|(cname, ctype)| format!("  '{cname}' {ctype}"))
+            .collect::<std::vec::Vec<_>>()
+            .join(",\n")
     );
     s
 }
@@ -164,11 +168,11 @@ fn sqlite_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filen
 
 fn sqlite_read_table_unsafe_or_panic<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, table: &str) -> std::vec::Vec<(String, T)> {
     assert_eq!(table, T::sqlite_table());
-    let mut columns = vec!["file".to_string()];
+    let mut columns = vec![("file".to_string(), "text")];
     columns.extend(T::sqlite_columns());
     let s = format!(
         "select\n{}\nfrom {}",
-        columns.iter().map(|c| format!("  [{c}]")).collect::<std::vec::Vec<String>>().join(",\n"),
+        columns.iter().map(|(cname, ctype)| format!("  [{cname}]")).collect::<std::vec::Vec<String>>().join(",\n"),
         T::sqlite_table()
     );
     let mut stmt = match tx.prepare(&s) {
