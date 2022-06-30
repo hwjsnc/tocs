@@ -54,6 +54,12 @@ impl ioutil::tbl::TblEntry for Entry {
     }
 }
 
+impl ioutil::tbl::Tbl<Entry> for Tbl {
+    fn new(headers: std::vec::Vec<String>, entries: std::vec::Vec<Entry>) -> Self {
+        Self { headers, entries }
+    }
+}
+
 #[derive(Debug)]
 pub enum SerializeError {
     // TODO: number of offending entry
@@ -69,22 +75,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
     lazy_static::lazy_static! {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [].into_iter().collect();
     }
-
-    let (number_of_entries, header_names_with_counts, ctx) = ioutil::tbl::parse_tbl_header_v2(ParseContext::start_of(input))?;
-    let (entries, ctx) = ioutil::tbl::parse_entries(&PARSERS, ctx, number_of_entries)?;
-    // TODO: check that number of entries matches actual table entries
-    // TODO: check that every entry is present in the headers
-    if ctx.strict {
-        let _ = parse_eof(ctx).map_err(|e| ParseError {
-            detail: ParseErrorDetail::Primitive(e),
-            context: ParseErrorContext::End,
-        })?;
-    }
-    let tbl = Tbl {
-        headers: header_names_with_counts.into_iter().map(|(h, _)| h.into_owned()).collect(),
-        entries,
-    };
-    Ok(tbl)
+    ioutil::tbl::parse_tbl::<Entry, Tbl>(&PARSERS, input)
 }
 
 pub fn store(tbl: &Tbl) -> Result<std::vec::Vec<u8>, SerializeError> {

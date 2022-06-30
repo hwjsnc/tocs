@@ -1,4 +1,4 @@
-use crate::{parse_bytes, parse_le_u16, parse_le_u32, parse_utf8cstring, ParseContext};
+use crate::{parse_bytes, parse_eof, parse_le_u16, parse_le_u32, parse_utf8cstring, ParseContext};
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
@@ -168,6 +168,10 @@ pub trait TblEntry {
     fn new_generic(header_name: &str, data: &[u8]) -> Self;
 }
 
+pub trait Tbl<E: TblEntry> {
+    fn new(headers: std::vec::Vec<String>, entries: std::vec::Vec<E>) -> Self;
+}
+
 /// Deserialization/parsing trait for entry data (not for higher-level structure)
 pub trait Deserialize
 where
@@ -263,6 +267,27 @@ pub fn parse_entries<'a, E: TblEntry>(
         ctx = entry_ctx;
     }
     Ok((entries, ctx))
+}
+
+/// Parse tbl
+pub fn parse_tbl<E, T>(entry_parsers: &std::collections::HashMap<&str, EntryParseFun<E>>, input: &[u8]) -> Result<T, ParseError>
+where
+    E: TblEntry,
+    T: Tbl<E>,
+{
+    let (number_of_entries, header_names_with_counts, ctx) = parse_tbl_header_v2(ParseContext::start_of(input))?;
+    let (entries, ctx) = parse_entries(entry_parsers, ctx, number_of_entries)?;
+    // TOOO: check that number of entries match actual table entries
+    // TODO: check that every entry is present in the headers
+    if true {
+        // TODO: check strict
+        let _ = parse_eof(ctx).map_err(|e| ParseError {
+            detail: ParseErrorDetail::Primitive(e),
+            context: ParseErrorContext::End,
+        })?;
+    }
+    let tbl = T::new(header_names_with_counts.into_iter().map(|(h, _)| h.into_owned()).collect(), entries);
+    Ok(tbl)
 }
 
 impl Deserialize for u8 {
