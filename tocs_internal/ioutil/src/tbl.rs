@@ -11,8 +11,8 @@ pub enum ParseErrorDetail {
     Primitive(crate::PrimitiveParseError),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
     DuplicateHeader(String),
+    EntryHeaderNotInTblHeader { missing: String },
     // TODO:
-    //EntryHeaderNotInTblHeader { missing: String },
     //EntryCountDoesNotMatchHeaderEntry { expected_from_header: u32, actual: usize },
     //EntryHeaderNotInTblHeader { name: String },
 }
@@ -55,6 +55,7 @@ impl ParseErrorDetail {
                 )
             }
             ParseErrorDetail::DuplicateHeader(h) => format!("Tbl header name list contains duplicate ('{h}')"),
+            ParseErrorDetail::EntryHeaderNotInTblHeader { missing } => format!("unexpected entry header '{missing}'"),
         }
     }
 }
@@ -166,6 +167,7 @@ fn parse_header_names_with_count(ctx: ParseContext) -> Result<(std::vec::Vec<(st
 
 pub trait TblEntry {
     fn new_generic(header_name: &str, data: &[u8]) -> Self;
+    fn header_name(&self) -> &str;
 }
 
 pub trait Tbl<E: TblEntry> {
@@ -275,10 +277,29 @@ where
     E: TblEntry,
     T: Tbl<E>,
 {
+    // TODO options: tbl version (headers or not), strict
     let (number_of_entries, header_names_with_counts, ctx) = parse_tbl_header_v2(ParseContext::start_of(input))?;
     let (entries, ctx) = parse_entries(entry_parsers, ctx, number_of_entries)?;
+    let header_present = |s| header_names_with_counts.iter().any(|(h, _)| h == s);
+    if true {
+        // TODO: check strict
+        for (n, entry) in entries.iter().enumerate() {
+            // TODO: parse entry here
+            if !header_present(entry.header_name()) {
+                return Err(ParseError {
+                    detail: ParseErrorDetail::EntryHeaderNotInTblHeader {
+                        missing: entry.header_name().to_string(),
+                    },
+                    context: ParseErrorContext::TblHeaderEntry {
+                        start_position: todo!(),
+                        entry_number: n.try_into().unwrap(),
+                        total_entries: todo!(),
+                    },
+                });
+            }
+        }
+    }
     // TOOO: check that number of entries match actual table entries
-    // TODO: check that every entry is present in the headers
     if true {
         // TODO: check strict
         let _ = parse_eof(ctx).map_err(|e| ParseError {

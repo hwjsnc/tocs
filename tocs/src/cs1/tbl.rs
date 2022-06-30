@@ -9,6 +9,7 @@ use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
 use ioutil::tbl::Deserialize as _;
 use ioutil::tbl::Serialize as _;
 use ioutil::tbl::SerializeLength as _;
+use ioutil::tbl::TblEntry as _;
 
 use tbl_serialize_derive::Serialize;
 use tbl_serialize_length_derive::SerializeLength;
@@ -37,20 +38,17 @@ pub mod entry_data {
     }
 }
 
-impl Entry {
-    pub fn header_name(&self) -> &str {
-        match self {
-            Self::Generic(entry_data::Generic { header, .. }) => header,
-        }
-    }
-}
-
 impl ioutil::tbl::TblEntry for Entry {
     fn new_generic(header_name: &str, data: &[u8]) -> Self {
         Entry::Generic(entry_data::Generic {
             header: header_name.to_string(),
             data: data.to_vec(),
         })
+    }
+    fn header_name(&self) -> &str {
+        match self {
+            Self::Generic(entry_data::Generic { header, .. }) => header,
+        }
     }
 }
 
