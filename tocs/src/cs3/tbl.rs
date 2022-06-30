@@ -71,7 +71,7 @@ pub mod entry_data {
         pub unknown_short_2: u16,
         pub unknown_short_3: u16,
         pub portrait: String,
-        pub unknown_short_4: u16,
+        pub id: u16,
         pub character: i16,
         pub text: String,
         pub unknown_float_1: f32,
@@ -460,7 +460,7 @@ pub mod entry_data {
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "voice"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Voice {
-        pub unknown_short_1: u16,
+        pub id: u16,
         pub unknown_byte: u8,
         pub clip: String,
         pub unknown_short_2: u16,
