@@ -9,7 +9,8 @@ extern crate tbl_serialize_length_derive;
 use ioutil::tbl::Deserialize as _;
 use ioutil::tbl::Serialize as _;
 use ioutil::tbl::SerializeLength as _;
-use ioutil::tbl::TblEntry as _;
+
+pub use ioutil::tbl::TblEntry;
 
 use tbl_serialize_derive::Serialize;
 use tbl_serialize_length_derive::SerializeLength;
@@ -73,7 +74,11 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
     lazy_static::lazy_static! {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [].into_iter().collect();
     }
-    ioutil::tbl::parse_tbl::<Entry, Tbl>(&PARSERS, input)
+    let parse_options = ioutil::tbl::ParseOptions {
+        with_header_counts: true,
+        strict: true,
+    };
+    ioutil::tbl::parse_tbl::<Entry, Tbl>(&PARSERS, parse_options, input)
 }
 
 pub fn store(tbl: &Tbl) -> Result<std::vec::Vec<u8>, SerializeError> {

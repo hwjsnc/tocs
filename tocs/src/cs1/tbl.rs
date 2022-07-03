@@ -9,7 +9,8 @@ use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
 use ioutil::tbl::Deserialize as _;
 use ioutil::tbl::Serialize as _;
 use ioutil::tbl::SerializeLength as _;
-use ioutil::tbl::TblEntry as _;
+
+pub use ioutil::tbl::TblEntry;
 
 use tbl_serialize_derive::Serialize;
 use tbl_serialize_length_derive::SerializeLength;

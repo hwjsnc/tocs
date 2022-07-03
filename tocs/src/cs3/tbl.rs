@@ -12,7 +12,9 @@ use ioutil::{parse_eof, ParseContext};
 use ioutil::tbl::Deserialize as _;
 use ioutil::tbl::Serialize as _;
 use ioutil::tbl::SerializeLength as _;
-use ioutil::tbl::TblEntry as _;
+
+// reexport for use outside of the crate
+pub use ioutil::tbl::TblEntry;
 
 use blake2::Digest as _;
 
@@ -544,7 +546,11 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("voice", (|ctx| entry_data::Voice::deserialize(ctx).map(|(data, ctx)| (Entry::Voice(data), ctx))) as ParseFun),
             ].into_iter().collect();
     }
-    ioutil::tbl::parse_tbl::<Entry, Tbl>(&PARSERS, input)
+    let parse_options = ioutil::tbl::ParseOptions {
+        with_header_counts: true,
+        strict: true,
+    };
+    ioutil::tbl::parse_tbl::<Entry, Tbl>(&PARSERS, parse_options, input)
 }
 
 pub fn store(tbl: &Tbl) -> Result<std::vec::Vec<u8>, SerializeError> {

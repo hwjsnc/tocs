@@ -1,5 +1,10 @@
 use crate::{parse_bytes, parse_eof, parse_le_u16, parse_le_u32, parse_utf8cstring, ParseContext};
 
+pub struct ParseOptions {
+    pub with_header_counts: bool,
+    pub strict: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct ParseError {
     pub detail: ParseErrorDetail,
@@ -12,8 +17,8 @@ pub enum ParseErrorDetail {
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
     DuplicateHeader(String),
     EntryHeaderNotInTblHeader { missing: String },
+    EntryCountDoesNotMatchHeaderEntry { header: String, expected: u32, actual: usize },
     // TODO:
-    //EntryCountDoesNotMatchHeaderEntry { expected_from_header: u32, actual: usize },
     //EntryHeaderNotInTblHeader { name: String },
 }
 
@@ -56,6 +61,7 @@ impl ParseErrorDetail {
             }
             ParseErrorDetail::DuplicateHeader(h) => format!("Tbl header name list contains duplicate ('{h}')"),
             ParseErrorDetail::EntryHeaderNotInTblHeader { missing } => format!("unexpected entry header '{missing}'"),
+            ParseErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual } => format!("Unexpected number of {header} entries (expected {expected}, got {actual})"),
         }
     }
 }
@@ -272,19 +278,26 @@ pub fn parse_entries<'a, E: TblEntry>(
 }
 
 /// Parse tbl
-pub fn parse_tbl<E, T>(entry_parsers: &std::collections::HashMap<&str, EntryParseFun<E>>, input: &[u8]) -> Result<T, ParseError>
+pub fn parse_tbl<E, T>(entry_parsers: &std::collections::HashMap<&str, EntryParseFun<E>>, options: ParseOptions, input: &[u8]) -> Result<T, ParseError>
 where
     E: TblEntry,
     T: Tbl<E>,
 {
-    // TODO options: tbl version (headers or not), strict
-    let (number_of_entries, header_names_with_counts, ctx) = parse_tbl_header_v2(ParseContext::start_of(input))?;
+    let ctx = if options.strict {
+        ParseContext::start_of(input)
+    } else {
+        ParseContext::start_of(input).less_safe()
+    };
+    let (number_of_entries, header_names_with_counts, ctx) = if options.with_header_counts {
+        parse_tbl_header_v2(ctx)?
+    } else {
+        parse_tbl_header_v1(ctx).map(|(n, ctx)| (n, vec![], ctx))?
+    };
     let (entries, ctx) = parse_entries(entry_parsers, ctx, number_of_entries)?;
     let header_present = |s| header_names_with_counts.iter().any(|(h, _)| h == s);
-    if true {
-        // TODO: check strict
+    if options.strict {
         for (n, entry) in entries.iter().enumerate() {
-            // TODO: parse entry here
+            // TODO: parse entry here rather than parsing all up-front
             if !header_present(entry.header_name()) {
                 return Err(ParseError {
                     detail: ParseErrorDetail::EntryHeaderNotInTblHeader {
@@ -299,9 +312,26 @@ where
             }
         }
     }
-    // TOOO: check that number of entries match actual table entries
-    if true {
-        // TODO: check strict
+    if options.strict {
+        // check that number of entries match actual table entries
+        let mut counts = std::collections::HashMap::<&str, usize>::new();
+        for e in entries.iter() {
+            counts.entry(e.header_name()).and_modify(|n| *n += 1).or_insert(1);
+        }
+        for (h, n) in header_names_with_counts.iter() {
+            let k = counts.get(h.as_ref()).copied().unwrap_or(0);
+            if k.try_into() != Ok(*n) {
+                return Err(ParseError {
+                    detail: ParseErrorDetail::EntryCountDoesNotMatchHeaderEntry {
+                        header: h.to_string(),
+                        expected: *n,
+                        actual: k,
+                    },
+                    context: ParseErrorContext::End,
+                });
+            }
+        }
+        // check absence of trailing data
         let _ = parse_eof(ctx).map_err(|e| ParseError {
             detail: ParseErrorDetail::Primitive(e),
             context: ParseErrorContext::End,

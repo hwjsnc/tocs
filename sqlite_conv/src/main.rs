@@ -12,6 +12,7 @@ extern crate sqliteio;
 use tocs::cs3::tbl as cs3_tbl;
 use tocs::cs3::tbl::entry_data as cs3_entry_data;
 use tocs::cs3::tbl::Entry as CS3Entry;
+use tocs::cs3::tbl::TblEntry as _;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Parser)]
