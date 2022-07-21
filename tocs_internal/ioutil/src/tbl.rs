@@ -301,7 +301,7 @@ where
     let mut entries = std::vec::Vec::<E>::new();
     for i in 0..number_of_entries {
         let (entry, entry_ctx) = parse_entry(entry_parsers, ctx.clone(), i + 1, number_of_entries)?;
-        if options.strict {
+        if options.with_header_counts && options.strict {
             let header_present = |s| header_names_with_counts.iter().any(|(h, _)| h == s);
             if !header_present(entry.header_name()) {
                 return Err(ParseError {
@@ -322,22 +322,24 @@ where
 
     // final checks
     if options.strict {
-        // check that number of entries match actual table entries
-        let mut counts = std::collections::HashMap::<&str, usize>::new();
-        for e in entries.iter() {
-            counts.entry(e.header_name()).and_modify(|n| *n += 1).or_insert(1);
-        }
-        for (h, n) in header_names_with_counts.iter() {
-            let k = counts.get(h.as_ref()).copied().unwrap_or(0);
-            if k.try_into() != Ok(*n) {
-                return Err(ParseError {
-                    detail: ParseErrorDetail::EntryCountDoesNotMatchHeaderEntry {
-                        header: h.to_string(),
-                        expected: *n,
-                        actual: k,
-                    },
-                    context: ParseErrorContext::End,
-                });
+        if options.with_header_counts {
+            // check that number of entries match actual table entries
+            let mut counts = std::collections::HashMap::<&str, usize>::new();
+            for e in entries.iter() {
+                counts.entry(e.header_name()).and_modify(|n| *n += 1).or_insert(1);
+            }
+            for (h, n) in header_names_with_counts.iter() {
+                let k = counts.get(h.as_ref()).copied().unwrap_or(0);
+                if k.try_into() != Ok(*n) {
+                    return Err(ParseError {
+                        detail: ParseErrorDetail::EntryCountDoesNotMatchHeaderEntry {
+                            header: h.to_string(),
+                            expected: *n,
+                            actual: k,
+                        },
+                        context: ParseErrorContext::End,
+                    });
+                }
             }
         }
         // check absence of trailing data

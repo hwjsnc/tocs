@@ -39,6 +39,12 @@ pub mod entry_data {
     }
 }
 
+impl ioutil::tbl::Tbl<Entry> for Tbl {
+    fn new(_headers: std::vec::Vec<String>, entries: std::vec::Vec<Entry>) -> Self {
+        Tbl { entries }
+    }
+}
+
 impl ioutil::tbl::TblEntry for Entry {
     fn new_generic(header_name: &str, data: &[u8]) -> Self {
         Entry::Generic(entry_data::Generic {
@@ -67,18 +73,11 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
     lazy_static::lazy_static! {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [].into_iter().collect();
     }
-
-    let (number_of_entries, ctx) = ioutil::tbl::parse_tbl_header_v1(ioutil::ParseContext::start_of(input))?;
-    let (entries, ctx) = ioutil::tbl::parse_entries(&PARSERS, ctx, number_of_entries)?;
-
-    if ctx.strict {
-        let _ = parse_eof(ctx).map_err(|e| ParseError {
-            detail: ParseErrorDetail::Primitive(e),
-            context: ParseErrorContext::End,
-        })?;
-    }
-
-    Ok(Tbl { entries })
+    let parse_options = ioutil::tbl::ParseOptions {
+        with_header_counts: false,
+        strict: true,
+    };
+    ioutil::tbl::parse_tbl::<Entry, Tbl>(&PARSERS, parse_options, input)
 }
 
 pub fn store(tbl: &Tbl) -> Result<std::vec::Vec<u8>, SerializeError> {
