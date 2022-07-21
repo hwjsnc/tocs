@@ -78,6 +78,7 @@ fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SlotCost>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Status>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::StatusP>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::TextTableData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Voice>(&tx)?;
         Ok(())
     };
@@ -121,6 +122,7 @@ fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::SlotCost(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Status(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::StatusP(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::TextTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Voice(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                 };
                 match insert_result {

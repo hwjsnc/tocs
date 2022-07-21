@@ -47,6 +47,7 @@ pub enum Entry {
     SlotCost(entry_data::SlotCost),
     Status(entry_data::Status),
     StatusP(entry_data::StatusP),
+    TextTableData(entry_data::TextTableData),
     Voice(entry_data::Voice),
 }
 
@@ -470,6 +471,13 @@ pub mod entry_data {
         pub description: String,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "TextTableData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct TextTableData {
+        pub id: u16,
+        pub text: String,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "voice"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Voice {
@@ -515,6 +523,7 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::SlotCost(_) => "SlotCost",
             Self::Status(_) => "status",
             Self::StatusP(_) => "status_p",
+            Self::TextTableData(_) => "TextTableData",
             Self::Voice(_) => "voice",
         }
     }
@@ -555,6 +564,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).map(|(data, ctx)| (Entry::SlotCost(data), ctx))) as ParseFun),
                 ("status", (|ctx| entry_data::Status::deserialize(ctx).map(|(data, ctx)| (Entry::Status(data), ctx))) as ParseFun),
                 ("status_p", (|ctx| entry_data::StatusP::deserialize(ctx).map(|(data, ctx)| (Entry::StatusP(data), ctx))) as ParseFun),
+                ("TextTableData", (|ctx| entry_data::TextTableData::deserialize(ctx).map(|(data, ctx)| (Entry::TextTableData(data), ctx))) as ParseFun),
                 ("voice", (|ctx| entry_data::Voice::deserialize(ctx).map(|(data, ctx)| (Entry::Voice(data), ctx))) as ParseFun),
             ].into_iter().collect();
     }
