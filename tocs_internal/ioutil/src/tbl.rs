@@ -267,6 +267,7 @@ pub fn parse_entries<'a, E: TblEntry>(
     mut ctx: ParseContext<'a>,
     number_of_entries: u16,
 ) -> Result<(std::vec::Vec<E>, ParseContext<'a>), ParseError> {
+    // TODO: remove this
     let mut entries = std::vec::Vec::new();
     entries.reserve_exact(number_of_entries as usize);
     for i in 0..number_of_entries {
@@ -283,6 +284,7 @@ where
     E: TblEntry,
     T: Tbl<E>,
 {
+    // parse headers
     let ctx = if options.strict {
         ParseContext::start_of(input)
     } else {
@@ -293,25 +295,32 @@ where
     } else {
         parse_tbl_header_v1(ctx).map(|(n, ctx)| (n, vec![], ctx))?
     };
-    let (entries, ctx) = parse_entries(entry_parsers, ctx, number_of_entries)?;
-    let header_present = |s| header_names_with_counts.iter().any(|(h, _)| h == s);
-    if options.strict {
-        for (n, entry) in entries.iter().enumerate() {
-            // TODO: parse entry here rather than parsing all up-front
+
+    // parse entries
+    let mut ctx = ctx;
+    let mut entries = std::vec::Vec::<E>::new();
+    for i in 0..number_of_entries {
+        let (entry, entry_ctx) = parse_entry(entry_parsers, ctx.clone(), i + 1, number_of_entries)?;
+        if options.strict {
+            let header_present = |s| header_names_with_counts.iter().any(|(h, _)| h == s);
             if !header_present(entry.header_name()) {
                 return Err(ParseError {
                     detail: ParseErrorDetail::EntryHeaderNotInTblHeader {
                         missing: entry.header_name().to_string(),
                     },
-                    context: ParseErrorContext::TblHeaderEntry {
-                        start_position: todo!(),
-                        entry_number: n.try_into().unwrap(),
-                        total_entries: todo!(),
+                    context: ParseErrorContext::EntryHeader {
+                        start_position: ctx.position(),
+                        entry_number: i + 1,
+                        total_entries: number_of_entries,
                     },
                 });
             }
         }
+        entries.push(entry);
+        ctx = entry_ctx;
     }
+
+    // final checks
     if options.strict {
         // check that number of entries match actual table entries
         let mut counts = std::collections::HashMap::<&str, usize>::new();
@@ -332,11 +341,13 @@ where
             }
         }
         // check absence of trailing data
-        let _ = parse_eof(ctx).map_err(|e| ParseError {
+        parse_eof(ctx).map_err(|e| ParseError {
             detail: ParseErrorDetail::Primitive(e),
             context: ParseErrorContext::End,
         })?;
     }
+
+    // done
     let tbl = T::new(header_names_with_counts.into_iter().map(|(h, _)| h.into_owned()).collect(), entries);
     Ok(tbl)
 }
