@@ -39,6 +39,7 @@ pub enum Entry {
     CompHelpData(entry_data::CompHelpData),
     GameDifficulty(entry_data::GameDifficulty),
     Item(entry_data::Item),
+    ItemHelpData(entry_data::ItemHelpData),
     Magic(entry_data::Magic),
     MagicBo(entry_data::MagicBo),
     MasterQuartzDummy(entry_data::MasterQuartzDummy),
@@ -187,6 +188,15 @@ pub mod entry_data {
         pub name: String,
         pub description: String,
         #[deserialize(length = 8)]
+        pub unknown_data: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "ItemHelpData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct ItemHelpData {
+        pub effect: u16,
+        pub text: String,
+        #[deserialize(length = 9)]
         pub unknown_data: std::vec::Vec<u8>,
     }
 
@@ -497,6 +507,7 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::CompHelpData(_) => "CompHelpData",
             Self::GameDifficulty(_) => "game_difficulty",
             Self::Item(_) => "item",
+            Self::ItemHelpData(_) => "ItemHelpData",
             Self::Magic(_) => "magic",
             Self::MagicBo(_) => "magicbo",
             Self::MasterQuartzDummy(_) => "MasterQuartzDummy",
@@ -536,6 +547,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("CompHelpData", (|ctx| entry_data::CompHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::CompHelpData(data), ctx))) as ParseFun),
                 ("game_difficulty", (|ctx| entry_data::GameDifficulty::deserialize(ctx).map(|(data, ctx)| (Entry::GameDifficulty(data), ctx))) as ParseFun),
                 ("item", (|ctx| entry_data::Item::deserialize(ctx).map(|(data, ctx)| (Entry::Item(data), ctx))) as ParseFun),
+                ("ItemHelpData", (|ctx| entry_data::ItemHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::ItemHelpData(data), ctx))) as ParseFun),
                 ("magic", (|ctx| entry_data::Magic::deserialize(ctx).map(|(data, ctx)| (Entry::Magic(data), ctx))) as ParseFun),
                 ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).map(|(data, ctx)| (Entry::MagicBo(data), ctx))) as ParseFun),
                 ("MasterQuartzDummy", (|ctx| entry_data::MasterQuartzDummy::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzDummy(data), ctx))) as ParseFun),
