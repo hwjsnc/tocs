@@ -1,3 +1,4 @@
+extern crate blake2;
 extern crate ioutil;
 extern crate tbl_serialize_derive;
 extern crate tbl_serialize_length_derive;
@@ -7,6 +8,8 @@ use ioutil::tbl::ParseError;
 
 use ioutil::tbl::Serialize as _;
 use ioutil::tbl::SerializeLength as _;
+
+use blake2::Digest as _;
 
 pub use ioutil::tbl::TblEntry;
 
@@ -109,9 +112,43 @@ where
     entry.serialize(out).map_err(SerializeError::WriteError)
 }
 
+pub fn fix(data: &[u8]) -> std::vec::Vec<u8> {
+    let mut copy = data.to_vec();
+    let _ = fix_in_place_if_necessary(&mut copy);
+    copy
+}
+
+pub fn fix_in_place_if_necessary(data: &mut std::vec::Vec<u8>) -> Option<()> {
+    type FixFun = fn(&mut std::vec::Vec<u8>) -> ();
+    lazy_static::lazy_static! {
+        static ref FIXFUN: std::collections::HashMap<[u8; 64], FixFun> = [
+                (hex_literal::hex!("e3a75ea6c0902da1f8da0d052305a4db98839a8a3c4403cf129144177a3910504a4c8b11ce8aa177db3a7554c58575e86a41655fb8414a90ce2c3083ecef88d5"), fix_CS1_PC_1_6_dat_us_t_main as FixFun),
+        ].into_iter().collect();
+    }
+    let hash = blake2::Blake2b512::digest(&data);
+    let fixfun = FIXFUN.get(&hash[..])?;
+    fixfun(data);
+    Some(())
+}
+
+fn replace_byte(data: &mut [u8], location: usize, expected: u8, replacement: u8) {
+    assert_eq!(data[location], expected);
+    data[location] = replacement;
+}
+
+#[allow(non_snake_case)]
+fn fix_CS1_PC_1_6_dat_us_t_main(data: &mut std::vec::Vec<u8>) {
+    // Cold Steel PC version 1.6, data/text/dat_us/t_main.tbl
+    assert_eq!(data.len(), 155086);
+    let replace = [(127310, 0x54, 0x47), (128670, 0xa4, 0x53)];
+    for (location, expected, replacement) in replace {
+        replace_byte(data, location, expected, replacement);
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::{load, store};
+    use super::{fix, load, store};
     extern crate walkdir;
 
     #[test]
@@ -122,13 +159,18 @@ mod test {
         for entry in walkdir::WalkDir::new(base_path) {
             let entry = entry.unwrap();
             let path = entry.path();
+            if let Some(parent) = path.parent() {
+                if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) {
+                    continue; // TODO: support for JP files, maybe -- they use shift-JIS encoding for text though ...
+                }
+            }
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
                 println!("{}", path.display());
                 let original = std::fs::read(path).unwrap();
-                // TODO: fix data files
-                let tbl = load(&original).unwrap();
+                let fixed = fix(&original);
+                let tbl = load(&fixed).unwrap();
                 let serialized = store(&tbl).unwrap();
-                assert_eq!(original, serialized);
+                assert_eq!(serialized, fixed);
             }
         }
     }
