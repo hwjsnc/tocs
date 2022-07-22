@@ -42,7 +42,11 @@ pub enum Entry {
     ItemHelpData(entry_data::ItemHelpData),
     Magic(entry_data::Magic),
     MagicBo(entry_data::MagicBo),
+    MasterQuartzBase(entry_data::MasterQuartzBase),
+    MasterQuartzData(entry_data::MasterQuartzData),
     MasterQuartzDummy(entry_data::MasterQuartzDummy),
+    MasterQuartzMemo(entry_data::MasterQuartzMemo),
+    MasterQuartzStatus(entry_data::MasterQuartzStatus),
     QSBook(entry_data::QSBook),
     QSChapter(entry_data::QSChapter),
     QSMons(entry_data::QSMons),
@@ -242,11 +246,65 @@ pub mod entry_data {
         pub turns: u16,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MasterQuartzBase"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MasterQuartzBase {
+        pub item_id: u16,
+        pub mq_id: u16,
+        pub unknown_short: u16,
+        pub hp_pattern: u16,
+        pub ep_pattern: u16,
+        pub str_pattern: u16,
+        pub def_pattern: u16,
+        pub ats_pattern: u16,
+        pub adf_pattern: u16,
+        pub spd_pattern: u16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MasterQuartzData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MasterQuartzData {
+        pub item_id: u16,
+        pub level: u16,
+        pub effect_data: [f32; 9],
+        pub arts: [i16; 2],
+        pub memos: [u16; 9],
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MasterQuartzDummy"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct MasterQuartzDummy {
         pub dummy_id: u16,
         pub original_id: u16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MasterQuartzMemo"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MasterQuartzMemo {
+        pub item_id: u16,
+        pub memo_id: u16,
+        pub text: String,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MasterQuartzStatus"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MasterQuartzStatus {
+        pub pattern_id: u8,
+        pub level: u16,
+        pub main_hp: i16,
+        pub main_ep: i16,
+        pub main_str: i16,
+        pub main_def: i16,
+        pub main_ats: i16,
+        pub main_adf: i16,
+        pub main_spd: i16,
+        pub sub_hp: i16,
+        pub sub_ep: i16,
+        pub sub_str: i16,
+        pub sub_def: i16,
+        pub sub_ats: i16,
+        pub sub_adf: i16,
+        pub sub_spd: i16,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSBook"))]
@@ -562,7 +620,11 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::ItemHelpData(_) => "ItemHelpData",
             Self::Magic(_) => "magic",
             Self::MagicBo(_) => "magicbo",
+            Self::MasterQuartzBase(_) => "MasterQuartzBase",
+            Self::MasterQuartzData(_) => "MasterQuartzData",
             Self::MasterQuartzDummy(_) => "MasterQuartzDummy",
+            Self::MasterQuartzMemo(_) => "MasterQuartzMemo",
+            Self::MasterQuartzStatus(_) => "MasterQuartzStatus",
             Self::QSBook(_) => "QSBook",
             Self::QSChapter(_) => "QSChapter",
             Self::QSMons(_) => "QSMons",
@@ -607,7 +669,11 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("ItemHelpData", (|ctx| entry_data::ItemHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::ItemHelpData(data), ctx))) as ParseFun),
                 ("magic", (|ctx| entry_data::Magic::deserialize(ctx).map(|(data, ctx)| (Entry::Magic(data), ctx))) as ParseFun),
                 ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).map(|(data, ctx)| (Entry::MagicBo(data), ctx))) as ParseFun),
+                ("MasterQuartzBase", (|ctx| entry_data::MasterQuartzBase::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzBase(data), ctx))) as ParseFun),
+                ("MasterQuartzData", (|ctx| entry_data::MasterQuartzData::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzData(data), ctx))) as ParseFun),
                 ("MasterQuartzDummy", (|ctx| entry_data::MasterQuartzDummy::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzDummy(data), ctx))) as ParseFun),
+                ("MasterQuartzMemo", (|ctx| entry_data::MasterQuartzMemo::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzMemo(data), ctx))) as ParseFun),
+                ("MasterQuartzStatus", (|ctx| entry_data::MasterQuartzStatus::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzStatus(data), ctx))) as ParseFun),
                 ("QSChapter", (|ctx| entry_data::QSChapter::deserialize(ctx).map(|(data, ctx)| (Entry::QSChapter(data), ctx))) as ParseFun),
                 ("QSMons", (|ctx| entry_data::QSMons::deserialize(ctx).map(|(data, ctx)| (Entry::QSMons(data), ctx))) as ParseFun),
                 ("QSBook", (|ctx| entry_data::QSBook::deserialize(ctx).map(|(data, ctx)| (Entry::QSBook(data), ctx))) as ParseFun),
