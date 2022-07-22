@@ -149,13 +149,17 @@ mod test {
         for entry in walkdir::WalkDir::new(base_path) {
             let entry = entry.unwrap();
             let path = entry.path();
+            if let Some(parent) = path.parent() {
+                if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) {
+                    continue; // TODO: support for JP files, maybe -- they use shift-JIS encoding for text though ...
+                }
+            }
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
                 println!("{}", path.display());
                 let original = std::fs::read(path).unwrap();
-                // TODO: fix data files
                 let tbl = load(&original).unwrap();
                 let serialized = store(&tbl).unwrap();
-                assert_eq!(original, serialized);
+                assert_eq!(serialized, original);
             }
         }
     }
