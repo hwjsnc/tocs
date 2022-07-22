@@ -9,10 +9,19 @@ use std::str::FromStr as _;
 
 extern crate sqliteio;
 
+use tocs::cs1::tbl::TblEntry as _;
+
+use tocs::cs1::tbl as cs1_tbl;
+use tocs::cs1::tbl::entry_data as cs1_entry_data;
+use tocs::cs1::tbl::Entry as CS1Entry;
+
+use tocs::cs2::tbl as cs2_tbl;
+use tocs::cs2::tbl::entry_data as cs2_entry_data;
+use tocs::cs2::tbl::Entry as CS2Entry;
+
 use tocs::cs3::tbl as cs3_tbl;
 use tocs::cs3::tbl::entry_data as cs3_entry_data;
 use tocs::cs3::tbl::Entry as CS3Entry;
-use tocs::cs3::tbl::TblEntry as _;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Parser)]
@@ -25,6 +34,9 @@ enum Args {
         /// path of the new database file
         #[clap(long)]
         db_path: std::path::PathBuf,
+        /// game (CS1/CS2/CS3)
+        #[clap(long)]
+        game: Game,
     },
     /// Read data from a sqlite database and generate corresponding tbl files
     To_Tbl {
@@ -34,24 +46,165 @@ enum Args {
         /// path to the directory that the tbls should be written to
         #[clap(long)]
         tbl_path: std::path::PathBuf,
+        /// game (CS1/CS2/CS3)
+        #[clap(long)]
+        game: Game,
         /// overwrite any existing tbl files
         #[clap(short, long)]
         force: bool,
     },
 }
 
-pub fn main() {
-    match Args::parse() {
-        Args::To_Sql { tbl_path, db_path } => {
-            to_new_db(&tbl_path, &db_path);
-        }
-        Args::To_Tbl { db_path, tbl_path, force } => {
-            to_tbl(&db_path, &tbl_path, force);
+#[derive(Debug)]
+enum Game {
+    CS1,
+    CS2,
+    CS3,
+}
+
+impl std::str::FromStr for Game {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        match s {
+            "cs1" => Ok(Game::CS1),
+            "CS1" => Ok(Game::CS1),
+            "cs2" => Ok(Game::CS2),
+            "CS2" => Ok(Game::CS2),
+            "cs3" => Ok(Game::CS3),
+            "CS3" => Ok(Game::CS3),
+            _ => Err("invalid/unknown game"),
         }
     }
 }
 
-fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
+pub fn main() {
+    match Args::parse() {
+        Args::To_Sql { tbl_path, db_path, game } => {
+            match game {
+                Game::CS1 => to_new_db_cs1(&tbl_path, &db_path),
+                Game::CS2 => to_new_db_cs2(&tbl_path, &db_path),
+                Game::CS3 => to_new_db_cs3(&tbl_path, &db_path),
+            };
+        }
+        Args::To_Tbl { db_path, tbl_path, game, force } => {
+            match game {
+                Game::CS1 => todo!(),
+                Game::CS2 => todo!(),
+                Game::CS3 => to_tbl_cs3(&db_path, &tbl_path, force),
+            };
+        }
+    }
+}
+
+fn to_new_db_cs1(tblpath: &std::path::Path, dbpath: &std::path::Path) {
+    if dbpath.exists() {
+        panic!("Database output path {} exists, refusing to overwrite", dbpath.display());
+    }
+
+    let mut db = rusqlite::Connection::open(dbpath).expect("opening new database file");
+    db.execute("pragma foreign_keys = on", []).unwrap();
+
+    let tx = db.transaction().unwrap();
+
+    let create_tables = || -> rusqlite::Result<()> {
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs1_entry_data::Generic>(&tx)?;
+        Ok(())
+    };
+    match create_tables() {
+        Ok(()) => (),
+        Err(e) => panic!("Error creating sql tables: {e}"),
+    };
+
+    for direntry in walkdir::WalkDir::new(tblpath).into_iter() {
+        let direntry = match direntry {
+            Ok(x) => x,
+            Err(e) => panic!("Error walking directory: {e}"),
+        };
+        let path = direntry.path();
+        if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
+            println!("Reading {}", path.display());
+            let path_for_db = path.strip_prefix(tblpath).expect("child path should have parent as prefix").display().to_string();
+            let data = match std::fs::read(path).map(|data| cs1_tbl::fix(&data)) {
+                Ok(x) => x,
+                Err(e) => panic!("Couldn't read tbl file: {e}"),
+            };
+            let tbl = match cs1_tbl::load(&data) {
+                Ok(x) => x,
+                Err(e) => panic!("Couldn't parse tbl file: {}", e.to_msg(&data)),
+            };
+            for (n, tblentry) in tbl.entries.iter().enumerate() {
+                let insert_result = match tblentry {
+                    CS1Entry::Generic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                };
+                match insert_result {
+                    Ok(_) => (),
+                    Err(e) => panic!("Couldn't insert entry {} of {} into table: {}", n + 1, tbl.entries.len(), e),
+                };
+            }
+        }
+    }
+
+    match tx.commit() {
+        Ok(_) => (),
+        Err(e) => panic!("couldn't commit database transaction: {e}"),
+    };
+}
+
+fn to_new_db_cs2(tblpath: &std::path::Path, dbpath: &std::path::Path) {
+    if dbpath.exists() {
+        panic!("Database output path {} exists, refusing to overwrite", dbpath.display());
+    }
+
+    let mut db = rusqlite::Connection::open(dbpath).expect("opening new database file");
+    db.execute("pragma foreign_keys = on", []).unwrap();
+
+    let tx = db.transaction().unwrap();
+
+    let create_tables = || -> rusqlite::Result<()> {
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs2_entry_data::Generic>(&tx)?;
+        Ok(())
+    };
+    match create_tables() {
+        Ok(()) => (),
+        Err(e) => panic!("Error creating sql tables: {e}"),
+    };
+
+    for direntry in walkdir::WalkDir::new(tblpath).into_iter() {
+        let direntry = match direntry {
+            Ok(x) => x,
+            Err(e) => panic!("Error walking directory: {e}"),
+        };
+        let path = direntry.path();
+        if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
+            println!("Reading {}", path.display());
+            let path_for_db = path.strip_prefix(tblpath).expect("child path should have parent as prefix").display().to_string();
+            let data = match std::fs::read(path) {
+                Ok(x) => x,
+                Err(e) => panic!("Couldn't read tbl file: {e}"),
+            };
+            let tbl = match cs2_tbl::load(&data) {
+                Ok(x) => x,
+                Err(e) => panic!("Couldn't parse tbl file: {}", e.to_msg(&data)),
+            };
+            for (n, tblentry) in tbl.entries.iter().enumerate() {
+                let insert_result = match tblentry {
+                    CS2Entry::Generic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                };
+                match insert_result {
+                    Ok(_) => (),
+                    Err(e) => panic!("Couldn't insert entry {} of {} into table: {}", n + 1, tbl.entries.len(), e),
+                };
+            }
+        }
+    }
+
+    match tx.commit() {
+        Ok(_) => (),
+        Err(e) => panic!("couldn't commit database transaction: {e}"),
+    };
+}
+
+fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
     if dbpath.exists() {
         panic!("Database output path {} exists, refusing to overwrite", dbpath.display());
     }
@@ -222,7 +375,7 @@ fn sqlite_read_table_unsafe_or_panic<T: sqliteio::SqliteIO>(tx: &rusqlite::Trans
         .collect()
 }
 
-fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path, force: bool) {
+fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bool) {
     // load data from db
     let mut db = match rusqlite::Connection::open(dbpath) {
         Ok(x) => x,
