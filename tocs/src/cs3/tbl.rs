@@ -43,6 +43,7 @@ pub enum Entry {
     Magic(entry_data::Magic),
     MagicBo(entry_data::MagicBo),
     MasterQuartzDummy(entry_data::MasterQuartzDummy),
+    QSText(entry_data::QSText),
     SE(entry_data::SE),
     SlotCost(entry_data::SlotCost),
     Status(entry_data::Status),
@@ -243,6 +244,15 @@ pub mod entry_data {
     pub struct MasterQuartzDummy {
         pub dummy_id: u16,
         pub original_id: u16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSText"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSText {
+        pub id: u16,
+        pub unknown_byte_1: u8,
+        pub text: String,
+        pub unknown_byte_2: u8,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "se"))]
@@ -519,6 +529,7 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::Magic(_) => "magic",
             Self::MagicBo(_) => "magicbo",
             Self::MasterQuartzDummy(_) => "MasterQuartzDummy",
+            Self::QSText(_) => "QSText",
             Self::SE(_) => "se",
             Self::SlotCost(_) => "SlotCost",
             Self::Status(_) => "status",
@@ -560,6 +571,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("magic", (|ctx| entry_data::Magic::deserialize(ctx).map(|(data, ctx)| (Entry::Magic(data), ctx))) as ParseFun),
                 ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).map(|(data, ctx)| (Entry::MagicBo(data), ctx))) as ParseFun),
                 ("MasterQuartzDummy", (|ctx| entry_data::MasterQuartzDummy::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzDummy(data), ctx))) as ParseFun),
+                ("QSText", (|ctx| entry_data::QSText::deserialize(ctx).map(|(data, ctx)| (Entry::QSText(data), ctx))) as ParseFun),
                 ("se", (|ctx| entry_data::SE::deserialize(ctx).map(|(data, ctx)| (Entry::SE(data), ctx))) as ParseFun),
                 ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).map(|(data, ctx)| (Entry::SlotCost(data), ctx))) as ParseFun),
                 ("status", (|ctx| entry_data::Status::deserialize(ctx).map(|(data, ctx)| (Entry::Status(data), ctx))) as ParseFun),
