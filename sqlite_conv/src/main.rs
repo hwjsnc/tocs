@@ -243,97 +243,97 @@ fn to_tbl(dbpath: &std::path::Path, output_path: &std::path::Path, force: bool) 
             "generic" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::Generic>(&tx, table) {
                     let e = CS3Entry::Generic(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "ActiveVoiceTableData" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::ActiveVoiceTableData>(&tx, table) {
                     let e = CS3Entry::ActiveVoiceTableData(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "AtBonus" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::AtBonus>(&tx, table) {
                     let e = CS3Entry::AtBonus(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "char_revise" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::CharRevise>(&tx, table) {
                     let e = CS3Entry::CharRevise(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "CharData" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::CharData>(&tx, table) {
                     let e = CS3Entry::CharData(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "CompHelpData" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::CompHelpData>(&tx, table) {
                     let e = CS3Entry::CompHelpData(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "game_difficulty" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::GameDifficulty>(&tx, table) {
                     let e = CS3Entry::GameDifficulty(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "item" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::Item>(&tx, table) {
                     let e = CS3Entry::Item(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "magic" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::Magic>(&tx, table) {
                     let e = CS3Entry::Magic(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "magicbo" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MagicBo>(&tx, table) {
                     let e = CS3Entry::MagicBo(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "MasterQuartzDummy" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MasterQuartzDummy>(&tx, table) {
                     let e = CS3Entry::MasterQuartzDummy(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "se" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::SE>(&tx, table) {
                     let e = CS3Entry::SE(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "SlotCost" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::SlotCost>(&tx, table) {
                     let e = CS3Entry::SlotCost(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "status" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::Status>(&tx, table) {
                     let e = CS3Entry::Status(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "status_p" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::StatusP>(&tx, table) {
                     let e = CS3Entry::StatusP(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             "voice" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::Voice>(&tx, table) {
                     let e = CS3Entry::Voice(e);
-                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert(vec![e]);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
             s => panic!("unexpected table {}. this is likely a version mismatch or a bug.", s),

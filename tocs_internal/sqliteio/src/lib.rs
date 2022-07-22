@@ -49,7 +49,7 @@ impl SqliteIO for u8 {
         vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
-        vec![Box::new(self.clone())]
+        vec![Box::new(*self)]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -64,7 +64,7 @@ impl SqliteIO for u16 {
         vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
-        vec![Box::new(self.clone())]
+        vec![Box::new(*self)]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -79,7 +79,7 @@ impl SqliteIO for u32 {
         vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
-        vec![Box::new(self.clone())]
+        vec![Box::new(*self)]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -94,7 +94,7 @@ impl SqliteIO for i8 {
         vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
-        vec![Box::new(self.clone())]
+        vec![Box::new(*self)]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -109,7 +109,7 @@ impl SqliteIO for i16 {
         vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
-        vec![Box::new(self.clone())]
+        vec![Box::new(*self)]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
@@ -124,7 +124,7 @@ impl SqliteIO for i32 {
         vec![("".to_string(), "integer")]
     }
     fn sqlite_to_tup(&self) -> std::vec::Vec<Box<dyn rusqlite::ToSql>> {
-        vec![Box::new(self.clone())]
+        vec![Box::new(*self)]
     }
     fn sqlite_row_read(row: &rusqlite::Row<'_>, start_idx: usize) -> rusqlite::Result<(Self, usize)> {
         Ok((row.get::<usize, Self>(start_idx)?, start_idx + 1))
