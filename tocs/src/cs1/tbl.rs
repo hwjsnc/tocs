@@ -2,11 +2,9 @@ extern crate ioutil;
 extern crate tbl_serialize_derive;
 extern crate tbl_serialize_length_derive;
 
-use ioutil::parse_eof;
 use ioutil::serialize_utf8cstring;
-use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
+use ioutil::tbl::ParseError;
 
-use ioutil::tbl::Deserialize as _;
 use ioutil::tbl::Serialize as _;
 use ioutil::tbl::SerializeLength as _;
 

@@ -6,8 +6,7 @@ extern crate tbl_deserialize_derive;
 extern crate tbl_serialize_derive;
 extern crate tbl_serialize_length_derive;
 
-use ioutil::tbl::{ParseError, ParseErrorContext, ParseErrorDetail};
-use ioutil::{parse_eof, ParseContext};
+use ioutil::tbl::ParseError;
 
 use ioutil::tbl::Deserialize as _;
 use ioutil::tbl::Serialize as _;
