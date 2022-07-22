@@ -43,6 +43,9 @@ pub enum Entry {
     Magic(entry_data::Magic),
     MagicBo(entry_data::MagicBo),
     MasterQuartzDummy(entry_data::MasterQuartzDummy),
+    QSBook(entry_data::QSBook),
+    QSChapter(entry_data::QSChapter),
+    QSMons(entry_data::QSMons),
     QSText(entry_data::QSText),
     SE(entry_data::SE),
     SlotCost(entry_data::SlotCost),
@@ -244,6 +247,37 @@ pub mod entry_data {
     pub struct MasterQuartzDummy {
         pub dummy_id: u16,
         pub original_id: u16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSBook"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSBook {
+        pub unknown_short_1: u16,
+        pub unknown_short_2: u16,
+        pub description: String,
+        pub unknown_text_1: String,
+        pub unknown_text_2: String,
+        #[deserialize(length = 5)]
+        pub unknown_data: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSChapter"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSChapter {
+        pub section_id: u16,
+        pub section_name: String,
+        pub unknown_short: u16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSMons"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSMons {
+        pub enemy: String,
+        pub unknown_string: String,
+        pub section_id: u16,
+        pub unknown_short: u16,
+        pub is_extra: u8,
+        pub unknown_byte: u8,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSText"))]
@@ -529,6 +563,9 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::Magic(_) => "magic",
             Self::MagicBo(_) => "magicbo",
             Self::MasterQuartzDummy(_) => "MasterQuartzDummy",
+            Self::QSBook(_) => "QSBook",
+            Self::QSChapter(_) => "QSChapter",
+            Self::QSMons(_) => "QSMons",
             Self::QSText(_) => "QSText",
             Self::SE(_) => "se",
             Self::SlotCost(_) => "SlotCost",
@@ -571,6 +608,9 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("magic", (|ctx| entry_data::Magic::deserialize(ctx).map(|(data, ctx)| (Entry::Magic(data), ctx))) as ParseFun),
                 ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).map(|(data, ctx)| (Entry::MagicBo(data), ctx))) as ParseFun),
                 ("MasterQuartzDummy", (|ctx| entry_data::MasterQuartzDummy::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzDummy(data), ctx))) as ParseFun),
+                ("QSChapter", (|ctx| entry_data::QSChapter::deserialize(ctx).map(|(data, ctx)| (Entry::QSChapter(data), ctx))) as ParseFun),
+                ("QSMons", (|ctx| entry_data::QSMons::deserialize(ctx).map(|(data, ctx)| (Entry::QSMons(data), ctx))) as ParseFun),
+                ("QSBook", (|ctx| entry_data::QSBook::deserialize(ctx).map(|(data, ctx)| (Entry::QSBook(data), ctx))) as ParseFun),
                 ("QSText", (|ctx| entry_data::QSText::deserialize(ctx).map(|(data, ctx)| (Entry::QSText(data), ctx))) as ParseFun),
                 ("se", (|ctx| entry_data::SE::deserialize(ctx).map(|(data, ctx)| (Entry::SE(data), ctx))) as ParseFun),
                 ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).map(|(data, ctx)| (Entry::SlotCost(data), ctx))) as ParseFun),

@@ -74,6 +74,9 @@ fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Magic>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MagicBo>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzDummy>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSBook>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChapter>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSMons>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSText>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SE>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SlotCost>(&tx)?;
@@ -119,6 +122,9 @@ fn to_new_db(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::Magic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MagicBo(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MasterQuartzDummy(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::QSBook(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::QSChapter(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::QSMons(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSText(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::SE(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::SlotCost(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
