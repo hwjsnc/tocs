@@ -27,6 +27,7 @@ pub struct Tbl {
 #[derive(Clone, Debug, Serialize, SerializeLength)]
 pub enum Entry {
     Generic(entry_data::Generic),
+    Item(entry_data::Item),
     QSText(entry_data::QSText),
     Status(entry_data::Status),
 }
@@ -47,6 +48,19 @@ pub mod entry_data {
         #[serialize(ignore)] // header is serialized separately
         pub header: String,
         pub data: Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "item"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct Item {
+        pub id: u16,
+        pub unknown_byte_1: u8,
+        pub unknown_byte_2: u8,
+        pub flags: String,
+        #[deserialize(length = 46)]
+        pub unknown_data: std::vec::Vec<u8>,
+        pub name: String,
+        pub description: String,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSText"))]
@@ -88,6 +102,7 @@ impl ioutil::tbl::TblEntry for Entry {
     fn header_name(&self) -> &str {
         match self {
             Self::Generic(entry_data::Generic { header, .. }) => header,
+            Self::Item(_) => "item",
             Self::QSText(_) => "QSText",
             Self::Status(_) => "status",
         }
@@ -107,6 +122,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
     type ParseFun = ioutil::tbl::EntryParseFun<Entry>;
     lazy_static::lazy_static! {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [
+            ("item", (|ctx| entry_data::Item::deserialize(ctx).map(|(data, ctx)| (Entry::Item(data), ctx))) as ParseFun),
             ("QSText", (|ctx| entry_data::QSText::deserialize(ctx).map(|(data, ctx)| (Entry::QSText(data), ctx))) as ParseFun),
             ("status", (|ctx| entry_data::Status::deserialize(ctx).map(|(data, ctx)| (Entry::Status(data), ctx))) as ParseFun),
         ].into_iter().collect();
