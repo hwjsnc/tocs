@@ -28,6 +28,7 @@ pub struct Tbl {
 pub enum Entry {
     Generic(entry_data::Generic),
     QSText(entry_data::QSText),
+    Status(entry_data::Status),
 }
 
 pub mod entry_data {
@@ -56,6 +57,19 @@ pub mod entry_data {
         pub text: String,
         pub unknown_byte_2: u8,
     }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "Status"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct Status {
+        pub unknown_text_1: String,
+        pub unknown_text_2: String,
+        pub unknown_text_3: String,
+        #[deserialize(length = 112)]
+        pub unknown_data: std::vec::Vec<u8>,
+        pub flags: String,
+        pub name: String,
+        pub description: String,
+    }
 }
 
 impl ioutil::tbl::Tbl<Entry> for Tbl {
@@ -75,6 +89,7 @@ impl ioutil::tbl::TblEntry for Entry {
         match self {
             Self::Generic(entry_data::Generic { header, .. }) => header,
             Self::QSText(_) => "QSText",
+            Self::Status(_) => "status",
         }
     }
 }
@@ -93,6 +108,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
     lazy_static::lazy_static! {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [
             ("QSText", (|ctx| entry_data::QSText::deserialize(ctx).map(|(data, ctx)| (Entry::QSText(data), ctx))) as ParseFun),
+            ("status", (|ctx| entry_data::Status::deserialize(ctx).map(|(data, ctx)| (Entry::Status(data), ctx))) as ParseFun),
         ].into_iter().collect();
     }
     let parse_options = ioutil::tbl::ParseOptions {
