@@ -9,11 +9,24 @@ enum Subcommand {
     /// Try to parse all data files
     ///
     /// Print the first error for each (if any)
-    All,
+    All {
+        /// Don't attempt to fix game data with hardcoded values
+        #[clap(short, long)]
+        raw: bool,
+    },
     /// Try to parse a specific file. Also print
     ///
     /// Print information about all the files
-    File { game: GameVersion, path: std::path::PathBuf },
+    File {
+        game: GameVersion,
+        path: std::path::PathBuf,
+        /// Don't attempt to fix game data with hardcoded values
+        #[clap(short, long)]
+        raw: bool,
+        /// Print data for parsed entries as text, to the extent possible
+        #[clap(short, long)]
+        print_data: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -40,23 +53,27 @@ impl std::str::FromStr for GameVersion {
 
 pub fn main() {
     match Subcommand::parse() {
-        Subcommand::All => parse_all(),
-        Subcommand::File { game, path } => match game {
-            GameVersion::CS1 => parse_file_cs1(&path),
+        Subcommand::All { raw } => parse_all(!raw),
+        Subcommand::File { game, path, raw, print_data } => match game {
+            GameVersion::CS1 => parse_file_cs1(&path, !raw, print_data),
             GameVersion::CS2 => todo!(),
             GameVersion::CS3 => todo!(),
         },
     }
 }
 
-pub fn parse_all() {
+pub fn parse_all(fix_data: bool) {
     let cwd = std::env::current_dir().unwrap();
     let base_path = cwd.join(std::path::Path::new("private-test-data/cs1/data/text/"));
     for entry in walkdir::WalkDir::new(base_path) {
         let entry = entry.unwrap();
         let path = entry.path();
         if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            let original = std::fs::read(path).unwrap();
+            let original = if fix_data {
+                tocs::cs1::tbl::fix(&std::fs::read(path).unwrap())
+            } else {
+                std::fs::read(path).unwrap()
+            };
             match tocs::cs1::tbl::load(&original) {
                 Ok(tbl) => {
                     match tocs::cs1::tbl::store(&tbl) {
@@ -132,11 +149,14 @@ pub fn parse_all() {
         let entry = entry.unwrap();
         let path = entry.path();
         if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            let original = std::fs::read(path).unwrap();
-            let fixed = tocs::cs3::tbl::fix(&original);
-            match tocs::cs3::tbl::load(&fixed) {
+            let original = if fix_data {
+                tocs::cs3::tbl::fix(&std::fs::read(path).unwrap())
+            } else {
+                std::fs::read(path).unwrap()
+            };
+            match tocs::cs3::tbl::load(&original) {
                 Ok(tbl) => match tocs::cs3::tbl::store(&tbl) {
-                    Ok(serialized) if serialized == fixed => {
+                    Ok(serialized) if serialized == original => {
                         //println!("{}: ok!", path.display());
                     }
                     Ok(serialized) => {
@@ -165,8 +185,12 @@ pub fn parse_all() {
     }
 }
 
-pub fn parse_file_cs1(path: &std::path::Path) {
-    let data = std::fs::read(path).unwrap();
+pub fn parse_file_cs1(path: &std::path::Path, fix_data: bool, print_data: bool) {
+    let data = if fix_data {
+        tocs::cs1::tbl::fix(&std::fs::read(path).unwrap())
+    } else {
+        std::fs::read(path).unwrap()
+    };
     let ctx = ioutil::ParseContext::start_of(&data);
     let (number_of_entries, mut ctx) = match ioutil::tbl::parse_tbl_header_v1(ctx) {
         Ok(result) => result,
@@ -182,21 +206,24 @@ pub fn parse_file_cs1(path: &std::path::Path) {
             Ok((entry, entry_ctx)) => {
                 match entry {
                     tocs::cs1::tbl::Entry::Generic(tocs::cs1::tbl::entry_data::Generic { header, data }) => {
-                        println!(" - Generic entry ({} of {})", i + 1, number_of_entries);
+                        println!(" - Generic entry ({} of {}, offset {} / 0x{:x})", i + 1, number_of_entries, ctx.position(), ctx.position());
                         println!("   - header name: '{}'", header);
-                        println!("   - data length: {}", data.len());
+                        println!("   - data length: {} / 0x{:x}", data.len(), data.len());
+                        if print_data {
+                            println!("   - data: {}", String::from_utf8_lossy(&data).escape_debug())
+                        }
                     }
                 }
                 ctx = entry_ctx;
             }
             Err(e) => {
                 if let ioutil::tbl::ParseErrorDetail::Primitive(ref e) = e.detail {
-                    if matches!(e, ioutil::PrimitiveParseError::UnexpectedEOF { .. }) && e.position() == ctx.position() {
+                    if matches!(e, ioutil::PrimitiveParseError::UnexpectedEOF { .. }) && e.position() == ctx.position() && i == number_of_entries {
                         println!("Reached EOF as expected, done.");
                         break;
                     }
                 }
-                panic!("Error: {}\n{} bytes remaining", e.to_msg(&data), data.len() - ctx.position());
+                panic!("Error: {}. {} bytes remaining.", e.to_msg(&data), data.len() - ctx.position());
             }
         };
         i += 1;
