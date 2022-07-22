@@ -108,6 +108,7 @@ fn to_new_db_cs1(tblpath: &std::path::Path, dbpath: &std::path::Path) {
 
     let create_tables = || -> rusqlite::Result<()> {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs1_entry_data::Generic>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs1_entry_data::QSText>(&tx)?;
         Ok(())
     };
     match create_tables() {
@@ -135,6 +136,7 @@ fn to_new_db_cs1(tblpath: &std::path::Path, dbpath: &std::path::Path) {
             for (n, tblentry) in tbl.entries.iter().enumerate() {
                 let insert_result = match tblentry {
                     CS1Entry::Generic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS1Entry::QSText(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                 };
                 match insert_result {
                     Ok(_) => (),

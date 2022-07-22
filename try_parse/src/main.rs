@@ -215,6 +215,13 @@ pub fn parse_file_cs1(path: &std::path::Path, fix_data: bool, print_data: bool) 
                             println!("   - data: {}", String::from_utf8_lossy(&data).escape_debug())
                         }
                     }
+                    _ => {
+                        println!(" - Specific entry ({} of {}, offset {} / 0x{:x})", i + 1, number_of_entries, ctx.position(), ctx.position());
+                        println!("   - header name: '{}'", entry.header_name());
+                        if print_data {
+                            println!("   - data omitted");
+                        }
+                    }
                 }
                 ctx = entry_ctx;
             }
