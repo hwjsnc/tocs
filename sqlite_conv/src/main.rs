@@ -229,6 +229,7 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CompHelpData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::GameDifficulty>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Item>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ItemQ>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ItemHelpData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Magic>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MagicBo>(&tx)?;
@@ -281,6 +282,7 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::CompHelpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::GameDifficulty(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Item(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::ItemQ(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::ItemHelpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Magic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MagicBo(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),

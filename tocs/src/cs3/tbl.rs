@@ -38,6 +38,7 @@ pub enum Entry {
     CompHelpData(entry_data::CompHelpData),
     GameDifficulty(entry_data::GameDifficulty),
     Item(entry_data::Item),
+    ItemQ(entry_data::ItemQ),
     ItemHelpData(entry_data::ItemHelpData),
     Magic(entry_data::Magic),
     MagicBo(entry_data::MagicBo),
@@ -197,6 +198,46 @@ pub mod entry_data {
         pub description: String,
         #[deserialize(length = 8)]
         pub unknown_data: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "item_q"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct ItemQ {
+        pub id: u16,
+        pub unknown_short_1: u16,
+        pub flags: String,
+        pub r#type: u16,
+        pub subtype: u16,
+        pub element: u16,
+        #[deserialize(length = 4)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub quartz_type: u8,
+        pub rating: f32,
+        pub unknown_byte_1: u8,
+        #[deserialize(length = 12)]
+        pub unknown_data_2: std::vec::Vec<u8>,
+        pub effects: [Effect; 5],
+        pub str: i16,
+        pub def: i16,
+        pub ats: i16,
+        pub adf: i16,
+        pub acc: i16,
+        pub eva: i16,
+        pub spd: i16,
+        pub mov: i16,
+        pub hp: i16,
+        pub ep: i16,
+        pub price: u32,
+        pub carry_limit: u8,
+        pub sort_id: u16,
+        pub unknown_short_2: u16,
+        pub name: String,
+        pub description: String,
+        pub prio_balanced: u16,
+        pub prio_physical: u16,
+        pub prio_magical: u16,
+        pub prio_speed: u16,
+        pub arts: [u16; 6],
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "ItemHelpData"))]
@@ -616,6 +657,7 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::CompHelpData(_) => "CompHelpData",
             Self::GameDifficulty(_) => "game_difficulty",
             Self::Item(_) => "item",
+            Self::ItemQ(_) => "item_q",
             Self::ItemHelpData(_) => "ItemHelpData",
             Self::Magic(_) => "magic",
             Self::MagicBo(_) => "magicbo",
@@ -665,6 +707,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("CompHelpData", (|ctx| entry_data::CompHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::CompHelpData(data), ctx))) as ParseFun),
                 ("game_difficulty", (|ctx| entry_data::GameDifficulty::deserialize(ctx).map(|(data, ctx)| (Entry::GameDifficulty(data), ctx))) as ParseFun),
                 ("item", (|ctx| entry_data::Item::deserialize(ctx).map(|(data, ctx)| (Entry::Item(data), ctx))) as ParseFun),
+                ("item_q", (|ctx| entry_data::ItemQ::deserialize(ctx).map(|(data, ctx)| (Entry::ItemQ(data), ctx))) as ParseFun),
                 ("ItemHelpData", (|ctx| entry_data::ItemHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::ItemHelpData(data), ctx))) as ParseFun),
                 ("magic", (|ctx| entry_data::Magic::deserialize(ctx).map(|(data, ctx)| (Entry::Magic(data), ctx))) as ParseFun),
                 ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).map(|(data, ctx)| (Entry::MagicBo(data), ctx))) as ParseFun),
