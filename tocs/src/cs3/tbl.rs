@@ -32,14 +32,20 @@ pub struct Tbl {
 pub enum Entry {
     Generic(entry_data::Generic),
     ActiveVoiceTableData(entry_data::ActiveVoiceTableData),
+    AssetCache(entry_data::AssetCache),
     AtBonus(entry_data::AtBonus),
+    AttachTableData(entry_data::AttachTableData),
     CharRevise(entry_data::CharRevise),
     CharData(entry_data::CharData),
     CompHelpData(entry_data::CompHelpData),
+    EventTableData(entry_data::EventTableData),
+    FootStepData(entry_data::FootStepData),
     GameDifficulty(entry_data::GameDifficulty),
     Item(entry_data::Item),
     ItemQ(entry_data::ItemQ),
     ItemHelpData(entry_data::ItemHelpData),
+    KisinPilotData(entry_data::KisinPilotData),
+    LinkAbText(entry_data::LinkAbText),
     Magic(entry_data::Magic),
     MagicBo(entry_data::MagicBo),
     MasterQuartzBase(entry_data::MasterQuartzBase),
@@ -48,6 +54,7 @@ pub enum Entry {
     MasterQuartzMemo(entry_data::MasterQuartzMemo),
     MasterQuartzStatus(entry_data::MasterQuartzStatus),
     NameTableData(entry_data::NameTableData),
+    NameVis(entry_data::NameVis),
     QSBook(entry_data::QSBook),
     QSChapter(entry_data::QSChapter),
     QSMons(entry_data::QSMons),
@@ -94,6 +101,14 @@ pub mod entry_data {
         pub unknown_data_2: std::vec::Vec<u8>,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "AssetCache"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct AssetCache {
+        #[deserialize(length = 2)]
+        pub unknown_data: std::vec::Vec<u8>,
+        pub unknown_string: String,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "AtBonus"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct AtBonus {
@@ -124,6 +139,16 @@ pub mod entry_data {
         cp_0: u8,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "AttachTableData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct AttachTableData {
+        character: u16,
+        #[deserialize(length = 20)]
+        unknown_data: std::vec::Vec<u8>,
+        model: String,
+        unknown_string: String,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "char_revise"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct CharRevise {
@@ -152,6 +177,26 @@ pub mod entry_data {
         pub r#type: u16,
         pub text: String,
         pub value: i32,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "EventTableData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct EventTableData {
+        pub id: u16,
+        pub unknown_string_1: String,
+        pub unknown_string_2: String,
+        #[deserialize(length = 6)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub unknown_string_3: String,
+        #[deserialize(length = 18)]
+        pub unknown_data_2: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "FootStepData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct FootStepData {
+        pub unknown_string: String,
+        pub unknown_byte: u8,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "game_difficulty"))]
@@ -248,6 +293,23 @@ pub mod entry_data {
         pub text: String,
         #[deserialize(length = 9)]
         pub unknown_data: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "KisinPilotData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct KisinPilotData {
+        #[deserialize(length = 8)]
+        pub unknown_data: std::vec::Vec<u8>,
+        pub unknown_string_1: String,
+        pub unknown_string_2: String,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "LinkAbText"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct LinkAbText {
+        pub id: u8,
+        pub name: String,
+        pub description: String,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "magic"))]
@@ -351,8 +413,8 @@ pub mod entry_data {
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "NameTableData"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct NameTableData {
-        pub character_id: u16,
-        pub character_name: String,
+        pub character: u16,
+        pub name: String,
         pub model: String,
         pub animation: String,
         pub default_face: String,
@@ -365,6 +427,14 @@ pub mod entry_data {
         pub unknown_short_2: i16,
         #[deserialize(length = 3)]
         pub unknown_data_2: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "NameVis"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct NameVis {
+        pub unknown_string: String,
+        #[deserialize(length = 8)]
+        pub unknown_data: std::vec::Vec<u8>,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSBook"))]
@@ -671,14 +741,20 @@ impl ioutil::tbl::TblEntry for Entry {
         match self {
             Self::Generic(entry_data::Generic { header, .. }) => header,
             Self::ActiveVoiceTableData(_) => "ActiveVoiceTableData",
+            Self::AssetCache(_) => "AssetCache",
             Self::AtBonus(_) => "AtBonus",
+            Self::AttachTableData(_) => "AttachTableData",
             Self::CharRevise(_) => "char_revise",
             Self::CharData(_) => "CharData",
             Self::CompHelpData(_) => "CompHelpData",
+            Self::EventTableData(_) => "EventTableData",
+            Self::FootStepData(_) => "FootStepData",
             Self::GameDifficulty(_) => "game_difficulty",
             Self::Item(_) => "item",
             Self::ItemQ(_) => "item_q",
             Self::ItemHelpData(_) => "ItemHelpData",
+            Self::KisinPilotData(_) => "KisinPilotData",
+            Self::LinkAbText(_) => "LinkAbText",
             Self::Magic(_) => "magic",
             Self::MagicBo(_) => "magicbo",
             Self::MasterQuartzBase(_) => "MasterQuartzBase",
@@ -687,6 +763,7 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::MasterQuartzMemo(_) => "MasterQuartzMemo",
             Self::MasterQuartzStatus(_) => "MasterQuartzStatus",
             Self::NameTableData(_) => "NameTableData",
+            Self::NameVis(_) => "NameVis",
             Self::QSBook(_) => "QSBook",
             Self::QSChapter(_) => "QSChapter",
             Self::QSMons(_) => "QSMons",
@@ -722,14 +799,20 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
     lazy_static::lazy_static! {
         static ref PARSERS: std::collections::HashMap<&'static str, ParseFun> = [
                 ("ActiveVoiceTableData", (|ctx| entry_data::ActiveVoiceTableData::deserialize(ctx).map(|(data, ctx)| (Entry::ActiveVoiceTableData(data), ctx))) as ParseFun),
+                ("AssetCache", (|ctx| entry_data::AssetCache::deserialize(ctx).map(|(data, ctx)| (Entry::AssetCache(data), ctx))) as ParseFun),
                 ("AtBonus", (|ctx| entry_data::AtBonus::deserialize(ctx).map(|(data, ctx)| (Entry::AtBonus(data), ctx))) as ParseFun),
+                ("AttachTableData", (|ctx| entry_data::AttachTableData::deserialize(ctx).map(|(data, ctx)| (Entry::AttachTableData(data), ctx))) as ParseFun),
                 ("char_revise", (|ctx| entry_data::CharRevise::deserialize(ctx).map(|(data, ctx)| (Entry::CharRevise(data), ctx))) as ParseFun),
                 ("CharData", (|ctx| entry_data::CharData::deserialize(ctx).map(|(data, ctx)| (Entry::CharData(data), ctx))) as ParseFun),
                 ("CompHelpData", (|ctx| entry_data::CompHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::CompHelpData(data), ctx))) as ParseFun),
+                ("EventTableData", (|ctx| entry_data::EventTableData::deserialize(ctx).map(|(data, ctx)| (Entry::EventTableData(data), ctx))) as ParseFun),
+                ("FootStepData", (|ctx| entry_data::FootStepData::deserialize(ctx).map(|(data, ctx)| (Entry::FootStepData(data), ctx))) as ParseFun),
                 ("game_difficulty", (|ctx| entry_data::GameDifficulty::deserialize(ctx).map(|(data, ctx)| (Entry::GameDifficulty(data), ctx))) as ParseFun),
                 ("item", (|ctx| entry_data::Item::deserialize(ctx).map(|(data, ctx)| (Entry::Item(data), ctx))) as ParseFun),
                 ("item_q", (|ctx| entry_data::ItemQ::deserialize(ctx).map(|(data, ctx)| (Entry::ItemQ(data), ctx))) as ParseFun),
                 ("ItemHelpData", (|ctx| entry_data::ItemHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::ItemHelpData(data), ctx))) as ParseFun),
+                ("KisinPilotData", (|ctx| entry_data::KisinPilotData::deserialize(ctx).map(|(data, ctx)| (Entry::KisinPilotData(data), ctx))) as ParseFun),
+                ("LinkAbText", (|ctx| entry_data::LinkAbText::deserialize(ctx).map(|(data, ctx)| (Entry::LinkAbText(data), ctx))) as ParseFun),
                 ("magic", (|ctx| entry_data::Magic::deserialize(ctx).map(|(data, ctx)| (Entry::Magic(data), ctx))) as ParseFun),
                 ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).map(|(data, ctx)| (Entry::MagicBo(data), ctx))) as ParseFun),
                 ("MasterQuartzBase", (|ctx| entry_data::MasterQuartzBase::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzBase(data), ctx))) as ParseFun),
@@ -738,6 +821,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("MasterQuartzMemo", (|ctx| entry_data::MasterQuartzMemo::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzMemo(data), ctx))) as ParseFun),
                 ("MasterQuartzStatus", (|ctx| entry_data::MasterQuartzStatus::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzStatus(data), ctx))) as ParseFun),
                 ("NameTableData", (|ctx| entry_data::NameTableData::deserialize(ctx).map(|(data, ctx)| (Entry::NameTableData(data), ctx))) as ParseFun),
+                ("NameVis", (|ctx| entry_data::NameVis::deserialize(ctx).map(|(data, ctx)| (Entry::NameVis(data), ctx))) as ParseFun),
                 ("QSChapter", (|ctx| entry_data::QSChapter::deserialize(ctx).map(|(data, ctx)| (Entry::QSChapter(data), ctx))) as ParseFun),
                 ("QSMons", (|ctx| entry_data::QSMons::deserialize(ctx).map(|(data, ctx)| (Entry::QSMons(data), ctx))) as ParseFun),
                 ("QSBook", (|ctx| entry_data::QSBook::deserialize(ctx).map(|(data, ctx)| (Entry::QSBook(data), ctx))) as ParseFun),

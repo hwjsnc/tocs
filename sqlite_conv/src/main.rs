@@ -223,14 +223,20 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
     let create_tables = || -> rusqlite::Result<()> {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Generic>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ActiveVoiceTableData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AssetCache>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AtBonus>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AttachTableData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CharRevise>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CharData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CompHelpData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::EventTableData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::FootStepData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::GameDifficulty>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Item>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ItemQ>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ItemHelpData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::KisinPilotData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::LinkAbText>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Magic>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MagicBo>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzBase>(&tx)?;
@@ -239,6 +245,7 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzMemo>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzStatus>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NameTableData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NameVis>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSBook>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChapter>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSMons>(&tx)?;
@@ -277,14 +284,20 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                 let insert_result = match tblentry {
                     CS3Entry::Generic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::ActiveVoiceTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::AssetCache(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::AtBonus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::AttachTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::CharRevise(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::CharData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::CompHelpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::EventTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::FootStepData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::GameDifficulty(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Item(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::ItemQ(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::ItemHelpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::KisinPilotData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::LinkAbText(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Magic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MagicBo(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MasterQuartzBase(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
@@ -293,6 +306,7 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::MasterQuartzMemo(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MasterQuartzStatus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::NameTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::NameVis(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSBook(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSChapter(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSMons(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
