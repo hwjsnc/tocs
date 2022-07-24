@@ -41,6 +41,11 @@ Here's a short overview:
   It's there for finding instances where the game data doesn't follow the rules we've reverse engineered.
   This can happen if the files are broken (it's more likely than you think), our understanding is incomplete, and/or because there's a bug in the code.
 
+- `try_fix` is a CLI program that attempts to fix game data.
+  It is not "intelligent" and all fixes are hardcoded.
+  Only very basic formatting errors are fixed (so far it's only incorrect length bytes in tbls).
+  This can be used to bring the files into a form where they can be more easily parsed with other software.
+
 related/alternative projects
 ----------------------------
 
