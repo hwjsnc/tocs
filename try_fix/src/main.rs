@@ -12,23 +12,20 @@ struct Args {
 }
 
 fn main() -> Result<(), String> {
-    match Args::parse() {
-        Args { paths } => {
-            for path in paths.iter() {
-                if path.is_file() {
+    let Args { paths } = Args::parse();
+    for path in paths.iter() {
+        if path.is_file() {
+            try_fix(path)?;
+        } else if path.is_dir() {
+            for entry in walkdir::WalkDir::new(path) {
+                let entry = entry.map_err(|e| format!("Couldn't get dir entry: {}", e))?;
+                let path = entry.path();
+                if entry.file_type().is_file() {
                     try_fix(path)?;
-                } else if path.is_dir() {
-                    for entry in walkdir::WalkDir::new(path) {
-                        let entry = entry.map_err(|e| format!("Couldn't get dir entry: {}", e))?;
-                        let path = entry.path();
-                        if entry.file_type().is_file() {
-                            try_fix(path)?;
-                        }
-                    }
-                } else {
-                    return Err(format!("{} - not a file or directory", path.display()));
                 }
             }
+        } else {
+            return Err(format!("{} - not a file or directory", path.display()));
         }
     }
     Ok(())
