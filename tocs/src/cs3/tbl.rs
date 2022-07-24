@@ -47,6 +47,7 @@ pub enum Entry {
     MasterQuartzDummy(entry_data::MasterQuartzDummy),
     MasterQuartzMemo(entry_data::MasterQuartzMemo),
     MasterQuartzStatus(entry_data::MasterQuartzStatus),
+    NameTableData(entry_data::NameTableData),
     QSBook(entry_data::QSBook),
     QSChapter(entry_data::QSChapter),
     QSMons(entry_data::QSMons),
@@ -345,6 +346,25 @@ pub mod entry_data {
         pub sub_ats: i16,
         pub sub_adf: i16,
         pub sub_spd: i16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "NameTableData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct NameTableData {
+        pub character_id: u16,
+        pub character_name: String,
+        pub model: String,
+        pub animation: String,
+        pub default_face: String,
+        pub face: String,
+        pub unknown_string: String,
+        #[deserialize(length = 4)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub unknown_floats: [f32; 2],
+        pub unknown_short_1: i16,
+        pub unknown_short_2: i16,
+        #[deserialize(length = 3)]
+        pub unknown_data_2: std::vec::Vec<u8>,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSBook"))]
@@ -666,6 +686,7 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::MasterQuartzDummy(_) => "MasterQuartzDummy",
             Self::MasterQuartzMemo(_) => "MasterQuartzMemo",
             Self::MasterQuartzStatus(_) => "MasterQuartzStatus",
+            Self::NameTableData(_) => "NameTableData",
             Self::QSBook(_) => "QSBook",
             Self::QSChapter(_) => "QSChapter",
             Self::QSMons(_) => "QSMons",
@@ -716,6 +737,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("MasterQuartzDummy", (|ctx| entry_data::MasterQuartzDummy::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzDummy(data), ctx))) as ParseFun),
                 ("MasterQuartzMemo", (|ctx| entry_data::MasterQuartzMemo::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzMemo(data), ctx))) as ParseFun),
                 ("MasterQuartzStatus", (|ctx| entry_data::MasterQuartzStatus::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzStatus(data), ctx))) as ParseFun),
+                ("NameTableData", (|ctx| entry_data::NameTableData::deserialize(ctx).map(|(data, ctx)| (Entry::NameTableData(data), ctx))) as ParseFun),
                 ("QSChapter", (|ctx| entry_data::QSChapter::deserialize(ctx).map(|(data, ctx)| (Entry::QSChapter(data), ctx))) as ParseFun),
                 ("QSMons", (|ctx| entry_data::QSMons::deserialize(ctx).map(|(data, ctx)| (Entry::QSMons(data), ctx))) as ParseFun),
                 ("QSBook", (|ctx| entry_data::QSBook::deserialize(ctx).map(|(data, ctx)| (Entry::QSBook(data), ctx))) as ParseFun),
