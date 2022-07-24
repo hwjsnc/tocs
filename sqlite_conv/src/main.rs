@@ -239,15 +239,25 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::LinkAbText>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Magic>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MagicBo>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MapJumpData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MarkerTableData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzBase>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzDummy>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzMemo>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzStatus>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08Card>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08CharMsg>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08PlyMsg>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08Text>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NameTableData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NameVis>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NaviTextData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::PlaceTableData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::PopupMsgFaceCharData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSBook>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChapter>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChar>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSMons>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSText>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SE>(&tx)?;
@@ -300,15 +310,25 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::LinkAbText(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Magic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MagicBo(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MapJumpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MarkerTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MasterQuartzBase(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MasterQuartzData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MasterQuartzDummy(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MasterQuartzMemo(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MasterQuartzStatus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MG08Card(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MG08CharMsg(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MG08PlyMsg(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MG08Text(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::NameTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::NameVis(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::NaviTextData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::PlaceTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::PopupMsgFaceCharData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSBook(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSChapter(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::QSChar(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSMons(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSText(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::SE(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),

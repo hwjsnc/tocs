@@ -48,15 +48,25 @@ pub enum Entry {
     LinkAbText(entry_data::LinkAbText),
     Magic(entry_data::Magic),
     MagicBo(entry_data::MagicBo),
+    MapJumpData(entry_data::MapJumpData),
+    MarkerTableData(entry_data::MarkerTableData),
     MasterQuartzBase(entry_data::MasterQuartzBase),
     MasterQuartzData(entry_data::MasterQuartzData),
     MasterQuartzDummy(entry_data::MasterQuartzDummy),
     MasterQuartzMemo(entry_data::MasterQuartzMemo),
     MasterQuartzStatus(entry_data::MasterQuartzStatus),
+    MG08Card(entry_data::MG08Card),
+    MG08CharMsg(entry_data::MG08CharMsg),
+    MG08PlyMsg(entry_data::MG08PlyMsg),
+    MG08Text(entry_data::MG08Text),
     NameTableData(entry_data::NameTableData),
     NameVis(entry_data::NameVis),
+    NaviTextData(entry_data::NaviTextData),
+    PlaceTableData(entry_data::PlaceTableData),
+    PopupMsgFaceCharData(entry_data::PopupMsgFaceCharData),
     QSBook(entry_data::QSBook),
     QSChapter(entry_data::QSChapter),
+    QSChar(entry_data::QSChar),
     QSMons(entry_data::QSMons),
     QSText(entry_data::QSText),
     SE(entry_data::SE),
@@ -349,6 +359,33 @@ pub mod entry_data {
         pub turns: u16,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MapJumpData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MapJumpData {
+        #[deserialize(length = 5)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub name: String,
+        #[deserialize(length = 4)]
+        pub unknown_data_2: std::vec::Vec<u8>,
+        pub unknown_text_1: String,
+        pub unknown_text_2: String,
+        #[deserialize(length = 24)]
+        pub unknown_data_3: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MarkerTableData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MarkerTableData {
+        #[deserialize(length = 6)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub unknown_text_1: String,
+        #[deserialize(length = 9)]
+        pub unknown_data_2: std::vec::Vec<u8>,
+        pub unknown_text_2: String,
+        #[deserialize(length = 12)]
+        pub unknown_data_3: std::vec::Vec<u8>,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MasterQuartzBase"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct MasterQuartzBase {
@@ -410,6 +447,66 @@ pub mod entry_data {
         pub sub_spd: i16,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08Card"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MG08Card {
+        pub id: u16,
+        pub r#type: u16,
+        pub element: u16,
+        pub name: String,
+
+        #[deserialize(length = 12)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+
+        pub ranged_flag: u16,
+        pub ranged_string: String,
+
+        pub flight_flag: u16,
+        pub flight_string: String,
+
+        pub skill_id: u16,
+        pub skill_string: String,
+        pub skill_cost: u16,
+        pub skill_strength: u16,
+        pub skill_description: String,
+
+        pub ability_id: u16,
+        pub ability_strength: u16,
+        pub ability_description: String,
+
+        #[deserialize(length = 8)]
+        pub unknown_data_2: std::vec::Vec<u8>,
+
+        pub action_description: String,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08CharMsg"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MG08CharMsg {
+        #[deserialize(length = 6)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub text: String,
+        #[deserialize(length = 6)]
+        pub unknown_data_2: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08PlyMsg"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MG08PlyMsg {
+        #[deserialize(length = 6)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub text: String,
+        #[deserialize(length = 6)]
+        pub unknown_data_2: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08Text"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MG08Text {
+        pub id: u16,
+        pub text: String,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "NameTableData"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct NameTableData {
@@ -437,6 +534,40 @@ pub mod entry_data {
         pub unknown_data: std::vec::Vec<u8>,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "NaviTextData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct NaviTextData {
+        #[deserialize(length = 4)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub text: String,
+        #[deserialize(length = 7)]
+        pub unknown_data_2: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "PlaceTableData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct PlaceTableData {
+        #[deserialize(length = 4)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub unknown_text_1: String,
+        #[deserialize(length = 4)]
+        pub unknown_data_2: std::vec::Vec<u8>,
+        pub unknown_text_2: String,
+        pub unknown_text_3: String,
+        pub unknown_text_4: String,
+        pub unknown_text_5: String,
+        pub unknown_text_6: String,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "PopupMsgFaceCharData"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct PopupMsgFaceCharData {
+        pub unknown_short: u16,
+        pub unknown_text_1: String,
+        #[deserialize(length = 44)]
+        pub unknown_data: std::vec::Vec<u8>,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSBook"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct QSBook {
@@ -455,6 +586,28 @@ pub mod entry_data {
         pub section_id: u16,
         pub section_name: String,
         pub unknown_short: u16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSChar"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSChar {
+        pub character: u16,
+        #[deserialize(length = 6)]
+        pub unknown_data: std::vec::Vec<u8>,
+        pub unknown_text_1: String,
+        pub name_short: String,
+        pub name_long: String,
+        pub affiliation_short: String,
+        pub affiliation_long: String,
+        pub note_1: String,
+        pub note_2_title: String,
+        pub note_2: String,
+        pub note_3_title: String,
+        pub note_3: String,
+        pub note_4_title: String,
+        pub note_4: String,
+        pub note_5_title: String,
+        pub note_5: String,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSMons"))]
@@ -757,15 +910,25 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::LinkAbText(_) => "LinkAbText",
             Self::Magic(_) => "magic",
             Self::MagicBo(_) => "magicbo",
+            Self::MapJumpData(_) => "MapJumpData",
+            Self::MarkerTableData(_) => "MarkerTableData",
             Self::MasterQuartzBase(_) => "MasterQuartzBase",
             Self::MasterQuartzData(_) => "MasterQuartzData",
             Self::MasterQuartzDummy(_) => "MasterQuartzDummy",
             Self::MasterQuartzMemo(_) => "MasterQuartzMemo",
             Self::MasterQuartzStatus(_) => "MasterQuartzStatus",
+            Self::MG08Card(_) => "MG08Card",
+            Self::MG08CharMsg(_) => "MG08CharMsg",
+            Self::MG08PlyMsg(_) => "MG08PlyMsg",
+            Self::MG08Text(_) => "MG08Text",
             Self::NameTableData(_) => "NameTableData",
             Self::NameVis(_) => "NameVis",
+            Self::NaviTextData(_) => "NaviTextData",
+            Self::PlaceTableData(_) => "PlaceTableData",
+            Self::PopupMsgFaceCharData(_) => "PopupMsgFaceCharData",
             Self::QSBook(_) => "QSBook",
             Self::QSChapter(_) => "QSChapter",
+            Self::QSChar(_) => "QSChar",
             Self::QSMons(_) => "QSMons",
             Self::QSText(_) => "QSText",
             Self::SE(_) => "se",
@@ -815,14 +978,24 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("LinkAbText", (|ctx| entry_data::LinkAbText::deserialize(ctx).map(|(data, ctx)| (Entry::LinkAbText(data), ctx))) as ParseFun),
                 ("magic", (|ctx| entry_data::Magic::deserialize(ctx).map(|(data, ctx)| (Entry::Magic(data), ctx))) as ParseFun),
                 ("magicbo", (|ctx| entry_data::MagicBo::deserialize(ctx).map(|(data, ctx)| (Entry::MagicBo(data), ctx))) as ParseFun),
+                ("MapJumpData", (|ctx| entry_data::MapJumpData::deserialize(ctx).map(|(data, ctx)| (Entry::MapJumpData(data), ctx))) as ParseFun),
+                ("MarkerTableData", (|ctx| entry_data::MarkerTableData::deserialize(ctx).map(|(data, ctx)| (Entry::MarkerTableData(data), ctx))) as ParseFun),
                 ("MasterQuartzBase", (|ctx| entry_data::MasterQuartzBase::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzBase(data), ctx))) as ParseFun),
                 ("MasterQuartzData", (|ctx| entry_data::MasterQuartzData::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzData(data), ctx))) as ParseFun),
                 ("MasterQuartzDummy", (|ctx| entry_data::MasterQuartzDummy::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzDummy(data), ctx))) as ParseFun),
                 ("MasterQuartzMemo", (|ctx| entry_data::MasterQuartzMemo::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzMemo(data), ctx))) as ParseFun),
                 ("MasterQuartzStatus", (|ctx| entry_data::MasterQuartzStatus::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzStatus(data), ctx))) as ParseFun),
+                ("MG08Card", (|ctx| entry_data::MG08Card::deserialize(ctx).map(|(data, ctx)| (Entry::MG08Card(data), ctx))) as ParseFun),
+                ("MG08CharMsg", (|ctx| entry_data::MG08CharMsg::deserialize(ctx).map(|(data, ctx)| (Entry::MG08CharMsg(data), ctx))) as ParseFun),
+                ("MG08PlyMsg", (|ctx| entry_data::MG08PlyMsg::deserialize(ctx).map(|(data, ctx)| (Entry::MG08PlyMsg(data), ctx))) as ParseFun),
+                ("MG08Text", (|ctx| entry_data::MG08Text::deserialize(ctx).map(|(data, ctx)| (Entry::MG08Text(data), ctx))) as ParseFun),
                 ("NameTableData", (|ctx| entry_data::NameTableData::deserialize(ctx).map(|(data, ctx)| (Entry::NameTableData(data), ctx))) as ParseFun),
                 ("NameVis", (|ctx| entry_data::NameVis::deserialize(ctx).map(|(data, ctx)| (Entry::NameVis(data), ctx))) as ParseFun),
+                ("NaviTextData", (|ctx| entry_data::NaviTextData::deserialize(ctx).map(|(data, ctx)| (Entry::NaviTextData(data), ctx))) as ParseFun),
+                ("PlaceTableData", (|ctx| entry_data::PlaceTableData::deserialize(ctx).map(|(data, ctx)| (Entry::PlaceTableData(data), ctx))) as ParseFun),
+                ("PopupMsgFaceCharData", (|ctx| entry_data::PopupMsgFaceCharData::deserialize(ctx).map(|(data, ctx)| (Entry::PopupMsgFaceCharData(data), ctx))) as ParseFun),
                 ("QSChapter", (|ctx| entry_data::QSChapter::deserialize(ctx).map(|(data, ctx)| (Entry::QSChapter(data), ctx))) as ParseFun),
+                ("QSChar", (|ctx| entry_data::QSChar::deserialize(ctx).map(|(data, ctx)| (Entry::QSChar(data), ctx))) as ParseFun),
                 ("QSMons", (|ctx| entry_data::QSMons::deserialize(ctx).map(|(data, ctx)| (Entry::QSMons(data), ctx))) as ParseFun),
                 ("QSBook", (|ctx| entry_data::QSBook::deserialize(ctx).map(|(data, ctx)| (Entry::QSBook(data), ctx))) as ParseFun),
                 ("QSText", (|ctx| entry_data::QSText::deserialize(ctx).map(|(data, ctx)| (Entry::QSText(data), ctx))) as ParseFun),
