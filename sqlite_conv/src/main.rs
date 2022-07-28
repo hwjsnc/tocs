@@ -467,9 +467,27 @@ fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bo
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
+            "AssetCache" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::AssetCache>(&tx, table) {
+                    let e = CS3Entry::AssetCache(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
             "AtBonus" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::AtBonus>(&tx, table) {
                     let e = CS3Entry::AtBonus(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "AttachTableData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::AttachTableData>(&tx, table) {
+                    let e = CS3Entry::AttachTableData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "bgm" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::Bgm>(&tx, table) {
+                    let e = CS3Entry::Bgm(e);
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
@@ -491,15 +509,57 @@ fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bo
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
+            "EventTableData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::EventTableData>(&tx, table) {
+                    let e = CS3Entry::EventTableData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "FootStepData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::FootStepData>(&tx, table) {
+                    let e = CS3Entry::FootStepData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
             "game_difficulty" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::GameDifficulty>(&tx, table) {
                     let e = CS3Entry::GameDifficulty(e);
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
+            "hkitugi_lst" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::HkitugiLst>(&tx, table) {
+                    let e = CS3Entry::HkitugiLst(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
             "item" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::Item>(&tx, table) {
                     let e = CS3Entry::Item(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "item_q" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::ItemQ>(&tx, table) {
+                    let e = CS3Entry::ItemQ(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "ItemHelpData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::ItemHelpData>(&tx, table) {
+                    let e = CS3Entry::ItemHelpData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "KisinPilotData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::KisinPilotData>(&tx, table) {
+                    let e = CS3Entry::KisinPilotData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "LinkAbText" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::LinkAbText>(&tx, table) {
+                    let e = CS3Entry::LinkAbText(e);
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
@@ -515,9 +575,165 @@ fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bo
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
+            "MapJumpData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MapJumpData>(&tx, table) {
+                    let e = CS3Entry::MapJumpData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MarkerTableData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MarkerTableData>(&tx, table) {
+                    let e = CS3Entry::MarkerTableData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MasterQuartzBase" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MasterQuartzBase>(&tx, table) {
+                    let e = CS3Entry::MasterQuartzBase(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MasterQuartzData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MasterQuartzData>(&tx, table) {
+                    let e = CS3Entry::MasterQuartzData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
             "MasterQuartzDummy" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MasterQuartzDummy>(&tx, table) {
                     let e = CS3Entry::MasterQuartzDummy(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MasterQuartzMemo" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MasterQuartzMemo>(&tx, table) {
+                    let e = CS3Entry::MasterQuartzMemo(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MasterQuartzStatus" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MasterQuartzStatus>(&tx, table) {
+                    let e = CS3Entry::MasterQuartzStatus(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MG08Card" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MG08Card>(&tx, table) {
+                    let e = CS3Entry::MG08Card(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MG08CharMsg" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MG08CharMsg>(&tx, table) {
+                    let e = CS3Entry::MG08CharMsg(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MG08PlyMsg" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MG08PlyMsg>(&tx, table) {
+                    let e = CS3Entry::MG08PlyMsg(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MG08Text" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MG08Text>(&tx, table) {
+                    let e = CS3Entry::MG08Text(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "NameTableData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::NameTableData>(&tx, table) {
+                    let e = CS3Entry::NameTableData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "NameVis" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::NameVis>(&tx, table) {
+                    let e = CS3Entry::NameVis(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "NaviTextData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::NaviTextData>(&tx, table) {
+                    let e = CS3Entry::NaviTextData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "PlaceTableData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::PlaceTableData>(&tx, table) {
+                    let e = CS3Entry::PlaceTableData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "PopupMsgFaceCharData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::PopupMsgFaceCharData>(&tx, table) {
+                    let e = CS3Entry::PopupMsgFaceCharData(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSBook" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSBook>(&tx, table) {
+                    let e = CS3Entry::QSBook(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSChapter" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSChapter>(&tx, table) {
+                    let e = CS3Entry::QSChapter(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSChar" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSChar>(&tx, table) {
+                    let e = CS3Entry::QSChar(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSCook" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSCook>(&tx, table) {
+                    let e = CS3Entry::QSCook(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSFish" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSFish>(&tx, table) {
+                    let e = CS3Entry::QSFish(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSHelp" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSHelp>(&tx, table) {
+                    let e = CS3Entry::QSHelp(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSMons" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSMons>(&tx, table) {
+                    let e = CS3Entry::QSMons(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSRank" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSRank>(&tx, table) {
+                    let e = CS3Entry::QSRank(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSText" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSText>(&tx, table) {
+                    let e = CS3Entry::QSText(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "QSTitle" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::QSTitle>(&tx, table) {
+                    let e = CS3Entry::QSTitle(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "SchoolGrade" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::SchoolGrade>(&tx, table) {
+                    let e = CS3Entry::SchoolGrade(e);
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
@@ -542,6 +758,18 @@ fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bo
             "status_p" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::StatusP>(&tx, table) {
                     let e = CS3Entry::StatusP(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "TacticalBonus" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::TacticalBonus>(&tx, table) {
+                    let e = CS3Entry::TacticalBonus(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "TextTableData" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::TextTableData>(&tx, table) {
+                    let e = CS3Entry::TextTableData(e);
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
