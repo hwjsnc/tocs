@@ -131,41 +131,41 @@ pub mod entry_data {
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "AtBonus"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct AtBonus {
-        unknown_int: u32,
-        inverse_chance: u8,
-        hp_10_perc: u8,
-        hp_30_perc: u8,
-        hp_50_perc: u8,
-        ep_10_perc: u8,
-        ep_30_perc: u8,
-        ep_50_perc: u8,
-        cp_10: u8,
-        cp_30: u8,
-        cp_50: u8,
-        cp_100: u8,
-        bp_1: u8,
-        bp_3: u8,
-        bp_5: u8,
-        crit: u8,
-        sepith_up: u8,
-        zero_art: u8,
-        zero_order: u8,
-        guard_break: u8,
-        status_attack: u8,
-        deathblow: u8,
-        vanish: u8,
-        cp_200: u8,
-        cp_0: u8,
+        pub unknown_int: u32,
+        pub inverse_chance: u8,
+        pub hp_10_perc: u8,
+        pub hp_30_perc: u8,
+        pub hp_50_perc: u8,
+        pub ep_10_perc: u8,
+        pub ep_30_perc: u8,
+        pub ep_50_perc: u8,
+        pub cp_10: u8,
+        pub cp_30: u8,
+        pub cp_50: u8,
+        pub cp_100: u8,
+        pub bp_1: u8,
+        pub bp_3: u8,
+        pub bp_5: u8,
+        pub crit: u8,
+        pub sepith_up: u8,
+        pub zero_art: u8,
+        pub zero_order: u8,
+        pub guard_break: u8,
+        pub status_attack: u8,
+        pub deathblow: u8,
+        pub vanish: u8,
+        pub cp_200: u8,
+        pub cp_0: u8,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "AttachTableData"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct AttachTableData {
-        character: u16,
+        pub character: u16,
         #[deserialize(length = 20)]
-        unknown_data: std::vec::Vec<u8>,
-        model: String,
-        unknown_string: String,
+        pub unknown_data: std::vec::Vec<u8>,
+        pub model: String,
+        pub unknown_string: String,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "bgm"))]
@@ -174,7 +174,7 @@ pub mod entry_data {
         pub id: u16,
         pub track: String,
         #[deserialize(length = 2)]
-        unknown_data: std::vec::Vec<u8>,
+        pub unknown_data: std::vec::Vec<u8>,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "TacticalBonus"))]
@@ -184,7 +184,7 @@ pub mod entry_data {
         pub name: String,
         pub bonus: f32,
         #[deserialize(length = 2)]
-        unknown_data: std::vec::Vec<u8>,
+        pub unknown_data: std::vec::Vec<u8>,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "char_revise"))]
