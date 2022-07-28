@@ -256,6 +256,7 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::PlaceTableData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::PopupMsgFaceCharData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSBook>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSCook>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChapter>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChar>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSMons>(&tx)?;
@@ -327,6 +328,7 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::PlaceTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::PopupMsgFaceCharData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSBook(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::QSCook(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSChapter(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSChar(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSMons(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),

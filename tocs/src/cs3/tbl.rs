@@ -67,6 +67,7 @@ pub enum Entry {
     QSBook(entry_data::QSBook),
     QSChapter(entry_data::QSChapter),
     QSChar(entry_data::QSChar),
+    QSCook(entry_data::QSCook),
     QSMons(entry_data::QSMons),
     QSText(entry_data::QSText),
     SE(entry_data::SE),
@@ -610,6 +611,20 @@ pub mod entry_data {
         pub note_5: String,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSCook"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSCook {
+        pub regular_name: String,
+        #[deserialize(length = 34)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub superb: QSCookVariantDescription,
+        pub regular: QSCookVariantDescription,
+        pub peculiar: QSCookVariantDescription,
+        pub unique: QSCookVariantDescription,
+        #[deserialize(length = 48)]
+        pub unknown_data_4: std::vec::Vec<u8>, // TODO probably likelihoods to make each variant, from 0 (likely to be peculiar) to 4 (likely to be unique); needs testing tho
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSMons"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct QSMons {
@@ -881,6 +896,14 @@ pub mod entry_data {
         pub id: u16,
         pub data: [i32; 3],
     }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = ""))]
+    #[derive(Clone, Debug, Default, Deserialize, Serialize, SerializeLength)]
+    pub struct QSCookVariantDescription {
+        pub item_id: u16,
+        pub description_1: String,
+        pub description_2: String,
+    }
 }
 
 impl ioutil::tbl::TblEntry for Entry {
@@ -929,6 +952,7 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::QSBook(_) => "QSBook",
             Self::QSChapter(_) => "QSChapter",
             Self::QSChar(_) => "QSChar",
+            Self::QSCook(_) => "QSCook",
             Self::QSMons(_) => "QSMons",
             Self::QSText(_) => "QSText",
             Self::SE(_) => "se",
@@ -994,10 +1018,11 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("NaviTextData", (|ctx| entry_data::NaviTextData::deserialize(ctx).map(|(data, ctx)| (Entry::NaviTextData(data), ctx))) as ParseFun),
                 ("PlaceTableData", (|ctx| entry_data::PlaceTableData::deserialize(ctx).map(|(data, ctx)| (Entry::PlaceTableData(data), ctx))) as ParseFun),
                 ("PopupMsgFaceCharData", (|ctx| entry_data::PopupMsgFaceCharData::deserialize(ctx).map(|(data, ctx)| (Entry::PopupMsgFaceCharData(data), ctx))) as ParseFun),
+                ("QSBook", (|ctx| entry_data::QSBook::deserialize(ctx).map(|(data, ctx)| (Entry::QSBook(data), ctx))) as ParseFun),
                 ("QSChapter", (|ctx| entry_data::QSChapter::deserialize(ctx).map(|(data, ctx)| (Entry::QSChapter(data), ctx))) as ParseFun),
                 ("QSChar", (|ctx| entry_data::QSChar::deserialize(ctx).map(|(data, ctx)| (Entry::QSChar(data), ctx))) as ParseFun),
+                ("QSCook", (|ctx| entry_data::QSCook::deserialize(ctx).map(|(data, ctx)| (Entry::QSCook(data), ctx))) as ParseFun),
                 ("QSMons", (|ctx| entry_data::QSMons::deserialize(ctx).map(|(data, ctx)| (Entry::QSMons(data), ctx))) as ParseFun),
-                ("QSBook", (|ctx| entry_data::QSBook::deserialize(ctx).map(|(data, ctx)| (Entry::QSBook(data), ctx))) as ParseFun),
                 ("QSText", (|ctx| entry_data::QSText::deserialize(ctx).map(|(data, ctx)| (Entry::QSText(data), ctx))) as ParseFun),
                 ("se", (|ctx| entry_data::SE::deserialize(ctx).map(|(data, ctx)| (Entry::SE(data), ctx))) as ParseFun),
                 ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).map(|(data, ctx)| (Entry::SlotCost(data), ctx))) as ParseFun),
