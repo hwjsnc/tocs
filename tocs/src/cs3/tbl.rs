@@ -574,7 +574,7 @@ pub mod entry_data {
     pub struct QSBook {
         pub unknown_short_1: u16,
         pub unknown_short_2: u16,
-        pub description: String,
+        pub title: String,
         pub unknown_text_1: String,
         pub unknown_text_2: String,
         #[deserialize(length = 5)]
