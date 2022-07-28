@@ -177,16 +177,6 @@ pub mod entry_data {
         pub unknown_data: std::vec::Vec<u8>,
     }
 
-    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "TacticalBonus"))]
-    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
-    pub struct TacticalBonus {
-        pub id: u16,
-        pub name: String,
-        pub bonus: f32,
-        #[deserialize(length = 2)]
-        pub unknown_data: std::vec::Vec<u8>,
-    }
-
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "char_revise"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct CharRevise {
@@ -954,6 +944,16 @@ pub mod entry_data {
         pub flags: String,
         pub name: String,
         pub description: String,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "TacticalBonus"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct TacticalBonus {
+        pub id: u16,
+        pub name: String,
+        pub bonus: f32,
+        #[deserialize(length = 2)]
+        pub unknown_data: std::vec::Vec<u8>,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "TextTableData"))]
