@@ -226,12 +226,14 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AssetCache>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AtBonus>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AttachTableData>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Bgm>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CharRevise>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CharData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CompHelpData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::EventTableData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::FootStepData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::GameDifficulty>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::HkitugiLst>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Item>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ItemQ>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ItemHelpData>(&tx)?;
@@ -259,12 +261,18 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSCook>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChapter>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChar>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSFish>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSHelp>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSMons>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSRank>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSText>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSTitle>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SchoolGrade>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SE>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SlotCost>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Status>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::StatusP>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::TacticalBonus>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::TextTableData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Voice>(&tx)?;
         Ok(())
@@ -298,12 +306,14 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::AssetCache(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::AtBonus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::AttachTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::Bgm(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::CharRevise(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::CharData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::CompHelpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::EventTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::FootStepData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::GameDifficulty(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::HkitugiLst(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Item(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::ItemQ(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::ItemHelpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
@@ -331,12 +341,18 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::QSCook(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSChapter(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSChar(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::QSFish(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::QSHelp(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSMons(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::QSRank(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::QSText(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::QSTitle(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::SchoolGrade(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::SE(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::SlotCost(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Status(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::StatusP(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::TacticalBonus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::TextTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Voice(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                 };

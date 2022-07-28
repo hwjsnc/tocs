@@ -35,12 +35,14 @@ pub enum Entry {
     AssetCache(entry_data::AssetCache),
     AtBonus(entry_data::AtBonus),
     AttachTableData(entry_data::AttachTableData),
+    Bgm(entry_data::Bgm),
     CharRevise(entry_data::CharRevise),
     CharData(entry_data::CharData),
     CompHelpData(entry_data::CompHelpData),
     EventTableData(entry_data::EventTableData),
     FootStepData(entry_data::FootStepData),
     GameDifficulty(entry_data::GameDifficulty),
+    HkitugiLst(entry_data::HkitugiLst),
     Item(entry_data::Item),
     ItemQ(entry_data::ItemQ),
     ItemHelpData(entry_data::ItemHelpData),
@@ -68,12 +70,18 @@ pub enum Entry {
     QSChapter(entry_data::QSChapter),
     QSChar(entry_data::QSChar),
     QSCook(entry_data::QSCook),
+    QSFish(entry_data::QSFish),
+    QSHelp(entry_data::QSHelp),
     QSMons(entry_data::QSMons),
+    QSRank(entry_data::QSRank),
     QSText(entry_data::QSText),
+    QSTitle(entry_data::QSTitle),
+    SchoolGrade(entry_data::SchoolGrade),
     SE(entry_data::SE),
     SlotCost(entry_data::SlotCost),
     Status(entry_data::Status),
     StatusP(entry_data::StatusP),
+    TacticalBonus(entry_data::TacticalBonus),
     TextTableData(entry_data::TextTableData),
     Voice(entry_data::Voice),
 }
@@ -160,6 +168,25 @@ pub mod entry_data {
         unknown_string: String,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "bgm"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct Bgm {
+        pub id: u16,
+        pub track: String,
+        #[deserialize(length = 2)]
+        unknown_data: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "TacticalBonus"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct TacticalBonus {
+        pub id: u16,
+        pub name: String,
+        pub bonus: f32,
+        #[deserialize(length = 2)]
+        unknown_data: std::vec::Vec<u8>,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "char_revise"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct CharRevise {
@@ -215,6 +242,16 @@ pub mod entry_data {
     pub struct GameDifficulty {
         pub difficulty: u16,
         pub modifier: i16,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "hkitugi_lst"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct HkitugiLst {
+        pub unknown_short: u16,
+        pub unknown_byte_1: u8,
+        pub unknown_byte_2: u8,
+        pub text: String,
+        pub description: String,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "item"))]
@@ -625,6 +662,25 @@ pub mod entry_data {
         pub unknown_data_4: std::vec::Vec<u8>, // TODO probably likelihoods to make each variant, from 0 (likely to be peculiar) to 4 (likely to be unique); needs testing tho
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSFish"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSFish {
+        pub id: u16,
+        pub unknown_string: String,
+        pub name: String,
+        #[deserialize(length = 167)]
+        pub unknown_data_1: std::vec::Vec<u8>,
+        pub description: String,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSHelp"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSHelp {
+        pub unknown_short_1: u16,
+        pub unknown_short_2: u16,
+        pub text: String,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSMons"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct QSMons {
@@ -636,6 +692,15 @@ pub mod entry_data {
         pub unknown_byte: u8,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSRank"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSRank {
+        pub id: u16,
+        pub text: String,
+        #[deserialize(length = 6)]
+        pub unknown_data: std::vec::Vec<u8>,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSText"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct QSText {
@@ -643,6 +708,26 @@ pub mod entry_data {
         pub unknown_byte_1: u8,
         pub text: String,
         pub unknown_byte_2: u8,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSTitle"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct QSTitle {
+        pub unknown_short: u16,
+        pub unknown_byte: u8,
+        pub title: String,
+        pub persons: String,
+        #[deserialize(length = 13)]
+        pub unknown_data: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "SchoolGrade"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct SchoolGrade {
+        pub id: u16,
+        pub text: String,
+        #[deserialize(length = 6)]
+        pub unknown_data: std::vec::Vec<u8>,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "se"))]
@@ -920,12 +1005,14 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::AssetCache(_) => "AssetCache",
             Self::AtBonus(_) => "AtBonus",
             Self::AttachTableData(_) => "AttachTableData",
+            Self::Bgm(_) => "bgm",
             Self::CharRevise(_) => "char_revise",
             Self::CharData(_) => "CharData",
             Self::CompHelpData(_) => "CompHelpData",
             Self::EventTableData(_) => "EventTableData",
             Self::FootStepData(_) => "FootStepData",
             Self::GameDifficulty(_) => "game_difficulty",
+            Self::HkitugiLst(_) => "hkitugi_lst",
             Self::Item(_) => "item",
             Self::ItemQ(_) => "item_q",
             Self::ItemHelpData(_) => "ItemHelpData",
@@ -953,12 +1040,18 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::QSChapter(_) => "QSChapter",
             Self::QSChar(_) => "QSChar",
             Self::QSCook(_) => "QSCook",
+            Self::QSFish(_) => "QSFish",
+            Self::QSHelp(_) => "QSHelp",
             Self::QSMons(_) => "QSMons",
+            Self::QSRank(_) => "QSRank",
             Self::QSText(_) => "QSText",
+            Self::QSTitle(_) => "QSTitle",
+            Self::SchoolGrade(_) => "SchoolGrade",
             Self::SE(_) => "se",
             Self::SlotCost(_) => "SlotCost",
             Self::Status(_) => "status",
             Self::StatusP(_) => "status_p",
+            Self::TacticalBonus(_) => "TacticalBonus",
             Self::TextTableData(_) => "TextTableData",
             Self::Voice(_) => "voice",
         }
@@ -989,12 +1082,14 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("AssetCache", (|ctx| entry_data::AssetCache::deserialize(ctx).map(|(data, ctx)| (Entry::AssetCache(data), ctx))) as ParseFun),
                 ("AtBonus", (|ctx| entry_data::AtBonus::deserialize(ctx).map(|(data, ctx)| (Entry::AtBonus(data), ctx))) as ParseFun),
                 ("AttachTableData", (|ctx| entry_data::AttachTableData::deserialize(ctx).map(|(data, ctx)| (Entry::AttachTableData(data), ctx))) as ParseFun),
+                ("bgm", (|ctx| entry_data::Bgm::deserialize(ctx).map(|(data, ctx)| (Entry::Bgm(data), ctx))) as ParseFun),
                 ("char_revise", (|ctx| entry_data::CharRevise::deserialize(ctx).map(|(data, ctx)| (Entry::CharRevise(data), ctx))) as ParseFun),
                 ("CharData", (|ctx| entry_data::CharData::deserialize(ctx).map(|(data, ctx)| (Entry::CharData(data), ctx))) as ParseFun),
                 ("CompHelpData", (|ctx| entry_data::CompHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::CompHelpData(data), ctx))) as ParseFun),
                 ("EventTableData", (|ctx| entry_data::EventTableData::deserialize(ctx).map(|(data, ctx)| (Entry::EventTableData(data), ctx))) as ParseFun),
                 ("FootStepData", (|ctx| entry_data::FootStepData::deserialize(ctx).map(|(data, ctx)| (Entry::FootStepData(data), ctx))) as ParseFun),
                 ("game_difficulty", (|ctx| entry_data::GameDifficulty::deserialize(ctx).map(|(data, ctx)| (Entry::GameDifficulty(data), ctx))) as ParseFun),
+                ("hkitugi_lst", (|ctx| entry_data::HkitugiLst::deserialize(ctx).map(|(data, ctx)| (Entry::HkitugiLst(data), ctx))) as ParseFun),
                 ("item", (|ctx| entry_data::Item::deserialize(ctx).map(|(data, ctx)| (Entry::Item(data), ctx))) as ParseFun),
                 ("item_q", (|ctx| entry_data::ItemQ::deserialize(ctx).map(|(data, ctx)| (Entry::ItemQ(data), ctx))) as ParseFun),
                 ("ItemHelpData", (|ctx| entry_data::ItemHelpData::deserialize(ctx).map(|(data, ctx)| (Entry::ItemHelpData(data), ctx))) as ParseFun),
@@ -1022,12 +1117,18 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("QSChapter", (|ctx| entry_data::QSChapter::deserialize(ctx).map(|(data, ctx)| (Entry::QSChapter(data), ctx))) as ParseFun),
                 ("QSChar", (|ctx| entry_data::QSChar::deserialize(ctx).map(|(data, ctx)| (Entry::QSChar(data), ctx))) as ParseFun),
                 ("QSCook", (|ctx| entry_data::QSCook::deserialize(ctx).map(|(data, ctx)| (Entry::QSCook(data), ctx))) as ParseFun),
+                ("QSFish", (|ctx| entry_data::QSFish::deserialize(ctx).map(|(data, ctx)| (Entry::QSFish(data), ctx))) as ParseFun),
+                ("QSHelp", (|ctx| entry_data::QSHelp::deserialize(ctx).map(|(data, ctx)| (Entry::QSHelp(data), ctx))) as ParseFun),
                 ("QSMons", (|ctx| entry_data::QSMons::deserialize(ctx).map(|(data, ctx)| (Entry::QSMons(data), ctx))) as ParseFun),
+                ("QSRank", (|ctx| entry_data::QSRank::deserialize(ctx).map(|(data, ctx)| (Entry::QSRank(data), ctx))) as ParseFun),
                 ("QSText", (|ctx| entry_data::QSText::deserialize(ctx).map(|(data, ctx)| (Entry::QSText(data), ctx))) as ParseFun),
+                ("QSTitle", (|ctx| entry_data::QSTitle::deserialize(ctx).map(|(data, ctx)| (Entry::QSTitle(data), ctx))) as ParseFun),
+                ("SchoolGrade", (|ctx| entry_data::SchoolGrade::deserialize(ctx).map(|(data, ctx)| (Entry::SchoolGrade(data), ctx))) as ParseFun),
                 ("se", (|ctx| entry_data::SE::deserialize(ctx).map(|(data, ctx)| (Entry::SE(data), ctx))) as ParseFun),
                 ("SlotCost", (|ctx| entry_data::SlotCost::deserialize(ctx).map(|(data, ctx)| (Entry::SlotCost(data), ctx))) as ParseFun),
                 ("status", (|ctx| entry_data::Status::deserialize(ctx).map(|(data, ctx)| (Entry::Status(data), ctx))) as ParseFun),
                 ("status_p", (|ctx| entry_data::StatusP::deserialize(ctx).map(|(data, ctx)| (Entry::StatusP(data), ctx))) as ParseFun),
+                ("TacticalBonus", (|ctx| entry_data::TacticalBonus::deserialize(ctx).map(|(data, ctx)| (Entry::TacticalBonus(data), ctx))) as ParseFun),
                 ("TextTableData", (|ctx| entry_data::TextTableData::deserialize(ctx).map(|(data, ctx)| (Entry::TextTableData(data), ctx))) as ParseFun),
                 ("voice", (|ctx| entry_data::Voice::deserialize(ctx).map(|(data, ctx)| (Entry::Voice(data), ctx))) as ParseFun),
             ].into_iter().collect();
