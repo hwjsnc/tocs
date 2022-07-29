@@ -483,8 +483,12 @@ pub mod entry_data {
         pub element: u16,
         pub name: String,
 
-        #[deserialize(length = 12)]
-        pub unknown_data_1: std::vec::Vec<u8>,
+        pub item: u16,
+        pub mana: u16,
+        pub cost: u16,
+        pub atk: u16,
+        pub hp: u16,
+        pub unknown_int: u16,
 
         pub ranged_flag: u16,
         pub ranged_string: String,
@@ -503,7 +507,7 @@ pub mod entry_data {
         pub ability_description: String,
 
         #[deserialize(length = 8)]
-        pub unknown_data_2: std::vec::Vec<u8>,
+        pub unknown_data: std::vec::Vec<u8>,
 
         pub action_description: String,
     }
@@ -511,21 +515,26 @@ pub mod entry_data {
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08CharMsg"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct MG08CharMsg {
-        #[deserialize(length = 6)]
-        pub unknown_data_1: std::vec::Vec<u8>,
+        pub character: u16,
+        pub id: u16,
+        pub unknown_int: u16,
         pub text: String,
-        #[deserialize(length = 6)]
-        pub unknown_data_2: std::vec::Vec<u8>,
+        pub voice: i16,
+        #[deserialize(length = 4)]
+        pub unknown_data: std::vec::Vec<u8>,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08PlyMsg"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct MG08PlyMsg {
-        #[deserialize(length = 6)]
-        pub unknown_data_1: std::vec::Vec<u8>,
+        // this might be unused
+        pub character: u16,
+        pub id: u16,
+        pub unknown_int: u16,
         pub text: String,
-        #[deserialize(length = 6)]
-        pub unknown_data_2: std::vec::Vec<u8>,
+        pub voice: i16,
+        #[deserialize(length = 4)]
+        pub unknown_data: std::vec::Vec<u8>,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08Text"))]
