@@ -499,17 +499,18 @@ pub mod entry_data {
         pub skill_id: u16,
         pub skill_string: String,
         pub skill_cost: u16,
-        pub skill_strength: u16,
+        pub skill_arg: u16,
         pub skill_description: String,
 
         pub ability_id: u16,
-        pub ability_strength: u16,
+        pub ability_arg: u16,
         pub ability_description: String,
 
-        #[deserialize(length = 8)]
-        pub unknown_data: std::vec::Vec<u8>,
-
-        pub action_description: String,
+        pub effect_id: u16,
+        pub unknown_int_2: u16,
+        pub effect_arg_1: i16,
+        pub effect_arg_2: i16,
+        pub effect_description: String,
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08CharMsg"))]
