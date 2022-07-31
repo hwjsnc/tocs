@@ -250,7 +250,9 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzStatus>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08Card>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08CharMsg>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08EnemyAI>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08PlyMsg>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08PresetDeck>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08Text>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NameTableData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NameVis>(&tx)?;
@@ -330,7 +332,9 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::MasterQuartzStatus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MG08Card(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MG08CharMsg(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MG08EnemyAI(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MG08PlyMsg(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::MG08PresetDeck(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::MG08Text(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::NameTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::NameVis(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
@@ -629,9 +633,21 @@ fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bo
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }
+            "MG08EnemyAi" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MG08EnemyAI>(&tx, table) {
+                    let e = CS3Entry::MG08EnemyAI(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
             "MG08PlyMsg" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MG08PlyMsg>(&tx, table) {
                     let e = CS3Entry::MG08PlyMsg(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "MG08PresetDeck" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::MG08PresetDeck>(&tx, table) {
+                    let e = CS3Entry::MG08PresetDeck(e);
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }

@@ -59,7 +59,9 @@ pub enum Entry {
     MasterQuartzStatus(entry_data::MasterQuartzStatus),
     MG08Card(entry_data::MG08Card),
     MG08CharMsg(entry_data::MG08CharMsg),
+    MG08EnemyAI(entry_data::MG08EnemyAI),
     MG08PlyMsg(entry_data::MG08PlyMsg),
+    MG08PresetDeck(entry_data::MG08PresetDeck),
     MG08Text(entry_data::MG08Text),
     NameTableData(entry_data::NameTableData),
     NameVis(entry_data::NameVis),
@@ -525,6 +527,19 @@ pub mod entry_data {
         pub unknown_data: std::vec::Vec<u8>,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08EnemyAi"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MG08EnemyAI {
+        pub character: u16,
+        pub id: u16,
+        pub unknown_short_1: u16,
+        pub unknown_short_2: u16,
+        pub unknown_short_3: u16,
+        pub unknown_short_4: u16,
+        pub master: u16,
+        pub cards: [u16; 20],
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08PlyMsg"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct MG08PlyMsg {
@@ -536,6 +551,14 @@ pub mod entry_data {
         pub voice: i16,
         #[deserialize(length = 4)]
         pub unknown_data: std::vec::Vec<u8>,
+    }
+
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08PresetDeck"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct MG08PresetDeck {
+        pub id: u8,
+        pub master: u8,
+        pub cards: [u8; 20],
     }
 
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "MG08Text"))]
@@ -1039,7 +1062,9 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::MasterQuartzStatus(_) => "MasterQuartzStatus",
             Self::MG08Card(_) => "MG08Card",
             Self::MG08CharMsg(_) => "MG08CharMsg",
+            Self::MG08EnemyAI(_) => "MG08EnemyAi",
             Self::MG08PlyMsg(_) => "MG08PlyMsg",
+            Self::MG08PresetDeck(_) => "MG08PresetDeck",
             Self::MG08Text(_) => "MG08Text",
             Self::NameTableData(_) => "NameTableData",
             Self::NameVis(_) => "NameVis",
@@ -1116,7 +1141,9 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("MasterQuartzStatus", (|ctx| entry_data::MasterQuartzStatus::deserialize(ctx).map(|(data, ctx)| (Entry::MasterQuartzStatus(data), ctx))) as ParseFun),
                 ("MG08Card", (|ctx| entry_data::MG08Card::deserialize(ctx).map(|(data, ctx)| (Entry::MG08Card(data), ctx))) as ParseFun),
                 ("MG08CharMsg", (|ctx| entry_data::MG08CharMsg::deserialize(ctx).map(|(data, ctx)| (Entry::MG08CharMsg(data), ctx))) as ParseFun),
+                ("MG08EnemyAi", (|ctx| entry_data::MG08EnemyAI::deserialize(ctx).map(|(data, ctx)| (Entry::MG08EnemyAI(data), ctx))) as ParseFun),
                 ("MG08PlyMsg", (|ctx| entry_data::MG08PlyMsg::deserialize(ctx).map(|(data, ctx)| (Entry::MG08PlyMsg(data), ctx))) as ParseFun),
+                ("MG08PresetDeck", (|ctx| entry_data::MG08PresetDeck::deserialize(ctx).map(|(data, ctx)| (Entry::MG08PresetDeck(data), ctx))) as ParseFun),
                 ("MG08Text", (|ctx| entry_data::MG08Text::deserialize(ctx).map(|(data, ctx)| (Entry::MG08Text(data), ctx))) as ParseFun),
                 ("NameTableData", (|ctx| entry_data::NameTableData::deserialize(ctx).map(|(data, ctx)| (Entry::NameTableData(data), ctx))) as ParseFun),
                 ("NameVis", (|ctx| entry_data::NameVis::deserialize(ctx).map(|(data, ctx)| (Entry::NameVis(data), ctx))) as ParseFun),
