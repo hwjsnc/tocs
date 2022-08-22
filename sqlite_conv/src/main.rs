@@ -275,6 +275,7 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Status>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::StatusP>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::TacticalBonus>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::TextLst>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::TextTableData>(&tx)?;
         sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Voice>(&tx)?;
         Ok(())
@@ -357,6 +358,7 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
                     CS3Entry::Status(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::StatusP(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::TacticalBonus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+                    CS3Entry::TextLst(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::TextTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                     CS3Entry::Voice(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
                 };
@@ -780,6 +782,12 @@ fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bo
             "TacticalBonus" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::TacticalBonus>(&tx, table) {
                     let e = CS3Entry::TacticalBonus(e);
+                    all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
+                }
+            }
+            "text_lst" => {
+                for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::TextLst>(&tx, table) {
+                    let e = CS3Entry::TextLst(e);
                     all_entries.entry(s).and_modify(|entries| entries.push(e.clone())).or_insert_with(|| vec![e]);
                 }
             }

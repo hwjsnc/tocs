@@ -84,6 +84,7 @@ pub enum Entry {
     Status(entry_data::Status),
     StatusP(entry_data::StatusP),
     TacticalBonus(entry_data::TacticalBonus),
+    TextLst(entry_data::TextLst),
     TextTableData(entry_data::TextTableData),
     Voice(entry_data::Voice),
 }
@@ -989,6 +990,13 @@ pub mod entry_data {
         pub unknown_data: std::vec::Vec<u8>,
     }
 
+    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "text_lst"))]
+    #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
+    pub struct TextLst {
+        pub id: u16,
+        pub text: String,
+    }
+
     #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "TextTableData"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct TextTableData {
@@ -1088,6 +1096,7 @@ impl ioutil::tbl::TblEntry for Entry {
             Self::StatusP(_) => "status_p",
             Self::TacticalBonus(_) => "TacticalBonus",
             Self::TextTableData(_) => "TextTableData",
+            Self::TextLst(_) => "text_lst",
             Self::Voice(_) => "voice",
         }
     }
@@ -1166,6 +1175,7 @@ pub fn load(input: &[u8]) -> Result<Tbl, ParseError> {
                 ("status", (|ctx| entry_data::Status::deserialize(ctx).map(|(data, ctx)| (Entry::Status(data), ctx))) as ParseFun),
                 ("status_p", (|ctx| entry_data::StatusP::deserialize(ctx).map(|(data, ctx)| (Entry::StatusP(data), ctx))) as ParseFun),
                 ("TacticalBonus", (|ctx| entry_data::TacticalBonus::deserialize(ctx).map(|(data, ctx)| (Entry::TacticalBonus(data), ctx))) as ParseFun),
+                ("text_lst", (|ctx| entry_data::TextLst::deserialize(ctx).map(|(data, ctx)| (Entry::TextLst(data), ctx))) as ParseFun),
                 ("TextTableData", (|ctx| entry_data::TextTableData::deserialize(ctx).map(|(data, ctx)| (Entry::TextTableData(data), ctx))) as ParseFun),
                 ("voice", (|ctx| entry_data::Voice::deserialize(ctx).map(|(data, ctx)| (Entry::Voice(data), ctx))) as ParseFun),
             ].into_iter().collect();
