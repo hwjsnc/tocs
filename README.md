@@ -27,10 +27,7 @@ Here's a short overview:
   - `sqliteio_derive`: Derive functions to convert entries to/from sql rows, and functions to help generate table schemas, etc.
 
 - `sqlite_conv` is a CLI program to convert from tbls to a sqlite database.
-  This sqlite database can then be edited, e.g. with [sqlitebrowser](https://sqlitebrowser.org/).
-  Currently only CS3 and tbl->sql is supported so it can only be used for analysis of this game's tbls.
-  I want to add support for other games and for sql->tbl.
-  Once this is done, it should be much easier to edit tbl files.
+  This sqlite database can be edited, e.g. with [sqlitebrowser](https://sqlitebrowser.org/) and converted back to tbl files.
   WARNING:
   The table schema is not going to be stable across versions, and backwards compatability is NOT a goal since it would be too much effort.
   As I learn more about the data, columns will be added/removed/renamed.
