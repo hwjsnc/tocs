@@ -1,3 +1,4 @@
+pub mod pkg;
 pub mod tbl;
 
 #[derive(Clone, Debug)]
@@ -28,6 +29,7 @@ pub enum PrimitiveParseError {
     UnexpectedEOF { position: usize }, // expected more data, but reached the end
     MissingEOF { position: usize },    // expected EOF, but there is more data
     UTF8Error { start_position: usize, end_position: usize, err: std::str::Utf8Error },
+    NonzeroPadding { start_position: usize, error_position: usize, value: u8 },
 }
 
 impl PrimitiveParseError {
@@ -36,6 +38,7 @@ impl PrimitiveParseError {
             PrimitiveParseError::UnexpectedEOF { position } => *position,
             PrimitiveParseError::MissingEOF { position } => *position,
             PrimitiveParseError::UTF8Error { start_position, err, .. } => start_position + err.valid_up_to(),
+            PrimitiveParseError::NonzeroPadding { error_position, .. } => *error_position,
         }
     }
 
@@ -47,6 +50,14 @@ impl PrimitiveParseError {
                 let data = String::from_utf8_lossy(&input[(*start_position as usize)..(*end_position as usize - 1)]);
                 format!("UTF-8 error for string \"{}\" at position {start_position}: {err:?}", data.escape_debug())
             }
+            PrimitiveParseError::NonzeroPadding {
+                start_position,
+                error_position,
+                value,
+            } => format!(
+                "cstring padding value {} (0x{:02x}) is nonzero at position {} (string starts at {})",
+                value, value, error_position, start_position
+            ),
         }
     }
 }
@@ -147,6 +158,23 @@ pub fn parse_utf8cstring(ctx: ParseContext) -> Result<(std::borrow::Cow<'_, str>
             }
         }
     }
+}
+
+pub fn parse_utf8cstring_padded(ctx: ParseContext, chunk_size: usize) -> Result<(std::borrow::Cow<'_, str>, ParseContext), PrimitiveParseError> {
+    let start_ctx = ctx.clone();
+    let (s, mut end_ctx) = parse_utf8cstring(ctx)?;
+    while (end_ctx.position() - start_ctx.position()) % chunk_size != 0 {
+        let (x, ctx) = parse_u8(end_ctx)?;
+        if ctx.strict && x != 0 {
+            return Err(PrimitiveParseError::NonzeroPadding {
+                start_position: start_ctx.position,
+                error_position: ctx.position(),
+                value: x,
+            });
+        }
+        end_ctx = ctx;
+    }
+    Ok((s, end_ctx))
 }
 
 pub fn serialize_utf8cstring<W>(out: &mut W, s: &str) -> Result<(), std::io::Error>
