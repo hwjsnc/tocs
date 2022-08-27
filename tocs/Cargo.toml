@@ -18,8 +18,11 @@ sqliteio = ["dep:sqliteio", "dep:sqliteio_derive", "dep:rusqlite"]
 
 [dependencies]
 lazy_static = "1.4"
+log = "0.4.17"
 blake2 = "0.10.4"
+hex = "0.4.3"
 hex-literal = "0.3.4"
+indexmap = "1.9.1"
 ioutil = { path = "../tocs_internal/ioutil" }
 tbl_deserialize_derive = { path = "../tocs_internal/tbl_deserialize_derive" }
 tbl_serialize_derive = { path = "../tocs_internal/tbl_serialize_derive" }
