@@ -291,6 +291,7 @@ pub fn atomic_value_serialization_length<S: AsRef<str>>(v: &AtomicValue<S>) -> R
 
 // Serialize, i.e. generate tbl data
 
+#[derive(Debug)]
 pub enum SerializeError {
     IOError(std::io::Error),
     TooLong,
@@ -332,6 +333,7 @@ pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header:
 
 // Deserialize, i.e. read tbl
 
+#[derive(Debug)]
 pub enum DeserializeErrorDetail {
     IO(std::io::Error),
     UTF8(std::str::Utf8Error),
@@ -343,6 +345,7 @@ pub enum DeserializeErrorDetail {
     //EntryHeaderNotInTblHeader { name: String },
 }
 
+#[derive(Clone, Debug)]
 pub enum DeserializeErrorPosition {
     TblHeader,
     TblHeaderEntry { entry_number: u32 },
@@ -353,6 +356,7 @@ pub enum DeserializeErrorPosition {
     End,
 }
 
+#[derive(Debug)]
 pub struct DeserializeError {
     detail: DeserializeErrorDetail,
     position: Option<u64>,                            // seek position in the file

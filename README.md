@@ -34,6 +34,9 @@ Here's a short overview:
   If you created a database using some version of the program, it will likely be impossible to turn back to tbl using any other version.
   If you want to upgrade and need to persist the data from the database, first convert it to tbl files, then convert the tbls back to a new database after the upgrade.
 
+- `tbled` is a GUI tbl editor.
+  It is a work in progress; right now it can't even edit, just display.
+
 - `try_parse` is a CLI program that attempts to parse all game data and prints any errors.
   It's there for finding instances where the game data doesn't follow the rules we've reverse engineered.
   This can happen if the files are broken (it's more likely than you think), our understanding is incomplete, and/or because there's a bug in the code.
