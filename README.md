@@ -46,9 +46,10 @@ Here's a short overview:
   Only very basic formatting errors are fixed (so far it's only incorrect length bytes in tbls).
   This can be used to bring the files into a form where they can be more easily parsed with other software.
 
-related/alternative projects
-----------------------------
+related & alternative projects
+------------------------------
 
+- https://github.com/Trails-Research-Group
 - https://github.com/nnguyen259/ColdSteel3Tools
 - https://github.com/nnguyen259/SenSchema
 - https://github.com/Ouroboros/Falcom
