@@ -179,7 +179,7 @@ impl App {
                     draw_header("", x, y, w, h); // Row titles
                 }
                 fltk::table::TableContext::Cell => {
-                    draw_data(&value, x, y, w, h, table.is_selected(row, col));
+                    draw_data(&value, x, y, w, h, table.is_selected(row, col), (row % 2) == 0);
                 }
                 _ => (),
             }
@@ -356,12 +356,16 @@ fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
 }
 
 // The selected flag sets the color of the cell to a grayish color, otherwise white
-fn draw_data(value: &tocs::tbl::AtomicValue<String>, x: i32, y: i32, w: i32, h: i32, selected: bool) {
+fn draw_data(value: &tocs::tbl::AtomicValue<String>, x: i32, y: i32, w: i32, h: i32, selected: bool, even: bool) {
     fltk::draw::push_clip(x, y, w, h);
     if selected {
-        fltk::draw::set_draw_color(fltk::enums::Color::from_u32(0x00D3_D3D3));
+        fltk::draw::set_draw_color(fltk::enums::Color::from_u32(0x00_D0_D0_D0));
     } else {
-        fltk::draw::set_draw_color(fltk::enums::Color::White);
+        if even {
+            fltk::draw::set_draw_color(fltk::enums::Color::White);
+        } else {
+            fltk::draw::set_draw_color(fltk::enums::Color::from_u32(0x00_F0_F0_F0));
+        }
     }
     fltk::draw::draw_rectf(x, y, w, h);
     fltk::draw::set_draw_color(fltk::enums::Color::Gray0);
