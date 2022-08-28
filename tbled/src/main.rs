@@ -134,7 +134,7 @@ impl App {
         table.set_col_header(true);
         table.set_col_width_all(40);
         table.set_col_resize(true);
-        table.set_row_header(false);
+        table.set_row_header(true);
         table.set_row_resize(true);
 
         table.draw_cell(|table, ctx, row, col, x, y, w, h| {
@@ -175,7 +175,9 @@ impl App {
                 fltk::table::TableContext::ColHeader => {
                     draw_header(attribute, x, y, w, h); // Column titles
                 }
-                //fltk::table::TableContext::RowHeader => draw_header(&format!("{}", row + 1), x, y, w, h),        // Row titles
+                fltk::table::TableContext::RowHeader => {
+                    draw_header("", x, y, w, h); // Row titles
+                }
                 fltk::table::TableContext::Cell => {
                     draw_data(&value, x, y, w, h, table.is_selected(row, col));
                 }
@@ -232,6 +234,7 @@ impl App {
                     state.active = None;
                     match load_tbl_file(&path, version) {
                         Ok(entries) => {
+                            // TODO: handle warnings
                             state.entries = entries;
                         }
                         Err(e) => {
