@@ -714,14 +714,14 @@ lazy_static::lazy_static! {
 
     pub static ref SCHEMAS_CS3 : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
         ("char_revise".to_string(), [
-            ("char".to_string(), Type::CUtf8),
-            ("hp".to_string(), Type::U16),
-            ("str".to_string(), Type::U16),
-            ("def".to_string(), Type::U16),
-            ("ats".to_string(), Type::U16),
-            ("adf".to_string(), Type::U16),
-            ("spd".to_string(), Type::U16),
-            ("brk".to_string(), Type::U16),
+            ("char", Type::CUtf8),
+            ("hp", Type::U16),
+            ("str", Type::U16),
+            ("def", Type::U16),
+            ("ats", Type::U16),
+            ("adf", Type::U16),
+            ("spd", Type::U16),
+            ("brk", Type::U16),
         ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
         ("game_difficulty".to_string(), [
             ("difficulty", Type::U16),
@@ -955,14 +955,14 @@ lazy_static::lazy_static! {
             ("description", Type::CUtf8),
         ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
         ("status_revise".to_string(), [
-            ("difficulty".to_string(), Type::U16),
-            ("hp".to_string(), Type::U16),
-            ("str".to_string(), Type::U16),
-            ("def".to_string(), Type::U16),
-            ("ats".to_string(), Type::U16),
-            ("adf".to_string(), Type::U16),
-            ("spd".to_string(), Type::U16),
-            ("brk".to_string(), Type::U16),
+            ("difficulty", Type::U16),
+            ("hp", Type::U16),
+            ("str", Type::U16),
+            ("def", Type::U16),
+            ("ats", Type::U16),
+            ("adf", Type::U16),
+            ("spd", Type::U16),
+            ("brk", Type::U16),
         ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
         ("voice".to_string(), [
             ("id", Type::U16),
@@ -975,9 +975,9 @@ lazy_static::lazy_static! {
     ].into_iter().collect();
     pub static ref SCHEMAS_CS3_COMMON : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
         ("effect".to_string(), [
-            ("id".to_string(), Type::U16),
-            ("data".to_string(), Type::Repeat(3, Box::new(Type::I32))),
-        ].into_iter().collect())
+            ("id", Type::U16),
+            ("data", Type::Repeat(3, Box::new(Type::I32))),
+        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
     ].into_iter().collect();
 
 
