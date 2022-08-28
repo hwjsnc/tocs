@@ -1,11 +1,14 @@
 use fltk::prelude::GroupExt as _;
+use fltk::prelude::InputExt as _;
 use fltk::prelude::TableExt as _;
 use fltk::prelude::WidgetExt as _;
 
-fn partition_entries_with_headers(
-    entries: std::vec::Vec<(String, indexmap::IndexMap<String, tocs::tbl::AtomicValue<String>>)>,
-) -> indexmap::IndexMap<String, std::vec::Vec<indexmap::IndexMap<String, tocs::tbl::AtomicValue<String>>>> {
-    let mut entries_for_header: indexmap::IndexMap<String, std::vec::Vec<indexmap::IndexMap<String, tocs::tbl::AtomicValue<String>>>> = indexmap::IndexMap::new();
+type Attributes = indexmap::IndexMap<String, tocs::tbl::AtomicType>;
+type AttributeValues = indexmap::IndexMap<String, tocs::tbl::AtomicValue<String>>;
+
+// Given rows in any order, collect all rows with the same header together
+fn partition_entries_with_headers(entries: std::vec::Vec<(String, AttributeValues)>) -> indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> {
+    let mut entries_for_header: indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> = indexmap::IndexMap::new();
     for (hdr, data) in entries.into_iter() {
         match entries_for_header.entry(hdr) {
             indexmap::map::Entry::Occupied(mut e) => {
@@ -19,20 +22,37 @@ fn partition_entries_with_headers(
     entries_for_header
 }
 
-type Attributes = indexmap::IndexMap<String, tocs::tbl::AtomicType>;
-type AttributeValues = indexmap::IndexMap<String, tocs::tbl::AtomicValue<String>>;
+#[derive(Debug, Clone, Copy)]
+pub enum TblVersion {
+    CS1,
+    CS2,
+    CS3,
+}
+
+lazy_static::lazy_static! {
+    pub static ref VERSION_SELECTOR_OPTIONS: indexmap::IndexMap<&'static str, TblVersion> = [
+        ("CS1 (XSeed PC, EN)", TblVersion::CS1),
+        ("CS2 (XSeed PC)", TblVersion::CS2),
+        ("CS3 (NISA PC)", TblVersion::CS3),
+    ].into_iter().collect();
+}
 
 #[derive(Clone, Debug)]
 enum Msg {
-    UpdateTable,
+    SelectAndLoadFile, // user pushed button to load a file
+    SaveFile,          // user pushed button to save to the same file
+    SelectAndSaveFile, // user pushed button to save a file
+    FileReloaded,      // user loaded a different tbl file and we have to update all widgets accordingly
+    UpdateTable,       // user selected a different header; update the table widget
 }
 
 struct Widgets {
+    tbl_version_selector: fltk::misc::InputChoice,
+    //filename_output: fltk::output::Output,
     header_selector: fltk::misc::InputChoice,
     table: fltk::table::Table,
 }
 
-#[derive(Clone)] // super disgusting, but i'm in despair right now
 pub struct AppState {
     entries: indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>,
     active: Option<String>,
@@ -60,29 +80,65 @@ impl App {
         let mut flex = fltk::group::Flex::default().size_of_parent();
         flex.set_type(fltk::group::FlexType::Column);
 
+        let mut flex_row = fltk::group::Flex::default().size_of_parent();
+        flex_row.set_type(fltk::group::FlexType::Row);
+
+        /*
         let tbl_entries = load_tbl_file();
         let mut loaded_table_name = tbl_entries.iter().next().map(|(k, v)| k.to_string());
+        */
 
-        let mut header_selector = fltk::misc::InputChoice::default();
-        for hdr in tbl_entries.keys() {
-            header_selector.add(&hdr);
+        let mut tbl_version_selector = fltk::misc::InputChoice::default();
+        for (s, _) in VERSION_SELECTOR_OPTIONS.iter() {
+            tbl_version_selector.add(s);
         }
-        if let Some((hdr, entries)) = tbl_entries.iter().next() {
-            header_selector.set_value(hdr);
-            loaded_table_name = Some(hdr.to_string());
-        }
-        header_selector.emit(sender, Msg::UpdateTable);
-        flex.set_size(&mut header_selector, 26);
+        tbl_version_selector.set_value_index(0);
+        tbl_version_selector.input().set_align(fltk::enums::Align::Left);
+        tbl_version_selector.input().set_readonly(true);
+        flex_row.set_size(&mut tbl_version_selector, 160);
+
+        let mut load_button = fltk::button::Button::default().with_label("Select && load file");
+        load_button.emit(sender.clone(), Msg::SelectAndLoadFile);
+        flex_row.set_size(&mut load_button, 140);
+
+        /*
+        let mut filename_output = fltk::output::Output::default();
+        filename_output.set_value(""); // TODO
+        flex_row.set_size(&mut filename_output, 400);
+        */
+
+        let mut save_button = fltk::button::Button::default().with_label("Save");
+        save_button.emit(sender.clone(), Msg::SaveFile);
+        flex_row.set_size(&mut save_button, 60);
+
+        let mut save_button = fltk::button::Button::default().with_label("Select && save file");
+        save_button.emit(sender.clone(), Msg::SelectAndSaveFile);
+        flex_row.set_size(&mut save_button, 140);
+
+        let mut widget = fltk::widget::Widget::default(); // just for spacing
+
+        //let mut label = fltk::output::Output::default();//.with_label("tbl header:");
+        //label.set_value("tbl header: ");
+        let mut label = fltk::widget::Widget::default().with_label("tbl header:");
+        flex_row.set_size(&mut label, 100);
+
+        let mut header_selector = fltk::misc::InputChoice::default().with_label("tbl header");
+        header_selector.emit(sender.clone(), Msg::UpdateTable);
+        header_selector.input().set_readonly(true);
+        flex_row.set_size(&mut header_selector, 200);
+
+        flex_row.end();
+        flex.set_size(&mut flex_row, 26);
 
         let mut table = fltk::table::Table::default();
         table.set_col_header(true);
-        table.set_col_width_all(80);
+        table.set_col_width_all(40);
         table.set_col_resize(true);
         table.set_row_header(false);
         table.set_row_resize(true);
 
         table.draw_cell(|table, ctx, row, col, x, y, w, h| {
-            // Called when the table is drawn then when it's redrawn due to events
+            // called when the table is drawn (both the first time and due to events)
             let state = TBL.lock().unwrap();
             let header = if let Some(hdr) = state.active.as_ref() {
                 hdr
@@ -135,7 +191,12 @@ impl App {
         let mut this = Self {
             app,
             receiver,
-            widgets: Widgets { header_selector, table },
+            widgets: Widgets {
+                tbl_version_selector,
+                //filename_output,
+                header_selector,
+                table,
+            },
         };
 
         this.update_table();
@@ -155,6 +216,44 @@ impl App {
     pub fn update(&mut self, msg: &Option<Msg>) {
         // TODO
         match msg {
+            Some(Msg::SelectAndLoadFile) => {
+                let version: &str = &self.widgets.tbl_version_selector.value().unwrap();
+                let version: TblVersion = *VERSION_SELECTOR_OPTIONS.get(version).unwrap();
+                let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
+                diag.show();
+                let path = diag.filename();
+                if !path.as_os_str().is_empty() {
+                    let mut state = TBL.lock().unwrap();
+                    state.active = None;
+                    state.entries = load_tbl_file(&path, version);
+                } else {
+                    let mut state = TBL.lock().unwrap();
+                    state.active = None;
+                    state.entries = indexmap::IndexMap::new();
+                }
+                self.update(&Some(Msg::FileReloaded));
+            }
+            Some(Msg::SaveFile) => {
+                println!("not yet implemented"); // TODO
+            }
+            Some(Msg::SelectAndSaveFile) => {
+                println!("not yet implemented"); // TODO
+            }
+            Some(Msg::FileReloaded) => {
+                {
+                    // reset header selector
+                    let mut state = TBL.lock().unwrap();
+                    state.active = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr).map(|_| hdr.to_string()));
+                    for hdr in state.entries.keys() {
+                        self.widgets.header_selector.add(&hdr);
+                    }
+                    if let Some((hdr, entries)) = state.entries.iter().next() {
+                        self.widgets.header_selector.set_value(hdr);
+                        state.active = Some(hdr.to_string());
+                    }
+                }
+                self.update_table();
+            }
             Some(Msg::UpdateTable) => {
                 {
                     let mut state = TBL.lock().unwrap();
@@ -169,38 +268,71 @@ impl App {
     }
 
     fn update_table(&mut self) {
+        // don't call this function while holding an appstate mutex lock!
         let table = &mut self.widgets.table;
 
-        let (nrows, ncols) = {
+        let (nrows, ncols, column_widths) = {
             let mut state = TBL.lock().unwrap();
             let header = state.active.as_ref();
-            let ncols = header.and_then(|hdr| tocs::tbl::SCHEMAS_CS3_ATOMIC.get(hdr)).and_then(|attrs| attrs.len().try_into().ok()).unwrap_or(1);
+            let schema = header.and_then(|hdr| tocs::tbl::SCHEMAS_CS3_ATOMIC.get(hdr));
+            let ncols = schema.and_then(|attrs| attrs.len().try_into().ok()).unwrap_or(1);
             let nrows = header.and_then(|hdr| state.entries.get(hdr)).and_then(|rows| rows.len().try_into().ok()).unwrap_or(0);
-            (nrows, ncols)
+            let column_widths: Option<std::vec::Vec<_>> = schema.map(|attrs| {
+                attrs
+                    .iter()
+                    .map(|(attr, ty)| match ty {
+                        tocs::tbl::AtomicType::I8
+                        | tocs::tbl::AtomicType::I16
+                        | tocs::tbl::AtomicType::I32
+                        | tocs::tbl::AtomicType::U8
+                        | tocs::tbl::AtomicType::U16
+                        | tocs::tbl::AtomicType::U32
+                        | tocs::tbl::AtomicType::F32 => 60,
+                        tocs::tbl::AtomicType::CUtf8 => 120,
+                        tocs::tbl::AtomicType::X(_) => {
+                            if attr == "data" {
+                                1280
+                            } else {
+                                60
+                            }
+                        }
+                    })
+                    .collect()
+            });
+            (nrows, ncols, column_widths)
         };
+        // note: we need to drop the mutex lock before changing the table.
         table.set_rows(nrows);
         table.set_cols(ncols);
+        if let Some(cws) = column_widths {
+            for (w, i) in cws.iter().zip(0..ncols) {
+                table.set_col_width(i, *w);
+            }
+        } else if ncols > 0 {
+            table.set_col_width_all(1260 / ncols);
+        }
     }
 }
 
-fn load_tbl_file() -> indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> {
-    let mut f = std::fs::File::open("../private-test-data/cs3/data/text/dat_en/t_status.tbl").unwrap();
+fn load_tbl_file(path: &std::path::Path, version: TblVersion) -> indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> {
+    // TODO: error handling
+    // TODO: headers?
+    let mut f = std::fs::File::open(path).unwrap();
     let mut log = tocs::tbl::WarningLogger::new(true);
-    let (headers, all_entries) = tocs::tbl::deserialize_tbl_v2(&mut f, &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC).unwrap();
+    let all_entries = match version {
+        TblVersion::CS1 => tocs::tbl::deserialize_tbl_v1(&mut f, &mut log, true, &tocs::tbl::SCHEMAS_CS1_ATOMIC).unwrap(),
+        TblVersion::CS2 => tocs::tbl::deserialize_tbl_v2(&mut f, &mut log, true, &tocs::tbl::SCHEMAS_CS2_ATOMIC).unwrap().1,
+        TblVersion::CS3 => tocs::tbl::deserialize_tbl_v2(&mut f, &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC).unwrap().1,
+    };
     drop(f);
     let mut tbl_entries = partition_entries_with_headers(all_entries);
-    for (header, _) in headers {
-        tbl_entries.entry(header).or_insert_with(|| vec![]);
-    }
+    // TODO: return warnings
     tbl_entries
 }
 
 fn main() {
-    {
-        let entries = load_tbl_file();
-        let active = entries.iter().next().map(|(k, v)| k.to_string());
-        *TBL.lock().unwrap() = AppState { entries, active };
-    }
+    simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
+
     let app = App::new();
     app.run();
     return;

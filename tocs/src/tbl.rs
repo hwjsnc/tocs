@@ -555,6 +555,60 @@ pub fn deserialize_entry_data<F: std::io::Read + std::io::Seek>(
     Ok(values)
 }
 
+pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek>(
+    f: &mut F,
+    log: &mut WarningLogger<DeserializeError>,
+    strict: bool,
+    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
+) -> Result<std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>, DeserializeError> {
+    log::debug!("parsing tbl");
+    let number_of_entries = deserialize_header_v1(f)?;
+
+    let mut entries = std::vec::Vec::new();
+
+    // parse number of entries equal to tbl header
+    for i in 0..number_of_entries {
+        let hdr = deserialize_c_utf8(f, log, strict).map_err(|mut e| {
+            e.context.push(DeserializeErrorPosition::EntryHeader { entry_number: i });
+            e
+        })?;
+        log::trace!("entry {} header name: {}", i, hdr);
+        let len = u16::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
+            detail: DeserializeErrorDetail::IO(e),
+            position: f.stream_position().ok(),
+            context: vec![DeserializeErrorPosition::EntryHeader { entry_number: i }],
+        })?);
+        log::trace!("entry {} data length: {}", i, len);
+        // TODO: check if header in header_counts.keys()
+        let data = if let Some(schema) = schemas.get(&hdr) {
+            log::debug!("parsing data according to schema");
+            deserialize_entry_data(f, log, strict, schema).map_err(|mut e| {
+                e.context.push(DeserializeErrorPosition::EntryData { entry_number: i });
+                e
+            })?
+        } else {
+            log::debug!("parsing data with general parser");
+            let x = deserialize_atomic_value(f, log, strict, &AtomicType::X(len.into())).map_err(|mut e| {
+                e.context.push(DeserializeErrorPosition::Attribute("data".to_string()));
+                e.context.push(DeserializeErrorPosition::EntryData { entry_number: i });
+                e
+            })?;
+            [("data".to_string(), x)].into_iter().collect()
+        };
+        entries.push((hdr, data));
+    }
+
+    // TODO: if strict, check that we're at eof; if not, parse remaining entries
+    /*
+    let mut i = usize;
+    loop {
+
+    }
+    */
+
+    Ok(entries)
+}
+
 pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
@@ -614,6 +668,16 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
 // schemas
 
 lazy_static::lazy_static! {
+    pub static ref SCHEMAS_CS1 : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
+    ].into_iter().collect();
+    pub static ref SCHEMAS_CS1_COMMON : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
+    ].into_iter().collect();
+
+    pub static ref SCHEMAS_CS2 : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
+    ].into_iter().collect();
+    pub static ref SCHEMAS_CS2_COMMON : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
+    ].into_iter().collect();
+
     pub static ref SCHEMAS_CS3 : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
         ("char_revise".to_string(), [
             ("char".to_string(), Type::CUtf8),
@@ -626,10 +690,12 @@ lazy_static::lazy_static! {
             ("brk".to_string(), Type::U16),
         ].into_iter().collect())
     ].into_iter().collect();
-
     pub static ref SCHEMAS_CS3_COMMON : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
     ].into_iter().collect();
 
+
+    pub static ref SCHEMAS_CS1_ATOMIC : indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS1, &SCHEMAS_CS1_COMMON).expect("");
+    pub static ref SCHEMAS_CS2_ATOMIC : indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS2, &SCHEMAS_CS2_COMMON).expect("");
     pub static ref SCHEMAS_CS3_ATOMIC : indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS3, &SCHEMAS_CS3_COMMON).expect("");
 }
 
