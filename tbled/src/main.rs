@@ -222,14 +222,23 @@ impl App {
                 let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
                 diag.show();
                 let path = diag.filename();
-                if !path.as_os_str().is_empty() {
-                    let mut state = TBL.lock().unwrap();
-                    state.active = None;
-                    state.entries = load_tbl_file(&path, version);
-                } else {
+                {
                     let mut state = TBL.lock().unwrap();
                     state.active = None;
                     state.entries = indexmap::IndexMap::new();
+                }
+                if !path.as_os_str().is_empty() {
+                    let mut state = TBL.lock().unwrap();
+                    state.active = None;
+                    match load_tbl_file(&path, version) {
+                        Ok(entries) => {
+                            state.entries = entries;
+                        }
+                        Err(e) => {
+                            fltk::dialog::alert(400, 200, &format!("error loading file: {:?}", e));
+                            // TODO: display
+                        }
+                    }
                 }
                 self.update(&Some(Msg::FileReloaded));
             }
@@ -314,20 +323,16 @@ impl App {
     }
 }
 
-fn load_tbl_file(path: &std::path::Path, version: TblVersion) -> indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> {
+fn load_tbl_file(path: &std::path::Path, version: TblVersion) -> Result<indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>, tocs::tbl::DeserializeError> {
     // TODO: error handling
     // TODO: headers?
-    let mut f = std::fs::File::open(path).unwrap();
     let mut log = tocs::tbl::WarningLogger::new(true);
-    let all_entries = match version {
-        TblVersion::CS1 => tocs::tbl::deserialize_tbl_v1(&mut f, &mut log, true, &tocs::tbl::SCHEMAS_CS1_ATOMIC).unwrap(),
-        TblVersion::CS2 => tocs::tbl::deserialize_tbl_v2(&mut f, &mut log, true, &tocs::tbl::SCHEMAS_CS2_ATOMIC).unwrap().1,
-        TblVersion::CS3 => tocs::tbl::deserialize_tbl_v2(&mut f, &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC).unwrap().1,
-    };
-    drop(f);
-    let mut tbl_entries = partition_entries_with_headers(all_entries);
-    // TODO: return warnings
-    tbl_entries
+    match version {
+        TblVersion::CS1 => tocs::tbl::load_file_v1(path, &mut log, true, &tocs::tbl::SCHEMAS_CS1_ATOMIC),
+        TblVersion::CS2 => tocs::tbl::load_file_v2(path, &mut log, true, &tocs::tbl::SCHEMAS_CS2_ATOMIC).map(|(hdr, data)| data),
+        TblVersion::CS3 => tocs::tbl::load_file_v2(path, &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC).map(|(hdr, data)| data),
+    }
+    .map(|entries| partition_entries_with_headers(entries))
 }
 
 fn main() {

@@ -347,6 +347,7 @@ pub enum DeserializeErrorDetail {
 
 #[derive(Clone, Debug)]
 pub enum DeserializeErrorPosition {
+    Start,
     TblHeader,
     TblHeaderEntry { entry_number: u32 },
     EntryHeader { entry_number: u16 },
@@ -663,6 +664,34 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
     // TODO: check header counts
 
     Ok((header_counts, entries))
+}
+
+pub fn load_file_v1<P: AsRef<std::path::Path>>(
+    path: P,
+    log: &mut WarningLogger<DeserializeError>,
+    strict: bool,
+    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
+) -> Result<std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>, DeserializeError> {
+    let mut f = std::fs::File::open(path).map_err(|e| DeserializeError {
+        detail: DeserializeErrorDetail::IO(e),
+        position: None,
+        context: vec![DeserializeErrorPosition::Start],
+    })?;
+    deserialize_tbl_v1(&mut f, log, strict, schemas)
+}
+
+pub fn load_file_v2<P: AsRef<std::path::Path>>(
+    path: P,
+    log: &mut WarningLogger<DeserializeError>,
+    strict: bool,
+    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
+) -> Result<(indexmap::IndexMap<String, u32>, std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>), DeserializeError> {
+    let mut f = std::fs::File::open(path).map_err(|e| DeserializeError {
+        detail: DeserializeErrorDetail::IO(e),
+        position: None,
+        context: vec![DeserializeErrorPosition::Start],
+    })?;
+    deserialize_tbl_v2(&mut f, log, strict, schemas)
 }
 
 // schemas
