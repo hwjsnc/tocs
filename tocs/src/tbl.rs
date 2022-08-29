@@ -1,4 +1,5 @@
 use hex::FromHex as _;
+use std::io::Write as _;
 use std::str::FromStr as _;
 
 // Generic helpers
@@ -272,6 +273,22 @@ pub fn atomic_type<S>(v: &AtomicValue<S>) -> AtomicType {
     }
 }
 
+pub fn atomic_type_describe(t: &AtomicType) -> &'static str {
+    match t {
+        AtomicType::I8 => "i8 (-128 to 127 inclusive)",
+        AtomicType::I16 => "i16 (-32768 to 32767 inclusive)",
+        AtomicType::I32 => "i32 (-2147483648 to 2147483647 inclusive)",
+        AtomicType::U8 => "u8 (0 to 255 inclusive)",
+        AtomicType::U16 => "u16 (0 to 65535 inclusive)",
+        AtomicType::U32 => "u32 (0 to 4294967295 inclusive)",
+        AtomicType::F32 => "f32 (single-precision floating point)",
+        AtomicType::CUtf8 => "UTF-8 string",
+        AtomicType::X(_) => "hex-encoded data",
+    }
+}
+
+// Serialize, i.e. generate tbl data
+
 pub fn atomic_schema_serialization_length<S: AsRef<str>>(schema: &indexmap::IndexMap<String, AtomicValue<S>>) -> Result<u16, ()> {
     schema.iter().map(|(_, v)| atomic_value_serialization_length(v)).fold(Ok(0), |a, b| {
         let x = a?;
@@ -293,8 +310,6 @@ pub fn atomic_value_serialization_length<S: AsRef<str>>(v: &AtomicValue<S>) -> R
         AtomicValue::X(data) => data.len().try_into().map_err(|_| ()),
     }
 }
-
-// Serialize, i.e. generate tbl data
 
 #[derive(Debug)]
 pub enum SerializeError {
@@ -336,12 +351,11 @@ pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header:
     Ok(written)
 }
 
-pub fn serialize_tbl_v1<'a, A, F, I, S>(f: &mut F, entries: I) -> Result<usize, SerializeError>
+pub fn serialize_tbl_v1<'a, F, I, S>(f: &mut F, entries: I) -> Result<usize, SerializeError>
 where
-    A: AsRef<indexmap::IndexMap<String, AtomicValue<S>>>,
     F: std::io::Write,
-    I: IntoIterator<Item = (&'a str, A)> + ExactSizeIterator,
-    S: AsRef<str>,
+    I: IntoIterator<Item = (&'a str, &'a indexmap::IndexMap<String, AtomicValue<S>>)> + ExactSizeIterator,
+    S: AsRef<str> + 'a,
 {
     let mut written = 0;
     let number_of_entries: Result<u16, _> = entries.len().try_into();
@@ -355,12 +369,12 @@ where
         }
     }
     for (header, attrs) in entries {
-        written += nf1_schema_serialize(f, header, attrs.as_ref())?;
+        written += nf1_schema_serialize(f, header, attrs)?;
     }
     Ok(written)
 }
 
-pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[&str], entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[&str], entries: &[(&str, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
     let mut written = 0;
     let number_of_entries: Result<u16, _> = entries.len().try_into();
     match number_of_entries {
@@ -385,6 +399,20 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[&str], entries:
     for (header, attrs) in entries {
         written += nf1_schema_serialize(f, &header, attrs)?;
     }
+    Ok(written)
+}
+
+pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[(&str, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+    let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
+    let written = serialize_tbl_v1(&mut f, entries.iter().map(|(hdr, attrs)| (*hdr, attrs)))?;
+    f.flush().map_err(SerializeError::IOError)?;
+    Ok(written)
+}
+
+pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[&str], entries: &[(&str, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+    let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
+    let written = serialize_tbl_v2(&mut f, headers, entries)?;
+    f.flush().map_err(SerializeError::IOError)?;
     Ok(written)
 }
 
@@ -729,11 +757,11 @@ pub fn load_file_v1<P: AsRef<std::path::Path>>(
     strict: bool,
     schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
 ) -> Result<std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>, DeserializeError> {
-    let mut f = std::fs::File::open(path).map_err(|e| DeserializeError {
+    let mut f = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: None,
         context: vec![DeserializeErrorPosition::Start],
-    })?;
+    })?);
     deserialize_tbl_v1(&mut f, log, strict, schemas)
 }
 

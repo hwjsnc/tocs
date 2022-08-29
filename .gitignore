@@ -1,5 +1,5 @@
 /*/target
 /tocs_internal/*/target
 /private-test-data
-/*.tbl
-/*.db
+*.tbl
+*.db

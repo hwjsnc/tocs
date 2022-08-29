@@ -45,11 +45,13 @@ enum Msg {
     FileReloaded,      // user loaded a different tbl file and we have to update all widgets accordingly
     UpdateTable,       // user selected a different header; update the table widget
     TableEvent,        // An arbitrary event on the table
+    DoneEditing,       // user is done editing, now the value should be updated
 }
 
 struct Widgets {
     tbl_version_selector: fltk::misc::InputChoice,
     //filename_output: fltk::output::Output,
+    input: fltk::input::Input,
     header_selector: fltk::misc::InputChoice,
     table: fltk::table::Table,
 }
@@ -124,6 +126,11 @@ impl App {
         flex_row.end();
         flex.set_size(&mut flex_row, 26);
 
+        let mut input = fltk::input::Input::default();
+        input.set_trigger(fltk::enums::CallbackTrigger::EnterKeyAlways);
+        input.emit(sender.clone(), Msg::DoneEditing);
+        flex.set_size(&mut input, 26);
+
         let mut table = fltk::table::Table::default();
         table.set_col_header(true);
         table.set_col_width_all(40);
@@ -134,6 +141,7 @@ impl App {
         table.emit(sender.clone(), Msg::TableEvent);
 
         table.draw_cell(|table, ctx, row, col, x, y, w, h| {
+            log::trace!("table draw");
             // called when the table is drawn (both the first time and due to events)
             let state = STATE.lock().unwrap();
             let header = if let Some(hdr) = state.active.as_ref() {
@@ -191,6 +199,7 @@ impl App {
         });
 
         flex.end();
+
         win.make_resizable(true);
         win.end();
         win.show();
@@ -201,6 +210,7 @@ impl App {
             widgets: Widgets {
                 tbl_version_selector,
                 header_selector,
+                input,
                 table,
             },
         };
@@ -220,6 +230,7 @@ impl App {
     }
 
     pub fn update(&mut self, msg: &Option<Msg>) {
+        log::debug!("update: {msg:?}");
         match msg {
             Some(Msg::SelectAndLoadFile) => {
                 // open a file browser dialog to select the file
@@ -243,13 +254,14 @@ impl App {
                 {
                     // try loading data from file
                     let mut state = STATE.lock().unwrap();
-                    match load_tbl_file(&path, version) {
+                    let result = load_tbl_file(&path, version);
+                    // TODO: handle warnings
+                    match result {
                         Ok(entries) => {
-                            // TODO: handle warnings
                             state.entries = entries;
                         }
                         Err(e) => {
-                            // error dialog; TODO: better reporting, including warnings
+                            // TODO: better reporting
                             fltk::dialog::alert(400, 200, &format!("error loading file: {:?}", e));
                         }
                     }
@@ -258,10 +270,33 @@ impl App {
                 self.update(&Some(Msg::FileReloaded));
             }
             Some(Msg::SaveFile) => {
-                println!("not yet implemented"); // TODO
+                fltk::dialog::alert(400, 200, "saving in place is not yet implemented");
             }
             Some(Msg::SelectAndSaveFile) => {
-                println!("not yet implemented"); // TODO
+                // open a file browser dialog to select the file
+                let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseSaveFile);
+                diag.show();
+                let path = diag.filename();
+                if path.as_os_str().is_empty() {
+                    return;
+                }
+                // get tbl version from the ui element
+                let version: &str = &self.widgets.tbl_version_selector.value().unwrap();
+                let version: TblVersion = *VERSION_SELECTOR_OPTIONS.get(version).unwrap();
+                {
+                    // try saving data to file
+                    let mut state = STATE.lock().unwrap();
+                    let result = save_tbl_file(&path, version, &state.entries);
+                    match result {
+                        Ok(entries) => {
+                            // TODO: clear changed cell flags
+                        }
+                        Err(e) => {
+                            // TODO: better reporting
+                            fltk::dialog::alert(400, 200, &format!("error loading file: {:?}", e));
+                        }
+                    }
+                }
             }
             Some(Msg::FileReloaded) => {
                 // reset header selector
@@ -291,7 +326,7 @@ impl App {
                         attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect()
                     } else {
                         // no known schema
-                        vec![1280]
+                        vec![10]
                     };
                     let entries = state.entries.get(hdr).unwrap();
                     let nrows = entries.len().try_into().unwrap();
@@ -309,12 +344,50 @@ impl App {
                 }
             }
             Some(Msg::TableEvent) => {
-                println!("table event: {:?}", fltk::app::event());
-                // TODO: if double click (event_click_number? > 1?) or enter or other keypress ->
+                match fltk::app::event() {
+                    fltk::enums::Event::Released if fltk::app::event_clicks() => {
+                        // find currently selected cell (if it's exactly one)
+                        let table = &mut self.widgets.table;
+                        log::debug!("double click on table");
+                        match table.try_get_selection() {
+                            Some((row, col, row2, col2)) if row == row2 && col == col2 => {
+                                // copy table value to input
+                                log::debug!("double click on cell");
+                                let mut state = STATE.lock().unwrap();
+                                self.widgets.input.set_value(&tocs::tbl::atomic_value_to_string(get_cell_value(&mut *state, row, col).unwrap()));
+                                self.widgets.input.take_focus().unwrap();
+                                self.widgets.input.redraw();
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
             }
-            None => {
-                // nothing
+            Some(Msg::DoneEditing) => {
+                // find the currently selected cell (if it's exactly one)
+                let input = &mut self.widgets.input;
+                let table = &mut self.widgets.table;
+                match table.try_get_selection() {
+                    Some((row, col, row2, col2)) if row == row2 && col == col2 => {
+                        // copy text input to selected cell
+                        {
+                            let mut state = STATE.lock().unwrap();
+                            let text = input.value();
+                            let cell_value = get_cell_value(&mut *state, row, col).unwrap();
+                            let ty = &tocs::tbl::atomic_type(cell_value);
+                            if let Ok(value) = tocs::tbl::try_atomic_value_from_str(&ty, &text) {
+                                *cell_value = value;
+                            } else {
+                                fltk::dialog::alert(400, 200, &format!("invalid input for cell, expected a {}", tocs::tbl::atomic_type_describe(&ty)));
+                            }
+                        }
+                        table.redraw();
+                    }
+                    _ => {}
+                }
             }
+            None => {}
         }
     }
 
@@ -330,6 +403,18 @@ impl App {
     }
 }
 
+fn get_cell_value<'a>(state: &'a mut AppState, row: i32, col: i32) -> Option<&'a mut tocs::tbl::AtomicValue<String>> {
+    let row: usize = row.try_into().unwrap();
+    let col: usize = col.try_into().unwrap();
+    let AppState { active, schemas, entries } = state;
+    active
+        .as_ref()
+        .and_then(|hdr: &String| entries.get_mut(*&hdr))
+        .and_then(|rows| rows.get_mut(row))
+        .and_then(|row| row.get_index_mut(col))
+        .map(|(_, val)| val)
+}
+
 fn schemas_for_version(version: TblVersion) -> indexmap::IndexMap<String, Attributes> {
     match version {
         TblVersion::CS1 => tocs::tbl::SCHEMAS_CS1_ATOMIC.clone(),
@@ -339,8 +424,7 @@ fn schemas_for_version(version: TblVersion) -> indexmap::IndexMap<String, Attrib
 }
 
 fn load_tbl_file(path: &std::path::Path, version: TblVersion) -> Result<indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>, tocs::tbl::DeserializeError> {
-    // TODO: error handling
-    // TODO: headers?
+    // TODO: handle warnings
     let mut log = tocs::tbl::WarningLogger::new(true);
     match version {
         TblVersion::CS1 => tocs::tbl::load_file_v1(path, &mut log, true, &tocs::tbl::SCHEMAS_CS1_ATOMIC).map(|entries| (indexmap::IndexMap::new(), entries)),
@@ -348,6 +432,17 @@ fn load_tbl_file(path: &std::path::Path, version: TblVersion) -> Result<indexmap
         TblVersion::CS3 => tocs::tbl::load_file_v2(path, &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC),
     }
     .map(|(headers, entries)| partition_entries_with_headers(headers, entries))
+}
+
+fn save_tbl_file(path: &std::path::Path, version: TblVersion, entries: &indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
+    // TODO: handle warnings
+    let headers: std::vec::Vec<&str> = entries.keys().map(|hdr| hdr.as_ref()).collect();
+    let mut entries: std::vec::Vec<(&str, AttributeValues)> = entries.iter().map(|(hdr, entries)| entries.iter().map(|e| (hdr.as_ref(), e.clone()))).flatten().collect();
+    match version {
+        TblVersion::CS1 => tocs::tbl::save_file_v1(path, &entries),
+        TblVersion::CS2 => tocs::tbl::save_file_v2(path, &headers, &entries),
+        TblVersion::CS3 => tocs::tbl::save_file_v2(path, &headers, &entries),
+    }
 }
 
 fn main() {
@@ -395,7 +490,7 @@ fn draw_data(value: &tocs::tbl::AtomicValue<String>, x: i32, y: i32, w: i32, h: 
         | tocs::tbl::AtomicType::U32
         | tocs::tbl::AtomicType::F32 => fltk::enums::Align::Right,
         tocs::tbl::AtomicType::CUtf8 => fltk::enums::Align::Left,
-        tocs::tbl::AtomicType::X(_) => fltk::enums::Align::Right,
+        tocs::tbl::AtomicType::X(_) => fltk::enums::Align::Left,
     };
 
     fltk::draw::draw_rect(x, y, w, h);
