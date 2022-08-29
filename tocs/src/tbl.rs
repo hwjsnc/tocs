@@ -1108,7 +1108,7 @@ mod test {
             let path = entry.path();
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
                 println!("{}", path.display());
-                let mut f = std::fs::File::open(path).unwrap();
+                let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
                 let mut logger = WarningLogger::<DeserializeError>::new(true);
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, true, &SCHEMAS_CS3_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
