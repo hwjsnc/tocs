@@ -210,7 +210,7 @@ pub fn get_nf1_for_all(
     joint.extend(common.clone().into_iter());
     let joint = joint;
     let mut res = indexmap::IndexMap::new();
-    for (name, schema) in schemas {
+    for name in schemas.keys() {
         res.insert(name.clone(), get_nf1(name, &joint)?);
     }
     Ok(res)
@@ -289,7 +289,7 @@ pub fn atomic_value_serialization_length<S: AsRef<str>>(v: &AtomicValue<S>) -> R
         AtomicValue::U16(_) => Ok(2),
         AtomicValue::U32(_) => Ok(4),
         AtomicValue::F32(_) => Ok(4),
-        AtomicValue::CUtf8(s) => s.as_ref().bytes().len().try_into().map_err(|_| ()),
+        AtomicValue::CUtf8(s) => (s.as_ref().bytes().len() + 1).try_into().map_err(|_| ()),
         AtomicValue::X(data) => data.len().try_into().map_err(|_| ()),
     }
 }
@@ -299,7 +299,9 @@ pub fn atomic_value_serialization_length<S: AsRef<str>>(v: &AtomicValue<S>) -> R
 #[derive(Debug)]
 pub enum SerializeError {
     IOError(std::io::Error),
-    TooLong,
+    TooManyHeaders,
+    TooManyEntries,
+    EntryDataTooLong,
 }
 
 pub fn serialize_c_utf8<F: std::io::Write>(f: &mut F, s: &str) -> Result<usize, std::io::Error> {
@@ -323,18 +325,68 @@ pub fn serialize_atomic_value<S: AsRef<str>, F: std::io::Write>(f: &mut F, v: &A
     }
 }
 
-pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header: &str, schema: &indexmap::IndexMap<String, AtomicValue<S>>) -> Result<usize, SerializeError> {
+pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header: &str, attributes: &indexmap::IndexMap<String, AtomicValue<S>>) -> Result<usize, SerializeError> {
     let mut written = 0;
     written += serialize_c_utf8(f, header).map_err(SerializeError::IOError)?;
-    let length = atomic_schema_serialization_length(schema).map_err(|()| SerializeError::TooLong)?;
+    let length = atomic_schema_serialization_length(attributes).map_err(|()| SerializeError::EntryDataTooLong)?;
     written += f.write(&length.to_le_bytes()).map_err(SerializeError::IOError)?;
-    for (_, v) in schema.iter() {
+    for (_, v) in attributes.iter() {
         written += serialize_atomic_value(f, v).map_err(SerializeError::IOError)?;
     }
     Ok(written)
 }
 
-// TODO: serialize tbl (version 1 & version 2)
+pub fn serialize_tbl_v1<'a, A, F, I, S>(f: &mut F, entries: I) -> Result<usize, SerializeError>
+where
+    A: AsRef<indexmap::IndexMap<String, AtomicValue<S>>>,
+    F: std::io::Write,
+    I: IntoIterator<Item = (&'a str, A)> + ExactSizeIterator,
+    S: AsRef<str>,
+{
+    let mut written = 0;
+    let number_of_entries: Result<u16, _> = entries.len().try_into();
+    match number_of_entries {
+        Ok(n) => {
+            written += f.write(&n.to_le_bytes()).map_err(SerializeError::IOError)?;
+        }
+        Err(_) => {
+            log::error!("too many entries in file ({})", entries.len());
+            return Err(SerializeError::TooManyEntries);
+        }
+    }
+    for (header, attrs) in entries {
+        written += nf1_schema_serialize(f, header, attrs.as_ref())?;
+    }
+    Ok(written)
+}
+
+pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[&str], entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+    let mut written = 0;
+    let number_of_entries: Result<u16, _> = entries.len().try_into();
+    match number_of_entries {
+        Ok(n) => {
+            written += f.write(&n.to_le_bytes()).map_err(SerializeError::IOError)?;
+        }
+        Err(_) => {
+            log::error!("too many entries in file ({})", entries.len());
+            return Err(SerializeError::TooManyEntries);
+        }
+    }
+    let number_of_headers: u32 = headers.len().try_into().map_err(|_| SerializeError::TooManyHeaders)?;
+    written += f.write(&number_of_headers.to_le_bytes()).map_err(SerializeError::IOError)?;
+    let header_counts = headers.into_iter().map(|hdr| {
+        let n: u32 = entries.into_iter().filter(|(s, _)| s == hdr).count().try_into().expect("total number of entries fits in a u16");
+        (hdr, n)
+    });
+    for (h, n) in header_counts {
+        written += serialize_c_utf8(f, h.as_ref()).map_err(SerializeError::IOError)?;
+        written += f.write(&n.to_le_bytes()).map_err(SerializeError::IOError)?;
+    }
+    for (header, attrs) in entries {
+        written += nf1_schema_serialize(f, &header, attrs)?;
+    }
+    Ok(written)
+}
 
 // Deserialize, i.e. read tbl
 
@@ -448,7 +500,7 @@ pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek>(f: &mut F, log
         AtomicType::CUtf8 => AtomicValue::CUtf8(deserialize_c_utf8(f, log, strict)?),
         AtomicType::X(n) => {
             let mut buf = vec![0; *n];
-            let read = f.read_exact(&mut buf).map_err(|e| wrap_err(e, f))?;
+            let _ = f.read_exact(&mut buf).map_err(|e| wrap_err(e, f))?;
             AtomicValue::X(buf)
         }
     })
@@ -534,7 +586,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek>(f: &mut F, log: &
                 }
                 e.insert(count);
             }
-            indexmap::map::Entry::Vacant(mut e) => {
+            indexmap::map::Entry::Vacant(e) => {
                 e.insert(count);
             }
         }
@@ -763,6 +815,37 @@ lazy_static::lazy_static! {
             ("description", Type::CUtf8),
             ("unknown_data", Type::X(8)),
         ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
+        ("NameTableData".to_string(), [
+            ("character", Type::U16),
+            ("name", Type::CUtf8),
+            ("model", Type::CUtf8),
+            ("animation", Type::CUtf8),
+            ("default_face", Type::CUtf8),
+            ("face", Type::CUtf8),
+            ("unknown_string", Type::CUtf8),
+            ("unknown_data_1", Type::X(4)),
+            ("unknown_floats", Type::Repeat(2, Box::new(Type::F32))),
+            ("unknown_shorts", Type::Repeat(2, Box::new(Type::I16))),
+            ("unknown_data_2", Type::X(3)),
+        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
+        ("QSChapter".to_string(), [
+            ("section_id", Type::U16),
+            ("section_name", Type::CUtf8),
+            ("unknown_short", Type::U16),
+        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
+        ("QSText".to_string(), [
+            ("id", Type::U16),
+            ("unknown_byte_1", Type::U8),
+            ("text", Type::CUtf8),
+            ("unknown_byte_2", Type::U8),
+        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
+        ("QSTitle".to_string(), [
+            ("unknown_short", Type::U16),
+            ("unknown_byte", Type::U8),
+            ("title", Type::CUtf8),
+            ("persons", Type::CUtf8),
+            ("unknown_data", Type::X(13)),
+        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
         ("status".to_string(), [
             ("script", Type::CUtf8),
             ("texture", Type::CUtf8),
@@ -986,12 +1069,54 @@ lazy_static::lazy_static! {
     pub static ref SCHEMAS_CS3_ATOMIC : indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS3, &SCHEMAS_CS3_COMMON).expect("");
 }
 
-// TODO: tests
 #[cfg(test)]
 mod test {
+    use super::{deserialize_tbl_v2, serialize_tbl_v2, DeserializeError, WarningLogger, SCHEMAS_CS3_ATOMIC};
+
     #[cfg(feature = "roundtrip-cs3")]
     #[test]
-    fn test_roundtrip_cs3() {
-        todo!()
+    fn test_roundtrip_cs3_strict() {
+        let cwd = std::env::current_dir().unwrap();
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs3/data/text/"));
+        for entry in walkdir::WalkDir::new(base_path) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
+                println!("{}", path.display());
+                let fixed = crate::cs3::tbl::fix(&std::fs::read(path).unwrap());
+                let mut logger = WarningLogger::<DeserializeError>::new(true);
+                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut std::io::Cursor::new(&fixed), &mut logger, true, &SCHEMAS_CS3_ATOMIC).unwrap();
+                let serialized = {
+                    let mut serialized = std::io::Cursor::new(vec![]);
+                    let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                    let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.as_ref()).collect();
+                    let _ = serialize_tbl_v2(&mut serialized, &headers, e).unwrap();
+                    serialized.into_inner()
+                };
+                assert_eq!(serialized, fixed);
+            }
+        }
+    }
+
+    #[cfg(feature = "roundtrip-cs3")]
+    #[test]
+    fn test_parse_cs3_nonstrict() {
+        let cwd = std::env::current_dir().unwrap();
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs3/data/text/"));
+        for entry in walkdir::WalkDir::new(base_path) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
+                println!("{}", path.display());
+                let mut f = std::fs::File::open(path).unwrap();
+                let mut logger = WarningLogger::<DeserializeError>::new(true);
+                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, true, &SCHEMAS_CS3_ATOMIC).unwrap();
+                let mut serialized = std::io::Cursor::new(vec![]);
+                let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.as_ref()).collect();
+                let _ = serialize_tbl_v2(&mut serialized, &headers, e).unwrap();
+                // no comparison here
+            }
+        }
     }
 }

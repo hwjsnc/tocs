@@ -3,7 +3,6 @@ use fltk::prelude::InputExt as _;
 use fltk::prelude::TableExt as _;
 use fltk::prelude::WidgetExt as _;
 
-type Attributes = indexmap::IndexMap<String, tocs::tbl::AtomicType>;
 type AttributeValues = indexmap::IndexMap<String, tocs::tbl::AtomicValue<String>>;
 
 // Given rows in any order, collect all rows with the same header together
@@ -44,6 +43,7 @@ enum Msg {
     SelectAndSaveFile, // user pushed button to save a file
     FileReloaded,      // user loaded a different tbl file and we have to update all widgets accordingly
     UpdateTable,       // user selected a different header; update the table widget
+    TableEvent,        // An arbitrary event on the table
 }
 
 struct Widgets {
@@ -56,12 +56,14 @@ struct Widgets {
 pub struct AppState {
     entries: indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>,
     active: Option<String>,
+    edited: std::collections::HashSet<(i32, i32)>, // edited since last save
 }
 
 lazy_static::lazy_static! {
     pub static ref TBL: std::sync::Mutex<AppState> = std::sync::Mutex::new(AppState {
         entries: indexmap::IndexMap::new(),
         active: None,
+        edited: std::collections::HashSet::new(),
     });
 }
 
@@ -136,6 +138,8 @@ impl App {
         table.set_col_resize(true);
         table.set_row_header(true);
         table.set_row_resize(true);
+
+        table.emit(sender.clone(), Msg::TableEvent);
 
         table.draw_cell(|table, ctx, row, col, x, y, w, h| {
             // called when the table is drawn (both the first time and due to events)
@@ -216,33 +220,40 @@ impl App {
     }
 
     pub fn update(&mut self, msg: &Option<Msg>) {
-        // TODO
         match msg {
             Some(Msg::SelectAndLoadFile) => {
-                let version: &str = &self.widgets.tbl_version_selector.value().unwrap();
-                let version: TblVersion = *VERSION_SELECTOR_OPTIONS.get(version).unwrap();
+                // open a file browser dialog to select the file
                 let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
                 diag.show();
                 let path = diag.filename();
-                {
-                    let mut state = TBL.lock().unwrap();
-                    state.active = None;
-                    state.entries = indexmap::IndexMap::new();
+                if path.as_os_str().is_empty() {
+                    return;
                 }
-                if !path.as_os_str().is_empty() {
+                // get tbl version from the ui element
+                let version: &str = &self.widgets.tbl_version_selector.value().unwrap();
+                let version: TblVersion = *VERSION_SELECTOR_OPTIONS.get(version).unwrap();
+                {
+                    // reset state related to tbl data
                     let mut state = TBL.lock().unwrap();
                     state.active = None;
+                    state.entries.clear();
+                    state.edited.clear();
+                }
+                {
+                    // try loading data from file
+                    let mut state = TBL.lock().unwrap();
                     match load_tbl_file(&path, version) {
                         Ok(entries) => {
                             // TODO: handle warnings
                             state.entries = entries;
                         }
                         Err(e) => {
+                            // error dialog; TODO: better reporting, including warnings
                             fltk::dialog::alert(400, 200, &format!("error loading file: {:?}", e));
-                            // TODO: display
                         }
                     }
                 }
+                // we need to update other ui elements
                 self.update(&Some(Msg::FileReloaded));
             }
             Some(Msg::SaveFile) => {
@@ -256,6 +267,7 @@ impl App {
                     // reset header selector
                     let mut state = TBL.lock().unwrap();
                     state.active = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr).map(|_| hdr.to_string()));
+                    self.widgets.header_selector.clear();
                     for hdr in state.entries.keys() {
                         self.widgets.header_selector.add(&hdr);
                     }
@@ -264,6 +276,7 @@ impl App {
                         state.active = Some(hdr.to_string());
                     }
                 }
+                // TBL lock must be released before calling this:
                 self.update_table();
             }
             Some(Msg::UpdateTable) => {
@@ -271,7 +284,12 @@ impl App {
                     let mut state = TBL.lock().unwrap();
                     state.active = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr).map(|_| hdr.to_string()));
                 }
+                // TBL lock must be released before calling this:
                 self.update_table();
+            }
+            Some(Msg::TableEvent) => {
+                println!("table event: {:?}", fltk::app::event());
+                // TODO: if double click (event_click_number? > 1?) or enter or other keypress ->
             }
             None => {
                 // nothing
