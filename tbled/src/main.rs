@@ -3,11 +3,12 @@ use fltk::prelude::InputExt as _;
 use fltk::prelude::TableExt as _;
 use fltk::prelude::WidgetExt as _;
 
+type Attributes = indexmap::IndexMap<String, tocs::tbl::AtomicType>;
 type AttributeValues = indexmap::IndexMap<String, tocs::tbl::AtomicValue<String>>;
 
 // Given rows in any order, collect all rows with the same header together
-fn partition_entries_with_headers(entries: std::vec::Vec<(String, AttributeValues)>) -> indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> {
-    let mut entries_for_header: indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> = indexmap::IndexMap::new();
+fn partition_entries_with_headers(headers: indexmap::IndexMap<String, u32>, entries: std::vec::Vec<(String, AttributeValues)>) -> indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> {
+    let mut entries_for_header: indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> = headers.into_iter().map(|(hdr, _)| (hdr, vec![])).collect();
     for (hdr, data) in entries.into_iter() {
         match entries_for_header.entry(hdr) {
             indexmap::map::Entry::Occupied(mut e) => {
@@ -54,16 +55,18 @@ struct Widgets {
 }
 
 pub struct AppState {
+    schemas: indexmap::IndexMap<String, Attributes>,
     entries: indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>,
     active: Option<String>,
-    edited: std::collections::HashSet<(i32, i32)>, // edited since last save
+    //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
 }
 
 lazy_static::lazy_static! {
-    pub static ref TBL: std::sync::Mutex<AppState> = std::sync::Mutex::new(AppState {
+    pub static ref STATE: std::sync::Mutex<AppState> = std::sync::Mutex::new(AppState {
+        schemas: indexmap::IndexMap::new(),
         entries: indexmap::IndexMap::new(),
         active: None,
-        edited: std::collections::HashSet::new(),
+        //edited: std::collections::HashSet::new(),
     });
 }
 
@@ -85,11 +88,6 @@ impl App {
         let mut flex_row = fltk::group::Flex::default().size_of_parent();
         flex_row.set_type(fltk::group::FlexType::Row);
 
-        /*
-        let tbl_entries = load_tbl_file();
-        let mut loaded_table_name = tbl_entries.iter().next().map(|(k, v)| k.to_string());
-        */
-
         let mut tbl_version_selector = fltk::misc::InputChoice::default();
         for (s, _) in VERSION_SELECTOR_OPTIONS.iter() {
             tbl_version_selector.add(s);
@@ -102,12 +100,6 @@ impl App {
         let mut load_button = fltk::button::Button::default().with_label("Select && load file");
         load_button.emit(sender.clone(), Msg::SelectAndLoadFile);
         flex_row.set_size(&mut load_button, 140);
-
-        /*
-        let mut filename_output = fltk::output::Output::default();
-        filename_output.set_value(""); // TODO
-        flex_row.set_size(&mut filename_output, 400);
-        */
 
         let mut save_button = fltk::button::Button::default().with_label("Save");
         save_button.emit(sender.clone(), Msg::SaveFile);
@@ -143,7 +135,7 @@ impl App {
 
         table.draw_cell(|table, ctx, row, col, x, y, w, h| {
             // called when the table is drawn (both the first time and due to events)
-            let state = TBL.lock().unwrap();
+            let state = STATE.lock().unwrap();
             let header = if let Some(hdr) = state.active.as_ref() {
                 hdr
             } else {
@@ -183,7 +175,16 @@ impl App {
                     draw_header("", x, y, w, h); // Row titles
                 }
                 fltk::table::TableContext::Cell => {
-                    draw_data(&value, x, y, w, h, table.is_selected(row, col), (row % 2) == 0);
+                    let celltype = if table.is_selected(row, col) {
+                        CellType::Selected
+                    }
+                    /* else if changed: CellType::Changed */
+                    else if row % 2 == 0 {
+                        CellType::EvenRow
+                    } else {
+                        CellType::OddRow
+                    };
+                    draw_data(&value, x, y, w, h, celltype);
                 }
                 _ => (),
             }
@@ -199,13 +200,12 @@ impl App {
             receiver,
             widgets: Widgets {
                 tbl_version_selector,
-                //filename_output,
                 header_selector,
                 table,
             },
         };
 
-        this.update_table();
+        this.update(&Some(Msg::FileReloaded));
 
         this
     }
@@ -234,14 +234,15 @@ impl App {
                 let version: TblVersion = *VERSION_SELECTOR_OPTIONS.get(version).unwrap();
                 {
                     // reset state related to tbl data
-                    let mut state = TBL.lock().unwrap();
-                    state.active = None;
-                    state.entries.clear();
-                    state.edited.clear();
+                    let mut state = STATE.lock().unwrap();
+                    let AppState { active, schemas, entries } = &mut *state;
+                    *active = None;
+                    *schemas = schemas_for_version(version);
+                    entries.clear();
                 }
                 {
                     // try loading data from file
-                    let mut state = TBL.lock().unwrap();
+                    let mut state = STATE.lock().unwrap();
                     match load_tbl_file(&path, version) {
                         Ok(entries) => {
                             // TODO: handle warnings
@@ -263,9 +264,9 @@ impl App {
                 println!("not yet implemented"); // TODO
             }
             Some(Msg::FileReloaded) => {
+                // reset header selector
                 {
-                    // reset header selector
-                    let mut state = TBL.lock().unwrap();
+                    let mut state = STATE.lock().unwrap();
                     state.active = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr).map(|_| hdr.to_string()));
                     self.widgets.header_selector.clear();
                     for hdr in state.entries.keys() {
@@ -276,16 +277,36 @@ impl App {
                         state.active = Some(hdr.to_string());
                     }
                 }
-                // TBL lock must be released before calling this:
-                self.update_table();
+                // Note: mutex must be free for this function because it triggers table redraws:
+                self.update(&Some(Msg::UpdateTable));
             }
             Some(Msg::UpdateTable) => {
-                {
-                    let mut state = TBL.lock().unwrap();
-                    state.active = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr).map(|_| hdr.to_string()));
+                let mut state = STATE.lock().unwrap();
+                state.active = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr).map(|_| hdr.to_string()));
+                if let Some(hdr) = &state.active {
+                    // width of each column = max(header width, width of each entry in that column)
+                    // width of each row = max(width of all entries in all rows)
+                    let mut column_widths: std::vec::Vec<i32> = if let Some(attrs) = state.schemas.get(hdr) {
+                        // known schema, get text widths of the attributes (names)
+                        attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect()
+                    } else {
+                        // no known schema
+                        vec![1280]
+                    };
+                    let entries = state.entries.get(hdr).unwrap();
+                    let nrows = entries.len().try_into().unwrap();
+                    let mut row_height = 1;
+                    for row in entries {
+                        for (i, (_, val)) in row.iter().enumerate() {
+                            let (w, h) = fltk::draw::measure(&tocs::tbl::atomic_value_to_string(&val), false);
+                            column_widths[i] = std::cmp::max(column_widths[i], w);
+                            row_height = std::cmp::max(row_height, h);
+                        }
+                    }
+                    drop(state);
+                    // Note: mutex must be free for this function because it triggers table redraws:
+                    self.update_table(&column_widths, nrows, row_height);
                 }
-                // TBL lock must be released before calling this:
-                self.update_table();
             }
             Some(Msg::TableEvent) => {
                 println!("table event: {:?}", fltk::app::event());
@@ -297,50 +318,23 @@ impl App {
         }
     }
 
-    fn update_table(&mut self) {
-        // don't call this function while holding an appstate mutex lock!
+    fn update_table(&mut self, column_widths: &[i32], nrows: i32, row_height: i32) {
+        let ncols = column_widths.len().try_into().unwrap_or(i32::MAX);
         let table = &mut self.widgets.table;
-
-        let (nrows, ncols, column_widths) = {
-            let mut state = TBL.lock().unwrap();
-            let header = state.active.as_ref();
-            let schema = header.and_then(|hdr| tocs::tbl::SCHEMAS_CS3_ATOMIC.get(hdr));
-            let ncols = schema.and_then(|attrs| attrs.len().try_into().ok()).unwrap_or(1);
-            let nrows = header.and_then(|hdr| state.entries.get(hdr)).and_then(|rows| rows.len().try_into().ok()).unwrap_or(0);
-            let column_widths: Option<std::vec::Vec<_>> = schema.map(|attrs| {
-                attrs
-                    .iter()
-                    .map(|(attr, ty)| match ty {
-                        tocs::tbl::AtomicType::I8
-                        | tocs::tbl::AtomicType::I16
-                        | tocs::tbl::AtomicType::I32
-                        | tocs::tbl::AtomicType::U8
-                        | tocs::tbl::AtomicType::U16
-                        | tocs::tbl::AtomicType::U32
-                        | tocs::tbl::AtomicType::F32 => 60,
-                        tocs::tbl::AtomicType::CUtf8 => 120,
-                        tocs::tbl::AtomicType::X(_) => {
-                            if attr == "data" {
-                                1280
-                            } else {
-                                60
-                            }
-                        }
-                    })
-                    .collect()
-            });
-            (nrows, ncols, column_widths)
-        };
-        // note: we need to drop the mutex lock before changing the table.
         table.set_rows(nrows);
         table.set_cols(ncols);
-        if let Some(cws) = column_widths {
-            for (w, i) in cws.iter().zip(0..ncols) {
-                table.set_col_width(i, *w);
-            }
-        } else if ncols > 0 {
-            table.set_col_width_all(1260 / ncols);
+        for (w, i) in column_widths.iter().zip(0..ncols) {
+            table.set_col_width(i, w + 4);
         }
+        table.set_row_height_all(row_height + 4);
+    }
+}
+
+fn schemas_for_version(version: TblVersion) -> indexmap::IndexMap<String, Attributes> {
+    match version {
+        TblVersion::CS1 => tocs::tbl::SCHEMAS_CS1_ATOMIC.clone(),
+        TblVersion::CS2 => tocs::tbl::SCHEMAS_CS2_ATOMIC.clone(),
+        TblVersion::CS3 => tocs::tbl::SCHEMAS_CS3_ATOMIC.clone(),
     }
 }
 
@@ -349,11 +343,11 @@ fn load_tbl_file(path: &std::path::Path, version: TblVersion) -> Result<indexmap
     // TODO: headers?
     let mut log = tocs::tbl::WarningLogger::new(true);
     match version {
-        TblVersion::CS1 => tocs::tbl::load_file_v1(path, &mut log, true, &tocs::tbl::SCHEMAS_CS1_ATOMIC),
-        TblVersion::CS2 => tocs::tbl::load_file_v2(path, &mut log, true, &tocs::tbl::SCHEMAS_CS2_ATOMIC).map(|(hdr, data)| data),
-        TblVersion::CS3 => tocs::tbl::load_file_v2(path, &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC).map(|(hdr, data)| data),
+        TblVersion::CS1 => tocs::tbl::load_file_v1(path, &mut log, true, &tocs::tbl::SCHEMAS_CS1_ATOMIC).map(|entries| (indexmap::IndexMap::new(), entries)),
+        TblVersion::CS2 => tocs::tbl::load_file_v2(path, &mut log, true, &tocs::tbl::SCHEMAS_CS2_ATOMIC),
+        TblVersion::CS3 => tocs::tbl::load_file_v2(path, &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC),
     }
-    .map(|entries| partition_entries_with_headers(entries))
+    .map(|(headers, entries)| partition_entries_with_headers(headers, entries))
 }
 
 fn main() {
@@ -373,50 +367,41 @@ fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
     fltk::draw::pop_clip();
 }
 
+pub enum CellType {
+    EvenRow,
+    OddRow,
+    Selected, // currently selected
+    Changed,  // cell was changed since last save
+}
+
 // The selected flag sets the color of the cell to a grayish color, otherwise white
-fn draw_data(value: &tocs::tbl::AtomicValue<String>, x: i32, y: i32, w: i32, h: i32, selected: bool, even: bool) {
+fn draw_data(value: &tocs::tbl::AtomicValue<String>, x: i32, y: i32, w: i32, h: i32, celltype: CellType) {
     fltk::draw::push_clip(x, y, w, h);
-    if selected {
-        fltk::draw::set_draw_color(fltk::enums::Color::from_u32(0x00_D0_D0_D0));
-    } else {
-        if even {
-            fltk::draw::set_draw_color(fltk::enums::Color::White);
-        } else {
-            fltk::draw::set_draw_color(fltk::enums::Color::from_u32(0x00_F0_F0_F0));
-        }
-    }
+    fltk::draw::set_draw_color(fltk::enums::Color::from_u32(match celltype {
+        CellType::OddRow => 0x00_ff_ff_ff,
+        CellType::EvenRow => 0x00_F0_F0_F0,
+        CellType::Selected => 0x00_D0_D0_D0,
+        CellType::Changed => 0x00_C0_C0_FF,
+    }));
     fltk::draw::draw_rectf(x, y, w, h);
     fltk::draw::set_draw_color(fltk::enums::Color::Gray0);
     //fltk::draw::set_font(enums::Font::Helvetica, 14);
-    match value {
-        tocs::tbl::AtomicValue::I8(val) => {
-            fltk::draw::draw_text2(&format!("{val}"), x, y, w, h, fltk::enums::Align::Right);
-        }
-        tocs::tbl::AtomicValue::I16(val) => {
-            fltk::draw::draw_text2(&format!("{val}"), x, y, w, h, fltk::enums::Align::Right);
-        }
-        tocs::tbl::AtomicValue::I32(val) => {
-            fltk::draw::draw_text2(&format!("{val}"), x, y, w, h, fltk::enums::Align::Right);
-        }
-        tocs::tbl::AtomicValue::U8(val) => {
-            fltk::draw::draw_text2(&format!("{val}"), x, y, w, h, fltk::enums::Align::Right);
-        }
-        tocs::tbl::AtomicValue::U16(val) => {
-            fltk::draw::draw_text2(&format!("{val}"), x, y, w, h, fltk::enums::Align::Right);
-        }
-        tocs::tbl::AtomicValue::U32(val) => {
-            fltk::draw::draw_text2(&format!("{val}"), x, y, w, h, fltk::enums::Align::Right);
-        }
-        tocs::tbl::AtomicValue::F32(val) => {
-            fltk::draw::draw_text2(&format!("{val}"), x, y, w, h, fltk::enums::Align::Right);
-        }
-        tocs::tbl::AtomicValue::CUtf8(s) => {
-            fltk::draw::draw_text2(s, x, y, w, h, fltk::enums::Align::Left);
-        }
-        tocs::tbl::AtomicValue::X(val) => {
-            fltk::draw::draw_text2(&tocs::tbl::atomic_value_to_string(value), x, y, w, h, fltk::enums::Align::Left);
-        }
-    }
+    let text_alignment = match tocs::tbl::atomic_type(value) {
+        tocs::tbl::AtomicType::I8
+        | tocs::tbl::AtomicType::I16
+        | tocs::tbl::AtomicType::I32
+        | tocs::tbl::AtomicType::U8
+        | tocs::tbl::AtomicType::U16
+        | tocs::tbl::AtomicType::U32
+        | tocs::tbl::AtomicType::F32 => fltk::enums::Align::Right,
+        tocs::tbl::AtomicType::CUtf8 => fltk::enums::Align::Left,
+        tocs::tbl::AtomicType::X(_) => fltk::enums::Align::Right,
+    };
+
     fltk::draw::draw_rect(x, y, w, h);
+
+    let (x, w) = if w > 5 { (x + 2, w - 4) } else { (x, w) };
+    let (y, h) = if h > 5 { (y + 2, h - 4) } else { (y, h) };
+    fltk::draw::draw_text2(&tocs::tbl::atomic_value_to_string(value), x, y, w, h, text_alignment);
     fltk::draw::pop_clip();
 }
