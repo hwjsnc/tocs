@@ -166,7 +166,7 @@ impl std::fmt::Display for NF1Error {
         let Self { detail, context } = self;
         write!(f, "schema normalization error: {}", detail)?;
         if !context.is_empty() {
-            write!(f, ". error occured {}", context[0]);
+            write!(f, ". error occured {}", context[0])?;
             for pos in &context[1..] {
                 write!(f, "\n - {}", pos)?;
             }
@@ -469,8 +469,7 @@ pub enum DeserializeErrorDetail {
     DuplicateHeader(String),
     EntryHeaderNotInTblHeader { missing: String },
     EntryCountDoesNotMatchHeaderEntry { header: String, expected: u32, actual: usize },
-    // TODO:
-    //EntryHeaderNotInTblHeader { name: String },
+    TrailingData,
 }
 
 #[derive(Clone, Debug)]
@@ -503,13 +502,18 @@ impl std::fmt::Display for DeserializeErrorDetail {
                 if let Some(n) = sum {
                     write!(f, "({})", n)?;
                 } else {
-                    write!(f, "(exceeds max allowed)", )?;
+                    write!(f, "(exceeds max allowed)",)?;
                 }
                 write!(f, " exceeds expected number ({})", expected_total)
             }
             DeserializeErrorDetail::DuplicateHeader(hdr) => write!(f, "duplicate header '{}'", hdr),
             DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing } => write!(f, "file contains entry with header '{}' which does not appear in the tbl header", missing),
-            DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual } => write!(f, "number of entries for header '{}' in the file ({}) differs from the count given in the tbl header ({})", header, actual, expected),
+            DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual } => write!(
+                f,
+                "number of entries for header '{}' in the file ({}) differs from the count given in the tbl header ({})",
+                header, actual, expected
+            ),
+            DeserializeErrorDetail::TrailingData => write!(f, "unexpected trailing data"),
         }
     }
 }
@@ -547,7 +551,6 @@ impl std::fmt::Display for DeserializeError {
         Ok(())
     }
 }
-
 
 fn read_byte<F: std::io::Read>(f: &mut F) -> Result<u8, std::io::Error> {
     let a: [u8; 1] = read_bytes(f)?;
@@ -765,7 +768,6 @@ pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek>(
             context: vec![DeserializeErrorPosition::EntryHeader { entry_number: i }],
         })?);
         log::trace!("entry {} data length: {}", i, len);
-        // TODO: check if header in header_counts.keys()
         let data = if let Some(schema) = schemas.get(&hdr) {
             log::debug!("parsing data according to schema");
             deserialize_entry_data(f, log, strict, schema).map_err(|mut e| {
@@ -806,7 +808,7 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
 
     let mut entries = std::vec::Vec::new();
 
-    // parse number of entries equal to tbl header
+    // parse number of entries equal to tbl header; TODO: factor this out for tbl v1 & v2
     for i in 0..number_of_entries {
         let hdr = deserialize_c_utf8(f, log, strict).map_err(|mut e| {
             e.context.push(DeserializeErrorPosition::EntryHeader { entry_number: i });
@@ -819,7 +821,20 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
             context: vec![DeserializeErrorPosition::EntryHeader { entry_number: i }],
         })?);
         log::trace!("entry {} data length: {}", i, len);
-        // TODO: check if header in header_counts.keys()
+        if !header_counts.contains_key(&hdr) {
+            let e = DeserializeError {
+                detail: DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing: hdr.clone() },
+                position: f.stream_position().ok(),
+                context: vec![DeserializeErrorPosition::EntryHeader { entry_number: i }],
+            };
+            if strict {
+                log::warn!("entry header '{}' does not appear in tbl header", hdr);
+                return Err(e);
+            } else {
+                log::warn!("entry header '{}' does not appear in tbl header", hdr);
+                log.log(e);
+            }
+        }
         let data = if let Some(schema) = schemas.get(&hdr) {
             log::debug!("parsing data according to schema");
             deserialize_entry_data(f, log, strict, schema).map_err(|mut e| {
@@ -838,13 +853,21 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
         entries.push((hdr, data));
     }
 
-    // TODO: if strict, check that we're at eof; if not, parse remaining entries
-    /*
-    let mut i = usize;
-    loop {
-
+    if strict {
+        // we should be at eof
+        let pos = f.stream_position().ok();
+        if pos != f.seek(std::io::SeekFrom::End(0)).ok() {
+            log::error!("error: trailing bytes after offset {pos:?}");
+            return Err(DeserializeError {
+                detail: DeserializeErrorDetail::TrailingData,
+                position: pos,
+                context: vec![DeserializeErrorPosition::End],
+            });
+        }
+    } else {
+        // TODO: try parsing additional entries
+        log::warn!("TODO: try parsing additional headers");
     }
-    */
 
     // TODO: check header counts
 

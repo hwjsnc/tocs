@@ -119,7 +119,7 @@ impl App {
         save_button.emit(sender.clone(), Msg::SelectAndSaveFile);
         flex_row.set_size(&mut save_button, 140);
 
-        let mut widget = fltk::widget::Widget::default(); // just for spacing
+        let _ = fltk::widget::Widget::default(); // just for spacing
 
         //let mut label = fltk::output::Output::default();//.with_label("tbl header:");
         //label.set_value("tbl header: ");
@@ -293,10 +293,10 @@ impl App {
                 let version: TblVersion = *VERSION_SELECTOR_OPTIONS.get(version).unwrap();
                 {
                     // try saving data to file
-                    let mut state = STATE.lock().unwrap();
+                    let state = STATE.lock().unwrap();
                     let result = save_tbl_file(&path, version, &state.entries);
                     match result {
-                        Ok(entries) => {
+                        Ok(_) => {
                             // TODO: clear changed cell flags
                         }
                         Err(e) => {
@@ -315,7 +315,7 @@ impl App {
                     for hdr in state.entries.keys() {
                         self.widgets.header_selector.add(&hdr);
                     }
-                    if let Some((hdr, entries)) = state.entries.iter().next() {
+                    if let Some((hdr, _)) = state.entries.iter().next() {
                         self.widgets.header_selector.set_value(hdr);
                         state.active = Some(hdr.to_string());
                     }
@@ -414,7 +414,7 @@ impl App {
 fn get_cell_value<'a>(state: &'a mut AppState, row: i32, col: i32) -> Option<&'a mut tocs::tbl::AtomicValue<String>> {
     let row: usize = row.try_into().unwrap();
     let col: usize = col.try_into().unwrap();
-    let AppState { active, schemas, entries } = state;
+    let AppState { active, schemas: _, entries } = state;
     active
         .as_ref()
         .and_then(|hdr: &String| entries.get_mut(*&hdr))
@@ -445,7 +445,7 @@ fn load_tbl_file(path: &std::path::Path, version: TblVersion) -> Result<indexmap
 fn save_tbl_file(path: &std::path::Path, version: TblVersion, entries: &indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
     // TODO: handle warnings
     let headers: std::vec::Vec<&str> = entries.keys().map(|hdr| hdr.as_ref()).collect();
-    let mut entries: std::vec::Vec<(&str, AttributeValues)> = entries.iter().map(|(hdr, entries)| entries.iter().map(|e| (hdr.as_ref(), e.clone()))).flatten().collect();
+    let entries: std::vec::Vec<(&str, AttributeValues)> = entries.iter().map(|(hdr, entries)| entries.iter().map(|e| (hdr.as_ref(), e.clone()))).flatten().collect();
     match version {
         TblVersion::CS1 => tocs::tbl::save_file_v1(path, &entries),
         TblVersion::CS2 => tocs::tbl::save_file_v2(path, &headers, &entries),
