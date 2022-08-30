@@ -340,6 +340,7 @@ dependencies = [
  "ioutil",
  "lazy_static",
  "log",
+ "simple_logger",
  "tbl_deserialize_derive",
  "tbl_serialize_derive",
  "tbl_serialize_length_derive",

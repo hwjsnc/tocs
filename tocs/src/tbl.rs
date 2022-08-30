@@ -19,11 +19,16 @@ impl<W> Default for WarningLogger<W> {
 }
 
 impl<W> WarningLogger<W> {
-    pub fn new(ignore: bool) -> Self {
+    pub fn new() -> Self {
         Self {
-            ignore,
+            ignore: false,
             warnings: std::vec::Vec::new(),
         }
+    }
+
+    pub fn ignore(mut self) -> Self {
+        self.ignore = true;
+        self
     }
 
     pub fn log(&mut self, warning: W) {
@@ -33,11 +38,12 @@ impl<W> WarningLogger<W> {
         }
     }
 
-    pub fn ignore_warnings(&self) -> bool {
+    pub fn ignores_warnings(&self) -> bool {
         self.ignore
     }
 
-    pub fn clear_warnings(&mut self) {
+    pub fn clear(&mut self) {
+        println!("warnlog clear");
         self.warnings.clear();
     }
 
@@ -469,6 +475,7 @@ pub enum DeserializeErrorDetail {
     DuplicateHeader(String),
     EntryHeaderNotInTblHeader { missing: String },
     EntryCountDoesNotMatchHeaderEntry { header: String, expected: u32, actual: usize },
+    EntryDataLengthMismatch { expected: u16, actual: Option<u16> },
     TrailingData,
 }
 
@@ -478,8 +485,9 @@ pub enum DeserializeErrorPosition {
     Start,
     TblHeader,
     TblHeaderEntry { entry_number: u32 },
-    EntryHeader { entry_number: u16 },
-    EntryData { entry_number: u16 },
+    Entry { number: u16 },
+    EntryHeader,
+    EntryData,
     Value(AtomicType),
     Attribute(String),
     End,
@@ -513,6 +521,15 @@ impl std::fmt::Display for DeserializeErrorDetail {
                 "number of entries for header '{}' in the file ({}) differs from the count given in the tbl header ({})",
                 header, actual, expected
             ),
+            DeserializeErrorDetail::EntryDataLengthMismatch { expected, actual } => {
+                write!(f, "length of entry data ")?;
+                if let Some(len) = actual {
+                    write!(f, "({})", len)?;
+                } else {
+                    write!(f, "(>{})", u16::MAX)?;
+                }
+                write!(f, " differs from length in table header ({})", expected)
+            }
             DeserializeErrorDetail::TrailingData => write!(f, "unexpected trailing data"),
         }
     }
@@ -524,8 +541,9 @@ impl std::fmt::Display for DeserializeErrorPosition {
             DeserializeErrorPosition::Start => write!(f, "before parsing"),
             DeserializeErrorPosition::TblHeader => write!(f, "while parsing tbl header"),
             DeserializeErrorPosition::TblHeaderEntry { entry_number } => write!(f, "while parsing tbl header number {}", entry_number + 1),
-            DeserializeErrorPosition::EntryHeader { entry_number } => write!(f, "while parsing header of entry number {}", entry_number + 1),
-            DeserializeErrorPosition::EntryData { entry_number } => write!(f, "while parsing data of header number {}", entry_number + 1),
+            DeserializeErrorPosition::Entry { number } => write!(f, "while parsing header of entry number {}", number + 1),
+            DeserializeErrorPosition::EntryHeader => write!(f, "while parsing entry header name"),
+            DeserializeErrorPosition::EntryData => write!(f, "while parsing entry data"),
             DeserializeErrorPosition::Value(ty) => write!(f, "while parsing a {}", atomic_type_describe(ty)),
             DeserializeErrorPosition::Attribute(name) => write!(f, "while parsing attribute {}", name),
             DeserializeErrorPosition::End => write!(f, "after parsing"),
@@ -744,6 +762,76 @@ pub fn deserialize_entry_data<F: std::io::Read + std::io::Seek>(
     Ok(values)
 }
 
+fn deserialize_entry<F: std::io::Read + std::io::Seek>(
+    f: &mut F,
+    log: &mut WarningLogger<DeserializeError>,
+    strict: bool,
+    header_counts: Option<&indexmap::IndexMap<String, u32>>,
+    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
+) -> Result<(String, indexmap::IndexMap<String, AtomicValue<String>>), DeserializeError> {
+    // read header name and check that it's ok (if necessary)
+    let hdr = deserialize_c_utf8(f, log, strict).map_err(|mut e| {
+        e.context.push(DeserializeErrorPosition::EntryHeader);
+        e
+    })?;
+    if let Some(allowed) = header_counts {
+        if !allowed.contains_key(&hdr) {
+            let e = DeserializeError {
+                detail: DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing: hdr.clone() },
+                position: f.stream_position().ok(),
+                context: vec![],
+            };
+            if strict {
+                log::error!("Header '{}' not in tbl header", hdr);
+                return Err(e);
+            } else {
+                log::warn!("Header '{}' not in tbl header", hdr);
+                log.log(e);
+            }
+        }
+    }
+    log::trace!("entry header name: {}", hdr);
+    // read data length
+    let len = u16::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
+        detail: DeserializeErrorDetail::IO(e),
+        position: f.stream_position().ok(),
+        context: vec![],
+    })?);
+    log::trace!("entry data length: {}", len);
+    // TODO: read data
+    let data = if let Some(schema) = schemas.get(&hdr) {
+        log::debug!("parsing data according to schema");
+        deserialize_entry_data(f, log, strict, schema).map_err(|mut e| {
+            e.context.push(DeserializeErrorPosition::EntryData);
+            e
+        })?
+    } else {
+        log::debug!("parsing data with general parser");
+        let x = deserialize_atomic_value(f, log, strict, &AtomicType::X(len.into())).map_err(|mut e| {
+            e.context.push(DeserializeErrorPosition::Attribute("data".to_string()));
+            e.context.push(DeserializeErrorPosition::EntryData);
+            e
+        })?;
+        [("data".to_string(), x)].into_iter().collect()
+    };
+    let actual_len = atomic_schema_serialization_length(&data).ok();
+    if actual_len != Some(len) {
+        let e = DeserializeError {
+            detail: DeserializeErrorDetail::EntryDataLengthMismatch { expected: len, actual: actual_len },
+            position: f.stream_position().ok(),
+            context: vec![DeserializeErrorPosition::EntryData],
+        };
+        if strict {
+            log::error!("Entry length ({}) does not match value in entry header ({})", data.len(), len);
+            return Err(e);
+        } else {
+            log::warn!("Entry length ({}) does not match value in entry header ({})", data.len(), len);
+            log.log(e);
+        }
+    }
+    Ok((hdr, data))
+}
+
 pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
@@ -757,33 +845,11 @@ pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek>(
 
     // parse number of entries equal to tbl header
     for i in 0..number_of_entries {
-        let hdr = deserialize_c_utf8(f, log, strict).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::EntryHeader { entry_number: i });
+        log::debug!("entry number {}", i);
+        entries.push(deserialize_entry(f, log, strict, None, schemas).map_err(|mut e| {
+            e.context.push(DeserializeErrorPosition::Entry { number: i });
             e
-        })?;
-        log::trace!("entry {} header name: {}", i, hdr);
-        let len = u16::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
-            detail: DeserializeErrorDetail::IO(e),
-            position: f.stream_position().ok(),
-            context: vec![DeserializeErrorPosition::EntryHeader { entry_number: i }],
         })?);
-        log::trace!("entry {} data length: {}", i, len);
-        let data = if let Some(schema) = schemas.get(&hdr) {
-            log::debug!("parsing data according to schema");
-            deserialize_entry_data(f, log, strict, schema).map_err(|mut e| {
-                e.context.push(DeserializeErrorPosition::EntryData { entry_number: i });
-                e
-            })?
-        } else {
-            log::debug!("parsing data with general parser");
-            let x = deserialize_atomic_value(f, log, strict, &AtomicType::X(len.into())).map_err(|mut e| {
-                e.context.push(DeserializeErrorPosition::Attribute("data".to_string()));
-                e.context.push(DeserializeErrorPosition::EntryData { entry_number: i });
-                e
-            })?;
-            [("data".to_string(), x)].into_iter().collect()
-        };
-        entries.push((hdr, data));
     }
 
     // TODO: if strict, check that we're at eof; if not, parse remaining entries
@@ -810,63 +876,49 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
 
     // parse number of entries equal to tbl header; TODO: factor this out for tbl v1 & v2
     for i in 0..number_of_entries {
-        let hdr = deserialize_c_utf8(f, log, strict).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::EntryHeader { entry_number: i });
+        log::debug!("entry number {}", i);
+        entries.push(deserialize_entry(f, log, strict, None, schemas).map_err(|mut e| {
+            e.context.push(DeserializeErrorPosition::Entry { number: i });
             e
-        })?;
-        log::trace!("entry {} header name: {}", i, hdr);
-        let len = u16::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
-            detail: DeserializeErrorDetail::IO(e),
-            position: f.stream_position().ok(),
-            context: vec![DeserializeErrorPosition::EntryHeader { entry_number: i }],
         })?);
-        log::trace!("entry {} data length: {}", i, len);
-        if !header_counts.contains_key(&hdr) {
-            let e = DeserializeError {
-                detail: DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing: hdr.clone() },
-                position: f.stream_position().ok(),
-                context: vec![DeserializeErrorPosition::EntryHeader { entry_number: i }],
-            };
-            if strict {
-                log::warn!("entry header '{}' does not appear in tbl header", hdr);
-                return Err(e);
-            } else {
-                log::warn!("entry header '{}' does not appear in tbl header", hdr);
-                log.log(e);
-            }
-        }
-        let data = if let Some(schema) = schemas.get(&hdr) {
-            log::debug!("parsing data according to schema");
-            deserialize_entry_data(f, log, strict, schema).map_err(|mut e| {
-                e.context.push(DeserializeErrorPosition::EntryData { entry_number: i });
-                e
-            })?
-        } else {
-            log::debug!("parsing data with general parser");
-            let x = deserialize_atomic_value(f, log, strict, &AtomicType::X(len.into())).map_err(|mut e| {
-                e.context.push(DeserializeErrorPosition::Attribute("data".to_string()));
-                e.context.push(DeserializeErrorPosition::EntryData { entry_number: i });
-                e
-            })?;
-            [("data".to_string(), x)].into_iter().collect()
-        };
-        entries.push((hdr, data));
     }
+
+    // parse the rest of the files
+    let getpos = |f: &mut F| {
+        f.stream_position().map_err(|e| DeserializeError {
+            detail: DeserializeErrorDetail::IO(e),
+            position: None,
+            context: vec![DeserializeErrorPosition::End],
+        })
+    };
+    let getlen = |f: &mut F| {
+        let pos = f.stream_position()?;
+        let len = f.seek(std::io::SeekFrom::End(0))?;
+        f.seek(std::io::SeekFrom::Start(pos))?;
+        Ok(len)
+    };
+    let file_len = getlen(f).map_err(|e| DeserializeError {
+        detail: DeserializeErrorDetail::IO(e),
+        position: None,
+        context: vec![DeserializeErrorPosition::End],
+    })?;
 
     if strict {
         // we should be at eof
-        let pos = f.stream_position().ok();
-        if pos != f.seek(std::io::SeekFrom::End(0)).ok() {
-            log::error!("error: trailing bytes after offset {pos:?}");
+        let pos = getpos(f)?;
+        if pos != file_len {
+            log::error!("error: trailing bytes after offset {pos}");
             return Err(DeserializeError {
                 detail: DeserializeErrorDetail::TrailingData,
-                position: pos,
+                position: Some(pos),
                 context: vec![DeserializeErrorPosition::End],
             });
         }
     } else {
-        // TODO: try parsing additional entries
-        log::warn!("TODO: try parsing additional headers");
+        while getpos(f)? != file_len {
+            log::debug!("parsing another entry");
+            entries.push(deserialize_entry(f, log, strict, None, schemas)?);
+        }
     }
 
     // TODO: check header counts
@@ -1167,9 +1219,10 @@ lazy_static::lazy_static! {
             ("dummy_id", Type::I16),
             ("original_id", Type::I16),
         ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MasterQuartzDummy".to_string(), [
+        ("MasterQuartzMemo".to_string(), [
             ("item_id", Type::I16),
             ("memo_id", Type::I16),
+            ("text", Type::CUtf8),
         ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
         ("MasterQuartzStatus".to_string(), [
             ("pattern_id", Type::U8),
@@ -1672,6 +1725,7 @@ mod test {
                 let fixed = crate::cs3::tbl::fix(&std::fs::read(path).unwrap());
                 let mut logger = WarningLogger::<DeserializeError>::new(true);
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut std::io::Cursor::new(&fixed), &mut logger, true, &SCHEMAS_CS3_ATOMIC).unwrap();
+                assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
                     let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
