@@ -143,6 +143,38 @@ impl NF1Error {
     }
 }
 
+impl std::fmt::Display for NF1ErrorDetail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            NF1ErrorDetail::NoSuchSchema(s) => write!(f, "no schema '{}' found", s),
+            NF1ErrorDetail::Duplicate(s) => write!(f, "duplicate definition of schema '{}'", s),
+        }
+    }
+}
+
+impl std::fmt::Display for NF1ErrorPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            NF1ErrorPosition::SchemaLookup => write!(f, "during schema lookup"),
+            NF1ErrorPosition::Deref(s) => write!(f, "while dereferencing a subschema of '{}'", s),
+        }
+    }
+}
+
+impl std::fmt::Display for NF1Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let Self { detail, context } = self;
+        write!(f, "schema normalization error: {}", detail)?;
+        if !context.is_empty() {
+            write!(f, ". error occured {}", context[0]);
+            for pos in &context[1..] {
+                write!(f, "\n - {}", pos)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Type {
     fn try_to_atomic_type(&self) -> Option<AtomicType> {
         match self {
@@ -319,9 +351,20 @@ pub enum SerializeError {
     EntryDataTooLong,
 }
 
+impl std::fmt::Display for SerializeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            SerializeError::IOError(e) => write!(f, "{}", e),
+            SerializeError::TooManyHeaders => write!(f, "too many headers in tbl (max 4294967295)"),
+            SerializeError::TooManyEntries => write!(f, "too many entries in tbl (max 65535)"),
+            SerializeError::EntryDataTooLong => write!(f, "entry data too long (max 65535bytes))"),
+        }
+    }
+}
+
 pub fn serialize_c_utf8<F: std::io::Write>(f: &mut F, s: &str) -> Result<usize, std::io::Error> {
     let mut written = f.write(s.as_bytes())?;
-    // TODO: assert that s.as_bytes() doesn't contain 0?
+    assert!(!s.as_bytes().iter().any(|x| *x == 0));
     written += f.write(&[0])?;
     Ok(written)
 }
@@ -432,13 +475,14 @@ pub enum DeserializeErrorDetail {
 
 #[derive(Clone, Debug)]
 pub enum DeserializeErrorPosition {
+    // entry numbers should start at 0 here but will be reported as starting with 1
     Start,
     TblHeader,
     TblHeaderEntry { entry_number: u32 },
     EntryHeader { entry_number: u16 },
     EntryData { entry_number: u16 },
+    Value(AtomicType),
     Attribute(String),
-    Type(AtomicType),
     End,
 }
 
@@ -448,6 +492,62 @@ pub struct DeserializeError {
     position: Option<u64>,                            // seek position in the file
     context: std::vec::Vec<DeserializeErrorPosition>, // first element is the position of the original cause, the rest is how we got there; may be empty
 }
+
+impl std::fmt::Display for DeserializeErrorDetail {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            DeserializeErrorDetail::IO(e) => write!(f, "{}", e),
+            DeserializeErrorDetail::UTF8(e) => write!(f, "{}", e),
+            DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum } => {
+                write!(f, "sum of entry numbers ")?;
+                if let Some(n) = sum {
+                    write!(f, "({})", n)?;
+                } else {
+                    write!(f, "(exceeds max allowed)", )?;
+                }
+                write!(f, " exceeds expected number ({})", expected_total)
+            }
+            DeserializeErrorDetail::DuplicateHeader(hdr) => write!(f, "duplicate header '{}'", hdr),
+            DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing } => write!(f, "file contains entry with header '{}' which does not appear in the tbl header", missing),
+            DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual } => write!(f, "number of entries for header '{}' in the file ({}) differs from the count given in the tbl header ({})", header, actual, expected),
+        }
+    }
+}
+
+impl std::fmt::Display for DeserializeErrorPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            DeserializeErrorPosition::Start => write!(f, "before parsing"),
+            DeserializeErrorPosition::TblHeader => write!(f, "while parsing tbl header"),
+            DeserializeErrorPosition::TblHeaderEntry { entry_number } => write!(f, "while parsing tbl header number {}", entry_number + 1),
+            DeserializeErrorPosition::EntryHeader { entry_number } => write!(f, "while parsing header of entry number {}", entry_number + 1),
+            DeserializeErrorPosition::EntryData { entry_number } => write!(f, "while parsing data of header number {}", entry_number + 1),
+            DeserializeErrorPosition::Value(ty) => write!(f, "while parsing a {}", atomic_type_describe(ty)),
+            DeserializeErrorPosition::Attribute(name) => write!(f, "while parsing attribute {}", name),
+            DeserializeErrorPosition::End => write!(f, "after parsing"),
+        }
+    }
+}
+
+impl std::fmt::Display for DeserializeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        let Self { detail, position, context } = self;
+        write!(f, "{} at ", detail)?;
+        if let Some(off) = position {
+            write!(f, "offset {} (0x{:x})", off, off)?;
+        } else {
+            write!(f, "an unknown offset")?;
+        }
+        if !context.is_empty() {
+            write!(f, ". error occured {}", context[0])?;
+            for position in &context[1..] {
+                write!(f, "\n - {}", position)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 
 fn read_byte<F: std::io::Read>(f: &mut F) -> Result<u8, std::io::Error> {
     let a: [u8; 1] = read_bytes(f)?;
@@ -467,7 +567,7 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mu
         let x = read_byte(f).map_err(|e| DeserializeError {
             detail: DeserializeErrorDetail::IO(e),
             position: f.stream_position().ok(),
-            context: vec![DeserializeErrorPosition::Type(AtomicType::CUtf8)],
+            context: vec![DeserializeErrorPosition::Value(AtomicType::CUtf8)],
         })?;
         if x != 0 {
             buf.push(x);
@@ -498,13 +598,13 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mu
             let e = DeserializeError {
                 detail: DeserializeErrorDetail::UTF8(utf8err),
                 position: f.stream_position().ok(),
-                context: vec![DeserializeErrorPosition::Type(AtomicType::CUtf8)],
+                context: vec![DeserializeErrorPosition::Value(AtomicType::CUtf8)],
             };
             if strict {
                 Err(e)
             } else {
+                log::warn!("UTF-8 decode error for string '{}': {:?}", s, e);
                 warnings.log(e);
-                // TODO: log::trace!(something);
                 Ok(s.into_owned())
             }
         }
@@ -515,7 +615,7 @@ pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek>(f: &mut F, log
     let wrap_err = |e: std::io::Error, f: &mut F| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: f.stream_position().ok(),
-        context: vec![DeserializeErrorPosition::Type(*t)],
+        context: vec![DeserializeErrorPosition::Value(*t)],
     };
     Ok(match t {
         AtomicType::I8 => AtomicValue::I8(i8::from_le_bytes(read_bytes(f).map_err(|e| wrap_err(e, f))?)),

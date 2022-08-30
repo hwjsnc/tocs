@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"] // don't open terminal on windows
+
 use fltk::prelude::GroupExt as _;
 use fltk::prelude::InputExt as _;
 use fltk::prelude::TableExt as _;
@@ -84,6 +86,12 @@ impl App {
         let app = fltk::app::App::default();
         let (sender, receiver) = fltk::app::channel();
         let mut win = fltk::window::Window::default().with_size(w, h).with_label("tbled");
+        win.set_callback(|_| {
+            // override close window on pressing escape
+            if fltk::app::event() == fltk::enums::Event::Close {
+                fltk::app::quit();
+            }
+        });
         let mut flex = fltk::group::Flex::default().size_of_parent();
         flex.set_type(fltk::group::FlexType::Column);
 
@@ -262,7 +270,7 @@ impl App {
                         }
                         Err(e) => {
                             // TODO: better reporting
-                            fltk::dialog::alert(400, 200, &format!("error loading file: {:?}", e));
+                            fltk::dialog::alert(400, 200, &format!("error loading file: {}", e));
                         }
                     }
                 }
@@ -270,7 +278,7 @@ impl App {
                 self.update(&Some(Msg::FileReloaded));
             }
             Some(Msg::SaveFile) => {
-                fltk::dialog::alert(400, 200, "saving in place is not yet implemented");
+                fltk::dialog::alert(400, 200, "saving in place is not yet implemented\nfor now, choose a different file to save to");
             }
             Some(Msg::SelectAndSaveFile) => {
                 // open a file browser dialog to select the file
