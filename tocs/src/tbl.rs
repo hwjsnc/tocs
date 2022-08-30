@@ -798,7 +798,6 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek>(
         context: vec![],
     })?);
     log::trace!("entry data length: {}", len);
-    // TODO: read data
     let data = if let Some(schema) = schemas.get(&hdr) {
         log::debug!("parsing data according to schema");
         deserialize_entry_data(f, log, strict, schema).map_err(|mut e| {
@@ -832,52 +831,20 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek>(
     Ok((hdr, data))
 }
 
-pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek>(
+fn deserialize_all_entries<F: std::io::Read + std::io::Seek>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
+    number_of_entries: u16,
     strict: bool,
+    header_counts: Option<&indexmap::IndexMap<String, u32>>,
     schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
 ) -> Result<std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>, DeserializeError> {
-    log::debug!("parsing tbl");
-    let number_of_entries = deserialize_header_v1(f)?;
-
     let mut entries = std::vec::Vec::new();
 
     // parse number of entries equal to tbl header
     for i in 0..number_of_entries {
         log::debug!("entry number {}", i);
-        entries.push(deserialize_entry(f, log, strict, None, schemas).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::Entry { number: i });
-            e
-        })?);
-    }
-
-    // TODO: if strict, check that we're at eof; if not, parse remaining entries
-    /*
-    let mut i = usize;
-    loop {
-
-    }
-    */
-
-    Ok(entries)
-}
-
-pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
-    f: &mut F,
-    log: &mut WarningLogger<DeserializeError>,
-    strict: bool,
-    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
-) -> Result<(indexmap::IndexMap<String, u32>, std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>), DeserializeError> {
-    log::debug!("parsing tbl");
-    let (number_of_entries, header_counts) = deserialize_header_v2(f, log, strict)?;
-
-    let mut entries = std::vec::Vec::new();
-
-    // parse number of entries equal to tbl header; TODO: factor this out for tbl v1 & v2
-    for i in 0..number_of_entries {
-        log::debug!("entry number {}", i);
-        entries.push(deserialize_entry(f, log, strict, None, schemas).map_err(|mut e| {
+        entries.push(deserialize_entry(f, log, strict, header_counts, schemas).map_err(|mut e| {
             e.context.push(DeserializeErrorPosition::Entry { number: i });
             e
         })?);
@@ -921,8 +888,29 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
         }
     }
 
-    // TODO: check header counts
+    Ok(entries)
+}
 
+pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek>(
+    f: &mut F,
+    log: &mut WarningLogger<DeserializeError>,
+    strict: bool,
+    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
+) -> Result<std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>, DeserializeError> {
+    log::debug!("parsing tbl");
+    let number_of_entries = deserialize_header_v1(f)?;
+    deserialize_all_entries(f, log, number_of_entries, strict, None, schemas)
+}
+
+pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
+    f: &mut F,
+    log: &mut WarningLogger<DeserializeError>,
+    strict: bool,
+    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
+) -> Result<(indexmap::IndexMap<String, u32>, std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>), DeserializeError> {
+    log::debug!("parsing tbl");
+    let (number_of_entries, header_counts) = deserialize_header_v2(f, log, strict)?;
+    let entries = deserialize_all_entries(f, log, number_of_entries, strict, Some(&header_counts), schemas)?;
     Ok((header_counts, entries))
 }
 
@@ -1723,7 +1711,7 @@ mod test {
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
                 println!("{}", path.display());
                 let fixed = crate::cs3::tbl::fix(&std::fs::read(path).unwrap());
-                let mut logger = WarningLogger::<DeserializeError>::new(true);
+                let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut std::io::Cursor::new(&fixed), &mut logger, true, &SCHEMAS_CS3_ATOMIC).unwrap();
                 assert!(!logger.has_warnings());
                 let serialized = {
@@ -1753,8 +1741,8 @@ mod test {
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
                 println!("{}", path.display());
                 let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-                let mut logger = WarningLogger::<DeserializeError>::new(true);
-                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, true, &SCHEMAS_CS3_ATOMIC).unwrap();
+                let mut logger = WarningLogger::<DeserializeError>::new();
+                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &SCHEMAS_CS3_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
                 let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
                 let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();

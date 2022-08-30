@@ -142,6 +142,7 @@ impl App {
 
         let mut save_button = fltk::button::Button::default().with_label("Save");
         save_button.emit(sender.clone(), Msg::SaveFile);
+        save_button.set_color(fltk::enums::Color::FrameDefault.inactive());
         flex_row.set_size(&mut save_button, 60);
 
         let mut save_button = fltk::button::Button::default().with_label("Select && save file");
@@ -152,6 +153,7 @@ impl App {
 
         let mut warn_button = fltk::button::Button::default().with_label("show warnings");
         warn_button.emit(sender.clone(), Msg::ShowWarnings);
+        warn_button.set_color(fltk::enums::Color::Red);
         warn_button.hide();
 
         flex_row.set_size(&mut save_button, 140);
@@ -456,10 +458,13 @@ impl App {
                     let mut state = self.state.lock().unwrap();
                     let AppData { warnlog, .. } = &mut *state;
                     if warnlog.has_warnings() {
-                        Some(warnlog.warnings().fold("".to_string(), |mut s, warn| {
-                            write!(s, "{}\n", warn).unwrap();
-                            s
-                        }))
+                        Some(warnlog.warnings().fold(
+                            "the following non-fatal error(s) occured loading the file.\nplease study them carefully and, if necessary, fix them before continuing!\n\n".to_string(),
+                            |mut s, warn| {
+                                write!(s, "{}\n", warn).unwrap();
+                                s
+                            },
+                        ))
                     } else {
                         None
                     }
