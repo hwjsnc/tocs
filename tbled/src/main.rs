@@ -443,9 +443,8 @@ fn load_tbl_file(path: &std::path::Path, version: TblVersion) -> Result<indexmap
 }
 
 fn save_tbl_file(path: &std::path::Path, version: TblVersion, entries: &indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
-    // TODO: handle warnings
-    let headers: std::vec::Vec<&str> = entries.keys().map(|hdr| hdr.as_ref()).collect();
-    let entries: std::vec::Vec<(&str, AttributeValues)> = entries.iter().map(|(hdr, entries)| entries.iter().map(|e| (hdr.as_ref(), e.clone()))).flatten().collect();
+    let headers: std::vec::Vec<String> = entries.keys().cloned().collect();
+    let entries: std::vec::Vec<(String, AttributeValues)> = entries.iter().map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).flatten().collect();
     match version {
         TblVersion::CS1 => tocs::tbl::save_file_v1(path, &entries),
         TblVersion::CS2 => tocs::tbl::save_file_v2(path, &headers, &entries),

@@ -417,7 +417,7 @@ where
     Ok(written)
 }
 
-pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[&str], entries: &[(&str, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[String], entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
     let mut written = 0;
     let number_of_entries: Result<u16, _> = entries.len().try_into();
     match number_of_entries {
@@ -445,14 +445,14 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[&str], entries:
     Ok(written)
 }
 
-pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[(&str, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
     let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
-    let written = serialize_tbl_v1(&mut f, entries.iter().map(|(hdr, attrs)| (*hdr, attrs)))?;
+    let written = serialize_tbl_v1(&mut f, entries.iter().map(|(hdr, attrs)| (hdr.as_ref(), attrs)))?;
     f.flush().map_err(SerializeError::IOError)?;
     Ok(written)
 }
 
-pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[&str], entries: &[(&str, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[String], entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
     let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
     let written = serialize_tbl_v2(&mut f, headers, entries)?;
     f.flush().map_err(SerializeError::IOError)?;
@@ -916,6 +916,18 @@ lazy_static::lazy_static! {
     ].into_iter().collect();
 
     pub static ref SCHEMAS_CS3 : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
+        ("ActiveVoiceTableData".to_string(), [
+            ("unknown_short_1", Type::U16),
+            ("unknown_short_2", Type::U16),
+            ("unknown_short_3", Type::U16),
+            ("portrait", Type::CUtf8),
+            ("id", Type::U16),
+            ("character", Type::I16),
+            ("text", Type::CUtf8),
+            ("unknown_float_1", Type::F32),
+            ("unknown_float_2", Type::F32),
+            ("unknown_data", Type::X(12)),
+        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
         ("char_revise".to_string(), [
             ("char", Type::CUtf8),
             ("hp", Type::U16),
@@ -1240,8 +1252,8 @@ mod test {
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
                     let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
-                    let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.as_ref()).collect();
-                    let _ = serialize_tbl_v2(&mut serialized, &headers, e).unwrap();
+                    let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
+                    let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                     serialized.into_inner()
                 };
                 assert_eq!(serialized, fixed);
@@ -1264,8 +1276,8 @@ mod test {
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, true, &SCHEMAS_CS3_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
                 let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
-                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.as_ref()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, e).unwrap();
+                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
+                let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                 // no comparison here
             }
         }
