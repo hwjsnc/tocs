@@ -10,7 +10,7 @@ However, there are two important possibilities for why this still may happen:
 2\) The tool does not necessarily preserve the order of entries within a .tbl file; while I have never noticed a problem with this I can't exclude that it might become one.
 Therefore it is highly recommended to BACK UP ALL DATA EARLY AND OFTEN.
 
-`tbled` currently supports the following versions of the game:
+`tbled` currently supports the following versions of the games:
 
 - Trails of Cold Steel (XSeed PC version, english language only)
 - Trails of Cold Steel II (XSeed PC version, english language only)
@@ -23,7 +23,7 @@ The tool does certain checks to detect discrepancies in the data it loads.
 In some cases, these checks can be too aggressive and reject data which would work perfectly well when loaded by the game.
 This can happen with a few of the original game files, or with files that have been manually hex edited.
 If this happens, you can override a lot of the optional checks by running tbled from the terminal with the option `--nonstrict` (this option is intentionally hidden in the GUI).
-If you do this, it is your responsibility to check every warning and decide whether or not to fix the detected problem or ignore it.
+If you do this, it is your responsibility to check every warning and decide whether or not to fix the detected problem, as well as how to fix it.
 Failing to do this could silently corrupt the data.
 
 Usage
@@ -35,7 +35,7 @@ If loading was successful, choose an entry type on the right.
 
 Editing works via the edit field.
 Clicking on a cell in the table selects that cell (and deselects other cells).
-Double clicking a cell copies the contents of that cell into the edit field.
+Double clicking a cell copies the content of that cell into the edit field.
 To edit the text in the edit field, make sure it is selected (e.g. by clicking on it).
 Once you're done editing, press Enter to copy the content of the edit field into the currently selected cell.
 
