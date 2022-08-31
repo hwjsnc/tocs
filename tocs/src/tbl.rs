@@ -219,13 +219,13 @@ pub fn get_nf1(schema_name: &SmolStr, schemas: &IndexMap<SmolStr, IndexMap<SmolS
             Type::Repeat(n, ty) => {
                 if let Some(t) = ty.try_to_atomic_type() {
                     for i in 1..=*n {
-                        nf1.insert(SmolStr::new(format!("{} {}", name, i)), t.clone());
+                        nf1.insert(SmolStr::new(format!("{} {}", name, i)), t);
                     }
                 } else if let Type::Ref(s) = ty.as_ref() {
-                    let sub_nf1 = get_nf1(&s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
+                    let sub_nf1 = get_nf1(s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
                     for i in 1..=*n {
                         for (n, t) in sub_nf1.iter() {
-                            nf1.insert(SmolStr::new(format!("{} {} {}", name, i, n)), t.clone());
+                            nf1.insert(SmolStr::new(format!("{} {} {}", name, i, n)), *t);
                         }
                     }
                 } else {
@@ -233,7 +233,7 @@ pub fn get_nf1(schema_name: &SmolStr, schemas: &IndexMap<SmolStr, IndexMap<SmolS
                 }
             }
             Type::Ref(s) => {
-                let sub_nf1 = get_nf1(&s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
+                let sub_nf1 = get_nf1(s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
                 for (n, t) in sub_nf1.into_iter() {
                     nf1.insert(SmolStr::new(format!("{} {}", name, n)), t);
                 }
@@ -265,7 +265,7 @@ pub enum AtomicValueFromStringError {
     LengthMismatch { expected: usize, actual: usize },
 }
 
-pub fn try_atomic_value_from_str<'a>(t: &AtomicType, s: &'a str) -> Result<AtomicValue<String>, AtomicValueFromStringError> {
+pub fn try_atomic_value_from_str(t: &AtomicType, s: &str) -> Result<AtomicValue<String>, AtomicValueFromStringError> {
     match t {
         AtomicType::I8 => Ok(AtomicValue::I8(i8::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
         AtomicType::I16 => Ok(AtomicValue::I16(i16::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
@@ -388,7 +388,7 @@ pub fn serialize_atomic_value<S: AsRef<str>, F: std::io::Write>(f: &mut F, v: &A
         AtomicValue::U32(x) => f.write(&x.to_le_bytes()),
         AtomicValue::F32(x) => f.write(&x.to_le_bytes()),
         AtomicValue::CUtf8(s) => serialize_c_utf8(f, s.as_ref()),
-        AtomicValue::X(data) => f.write(&data),
+        AtomicValue::X(data) => f.write(data),
     }
 }
 
@@ -403,9 +403,7 @@ pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header:
     Ok(written)
 }
 
-pub fn serialize_tbl_v1<'a, F>(f: &mut F, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError>
-where
-    F: std::io::Write,
+pub fn serialize_tbl_v1<F: std::io::Write>(f: &mut F, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError>
 {
     let mut written = 0;
     let number_of_entries: Result<u16, _> = entries.len().try_into();
@@ -438,8 +436,8 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[SmolStr], entri
     }
     let number_of_headers: u32 = headers.len().try_into().map_err(|_| SerializeError::TooManyHeaders)?;
     written += f.write(&number_of_headers.to_le_bytes()).map_err(SerializeError::IOError)?;
-    let header_counts = headers.into_iter().map(|hdr| {
-        let n: u32 = entries.into_iter().filter(|(s, _)| s == hdr).count().try_into().expect("total number of entries fits in a u16");
+    let header_counts = headers.iter().map(|hdr| {
+        let n: u32 = entries.iter().filter(|(s, _)| s == hdr).count().try_into().expect("total number of entries fits in a u16");
         (hdr, n)
     });
     for (h, n) in header_counts {
@@ -447,7 +445,7 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[SmolStr], entri
         written += f.write(&n.to_le_bytes()).map_err(SerializeError::IOError)?;
     }
     for (header, attrs) in entries {
-        written += nf1_schema_serialize(f, &header, attrs)?;
+        written += nf1_schema_serialize(f, header, attrs)?;
     }
     Ok(written)
 }
@@ -650,7 +648,7 @@ pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek>(f: &mut F, log
         AtomicType::CUtf8 => AtomicValue::CUtf8(deserialize_c_utf8(f, log, strict)?),
         AtomicType::X(n) => {
             let mut buf = vec![0; *n];
-            let _ = f.read_exact(&mut buf).map_err(|e| wrap_err(e, f))?;
+            f.read_exact(&mut buf).map_err(|e| wrap_err(e, f))?;
             AtomicValue::X(buf)
         }
     })
@@ -658,7 +656,7 @@ pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek>(f: &mut F, log
 
 /// deserialize tbl header for trails of cold steel (no list of headers at the start)
 fn deserialize_header_v1<F: std::io::Read + std::io::Seek>(f: &mut F) -> Result<u16, DeserializeError> {
-    read_bytes(f).map(|a| u16::from_le_bytes(a)).map_err(|e| DeserializeError {
+    read_bytes(f).map(u16::from_le_bytes).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::TblHeader],
@@ -667,7 +665,7 @@ fn deserialize_header_v1<F: std::io::Read + std::io::Seek>(f: &mut F) -> Result<
 
 /// deserialize tbl header for trails of cold steel 2 - 5 (includes list of headers at the start)
 fn deserialize_header_v2<F: std::io::Read + std::io::Seek>(f: &mut F, log: &mut WarningLogger<DeserializeError>, strict: bool) -> Result<(u16, IndexMap<SmolStr, u32>), DeserializeError> {
-    let number_of_entries = read_bytes(f).map(|a| u16::from_le_bytes(a)).map_err(|e| DeserializeError {
+    let number_of_entries = read_bytes(f).map(u16::from_le_bytes).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::TblHeader],
@@ -676,22 +674,20 @@ fn deserialize_header_v2<F: std::io::Read + std::io::Seek>(f: &mut F, log: &mut 
     let header_counts = deserialize_header_counts(f, log, strict)?;
     let sum_of_counts: Option<u32> = header_counts.values().fold(Some(0), |a, b| a?.checked_add(*b));
     if sum_of_counts != Some(number_of_entries.into()) {
+        let err = DeserializeError {
+            detail: DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber {
+                expected_total: number_of_entries,
+                sum: sum_of_counts,
+            },
+            position: f.stream_position().ok(),
+            context: vec![DeserializeErrorPosition::TblHeader],
+        };
         if strict {
-            let err = DeserializeError {
-                detail: DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber {
-                    expected_total: number_of_entries,
-                    sum: sum_of_counts,
-                },
-                position: f.stream_position().ok(),
-                context: vec![DeserializeErrorPosition::TblHeader],
-            };
-            if strict {
-                log::error!("entry count ({}) does not match sum of counts per header ({:?})", number_of_entries, sum_of_counts);
-                return Err(err);
-            } else {
-                log::warn!("entry count ({}) does not match sum of counts per header ({:?})", number_of_entries, sum_of_counts);
-                log.log(err);
-            }
+            log::error!("entry count ({}) does not match sum of counts per header ({:?})", number_of_entries, sum_of_counts);
+            return Err(err);
+        } else {
+            log::warn!("entry count ({}) does not match sum of counts per header ({:?})", number_of_entries, sum_of_counts);
+            log.log(err);
         }
     }
     Ok((number_of_entries, header_counts))
