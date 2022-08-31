@@ -400,11 +400,9 @@ pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header:
     Ok(written)
 }
 
-pub fn serialize_tbl_v1<'a, F, I, S>(f: &mut F, entries: I) -> Result<usize, SerializeError>
+pub fn serialize_tbl_v1<'a, F>(f: &mut F, entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError>
 where
     F: std::io::Write,
-    I: IntoIterator<Item = (&'a str, &'a indexmap::IndexMap<String, AtomicValue<S>>)> + ExactSizeIterator,
-    S: AsRef<str> + 'a,
 {
     let mut written = 0;
     let number_of_entries: Result<u16, _> = entries.len().try_into();
@@ -453,7 +451,7 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[String], entrie
 
 pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
     let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
-    let written = serialize_tbl_v1(&mut f, entries.iter().map(|(hdr, attrs)| (hdr.as_ref(), attrs)))?;
+    let written = serialize_tbl_v1(&mut f, entries)?;
     f.flush().map_err(SerializeError::IOError)?;
     Ok(written)
 }
@@ -1693,9 +1691,137 @@ lazy_static::lazy_static! {
 
 #[cfg(test)]
 mod test {
-    use super::{deserialize_tbl_v2, serialize_tbl_v2, DeserializeError, WarningLogger, SCHEMAS_CS3_ATOMIC};
+    use super::{deserialize_tbl_v1, serialize_tbl_v1, deserialize_tbl_v2, serialize_tbl_v2, DeserializeError, WarningLogger, SCHEMAS_CS1_ATOMIC, SCHEMAS_CS2_ATOMIC, SCHEMAS_CS3_ATOMIC};
 
     static INIT_LOG: std::sync::Once = std::sync::Once::new();
+
+    #[cfg(feature = "roundtrip-cs1")]
+    #[test]
+    fn test_roundtrip_cs1_strict() {
+        INIT_LOG.call_once(|| {
+            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
+        });
+        let cwd = std::env::current_dir().unwrap();
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs1/data/text/"));
+        for entry in walkdir::WalkDir::new(base_path) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if let Some(parent) = path.parent() {
+                if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) {
+                    continue; // TODO: SJIS support for jp files would be nice
+                }
+            }
+            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
+                println!("{}", path.display());
+                let fixed = crate::cs1::tbl::fix(&std::fs::read(path).unwrap());
+                let mut logger = WarningLogger::<DeserializeError>::new();
+                let entries = deserialize_tbl_v1(&mut std::io::Cursor::new(&fixed), &mut logger, true, &SCHEMAS_CS1_ATOMIC).unwrap();
+                assert!(!logger.has_warnings());
+                let serialized = {
+                    let mut serialized = std::io::Cursor::new(vec![]);
+                    let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                    let _ = serialize_tbl_v1(&mut serialized, &e).unwrap();
+                    serialized.into_inner()
+                };
+                assert_eq!(serialized, fixed);
+            }
+        }
+    }
+
+    #[cfg(feature = "roundtrip-cs1")]
+    #[test]
+    fn test_parse_cs1_nonstrict() {
+        INIT_LOG.call_once(|| {
+            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
+        });
+        let cwd = std::env::current_dir().unwrap();
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs1/data/text/"));
+        // TODO: test that each schema has at least one entry in any file
+        for entry in walkdir::WalkDir::new(base_path) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if let Some(parent) = path.parent() {
+                if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) || path.file_name() == Some(&std::ffi::OsStr::new("t_main.tbl")) {
+                    continue; // TODO: schemas for the headers with broken lengths
+                }
+            }
+            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
+                println!("{}", path.display());
+                let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+                let mut logger = WarningLogger::<DeserializeError>::new();
+                let entries = deserialize_tbl_v1(&mut f, &mut logger, false, &SCHEMAS_CS1_ATOMIC).unwrap();
+                let mut serialized = std::io::Cursor::new(vec![]);
+                let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                let _ = serialize_tbl_v1(&mut serialized, &e).unwrap();
+                // no comparison here
+            }
+        }
+    }
+
+    #[cfg(feature = "roundtrip-cs2")]
+    #[test]
+    fn test_roundtrip_cs2_strict() {
+        INIT_LOG.call_once(|| {
+            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
+        });
+        let cwd = std::env::current_dir().unwrap();
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs2/data/text/"));
+        for entry in walkdir::WalkDir::new(base_path) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if let Some(parent) = path.parent() {
+                if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) {
+                    continue; // TODO: SJIS support for jp files would be nice
+                }
+            }
+            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
+                println!("{}", path.display());
+                let fixed = std::fs::read(path).unwrap();
+                let mut logger = WarningLogger::<DeserializeError>::new();
+                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut std::io::Cursor::new(&fixed), &mut logger, true, &SCHEMAS_CS2_ATOMIC).unwrap();
+                assert!(!logger.has_warnings());
+                let serialized = {
+                    let mut serialized = std::io::Cursor::new(vec![]);
+                    let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                    let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
+                    let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
+                    serialized.into_inner()
+                };
+                assert_eq!(serialized, fixed);
+            }
+        }
+    }
+
+    #[cfg(feature = "roundtrip-cs2")]
+    #[test]
+    fn test_parse_cs2_nonstrict() {
+        INIT_LOG.call_once(|| {
+            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
+        });
+        let cwd = std::env::current_dir().unwrap();
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs2/data/text/"));
+        // TODO: test that each schema has at least one entry in any file
+        for entry in walkdir::WalkDir::new(base_path) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if let Some(parent) = path.parent() {
+                if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) {
+                    continue; // TODO: schemas for the headers with broken lengths
+                }
+            }
+            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
+                println!("{}", path.display());
+                let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+                let mut logger = WarningLogger::<DeserializeError>::new();
+                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &SCHEMAS_CS2_ATOMIC).unwrap();
+                let mut serialized = std::io::Cursor::new(vec![]);
+                let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
+                let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
+                // no comparison here
+            }
+        }
+    }
 
     #[cfg(feature = "roundtrip-cs3")]
     #[test]
