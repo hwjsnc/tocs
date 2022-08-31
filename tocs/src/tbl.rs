@@ -403,8 +403,7 @@ pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header:
     Ok(written)
 }
 
-pub fn serialize_tbl_v1<F: std::io::Write>(f: &mut F, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError>
-{
+pub fn serialize_tbl_v1<F: std::io::Write>(f: &mut F, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
     let mut written = 0;
     let number_of_entries: Result<u16, _> = entries.len().try_into();
     match number_of_entries {
@@ -469,7 +468,7 @@ pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[SmolStr], ent
 #[derive(Debug)]
 pub enum DeserializeErrorDetail {
     IO(std::io::Error),
-    UTF8(std::str::Utf8Error),
+    UTF8(std::str::Utf8Error, String),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
     DuplicateHeader(SmolStr),
     EntryHeaderNotInTblHeader { missing: String },
@@ -503,7 +502,7 @@ impl std::fmt::Display for DeserializeErrorDetail {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match self {
             DeserializeErrorDetail::IO(e) => write!(f, "{}", e),
-            DeserializeErrorDetail::UTF8(e) => write!(f, "{}", e),
+            DeserializeErrorDetail::UTF8(e, s) => write!(f, "{} for string '{}'", e, s.escape_debug()),
             DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum } => {
                 write!(f, "sum of entry numbers ")?;
                 if let Some(n) = sum {
@@ -602,28 +601,19 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mu
             let position = (|| {
                 let pos: u64 = f.stream_position().ok()?;
                 let pos: usize = pos.try_into().ok()?;
-                pos.checked_sub(buf.len())?.checked_add(utf8err.valid_up_to() + 1)
+                let pos = pos.checked_sub(buf.len())?.checked_add(utf8err.valid_up_to() - 1)?;
+                pos.try_into().ok()
             })();
-            if strict {
-                match position {
-                    Some(pos) => log::error!("Invalid UTF-8 String '{}' at position {}: {}", s, pos, utf8err),
-                    None => log::error!("Invalid UTF-8 String '{}' at unknown position: {}", s, utf8err),
-                }
-            } else {
-                match position {
-                    Some(pos) => log::warn!("Invalid UTF-8 String '{}' at position {}: {}", s, pos, utf8err),
-                    None => log::warn!("Invalid UTF-8 String '{}' at unknown position: {}", s, utf8err),
-                }
-            }
             let e = DeserializeError {
-                detail: DeserializeErrorDetail::UTF8(utf8err),
-                position: f.stream_position().ok(),
+                detail: DeserializeErrorDetail::UTF8(utf8err, s.to_string()),
+                position,
                 context: vec![DeserializeErrorPosition::Value(AtomicType::CUtf8)],
             };
             if strict {
+                log::error!("{e}");
                 Err(e)
             } else {
-                log::warn!("UTF-8 decode error for string '{}': {:?}", s, e);
+                log::warn!("{e}");
                 warnings.log(e);
                 Ok(s.into_owned())
             }
@@ -819,10 +809,10 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek>(
             context: vec![DeserializeErrorPosition::EntryData],
         };
         if strict {
-            log::error!("Entry length ({}) does not match value in entry header ({})", data.len(), len);
+            log::error!("{e}");
             return Err(e);
         } else {
-            log::warn!("Entry length ({}) does not match value in entry header ({})", data.len(), len);
+            log::warn!("{e}");
             log.log(e);
         }
     }
