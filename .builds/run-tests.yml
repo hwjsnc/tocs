@@ -1,0 +1,22 @@
+image: archlinux
+packages:
+ - rust
+ - sccache
+ - gtk3
+sources:
+ - https://git.sr.ht/~quf/tocs
+secrets:
+ - 27a9ff08-1f06-471d-9318-b40ffe3568e2
+tasks:
+ - prepare-sccache: |
+    mkdir -p "$HOME/.cargo/"
+    echo '[build]' >> "$HOME/.cargo/config.toml"
+    echo 'rustc-wrapper = "/usr/bin/sccache"' >> "$HOME/.cargo/config.toml"
+ - unpack-data: |
+    cd tocs
+    mkdir private-test-data
+    cd private-test-data
+    gpg --decrypt --passphrase-file "$HOME/tocs-data-password" --batch --pinentry-mode loopback < ../.builds/data.tar.xz.gpg | xzcat | tar xf -
+ - test: |
+    cd tocs
+    sh test.sh
