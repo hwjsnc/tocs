@@ -1,13 +1,13 @@
 tbled
------
+=====
 
 `tbled` is an editor for `.tbl` files for the Trails of Cold Steel games.
 It is quite limited and obtuse, but I hope it is better than viewing or editing the files in a general purpose hex editor.
 
 I try very hard to make sure this tool doesn't silently corrupt data.
 However, there are two important possibilities for why this still may happen:
-1) I make mistakes sometimes.
-2) The tool does not necessarily preserve the order of entries within a .tbl file; while I have never noticed a problem with this I can't exclude that it might become one.
+1\) I make mistakes sometimes.
+2\) The tool does not necessarily preserve the order of entries within a .tbl file; while I have never noticed a problem with this I can't exclude that it might become one.
 Therefore it is highly recommended to BACK UP ALL DATA EARLY AND OFTEN.
 
 `tbled` currently supports the following versions of the game:
@@ -30,7 +30,7 @@ Usage
 -----
 
 Before loading a file, make sure to select the right game version, or loading will likely fail.
-Then click "Select & load file" to load the file; `.tbl` files are located in the `data\\text` folders relative to the installation path.
+Then click "Select & load file" to load the file; `.tbl` files are located in the `data\text` folders relative to the installation path.
 If loading was successful, choose an entry type on the right.
 
 Editing works via the edit field.
