@@ -2,6 +2,9 @@ use hex::FromHex as _;
 use std::io::Write as _;
 use std::str::FromStr as _;
 
+use indexmap::IndexMap;
+use smol_str::SmolStr;
+
 // Generic helpers
 
 pub struct WarningLogger<W> {
@@ -75,7 +78,7 @@ pub enum Type {
     //C_SJIS, // null terminated Shift-JIS string
     X(usize),
     Repeat(usize, Box<Type>),
-    Ref(String),
+    Ref(SmolStr),
 }
 
 // Values for parsing/serializing
@@ -126,14 +129,14 @@ pub enum AtomicValue<S> {
 
 #[derive(Clone, Debug)]
 pub enum NF1ErrorDetail {
-    NoSuchSchema(String),
-    Duplicate(String),
+    NoSuchSchema(SmolStr),
+    Duplicate(SmolStr),
 }
 
 #[derive(Clone, Debug)]
 pub enum NF1ErrorPosition {
     SchemaLookup,
-    Deref(String),
+    Deref(SmolStr),
 }
 
 #[derive(Clone, Debug)]
@@ -200,13 +203,13 @@ impl Type {
 }
 
 // compute the first normal form, i.e. unroll sequences (except data of a given length) and dereference references.
-pub fn get_nf1(schema_name: &str, schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, Type>>) -> Result<indexmap::IndexMap<String, AtomicType>, NF1Error> {
+pub fn get_nf1(schema_name: &SmolStr, schemas: &IndexMap<SmolStr, IndexMap<SmolStr, Type>>) -> Result<IndexMap<SmolStr, AtomicType>, NF1Error> {
     // TODO: check duplicates
     let schema = schemas.get(schema_name).ok_or_else(|| NF1Error {
-        detail: NF1ErrorDetail::NoSuchSchema(schema_name.to_owned()),
+        detail: NF1ErrorDetail::NoSuchSchema(schema_name.clone()),
         context: vec![NF1ErrorPosition::SchemaLookup],
     })?;
-    let mut nf1 = indexmap::IndexMap::new();
+    let mut nf1 = IndexMap::new();
     for (name, ty) in schema.iter() {
         if let Some(t) = ty.try_to_atomic_type() {
             nf1.insert(name.clone(), t);
@@ -216,13 +219,13 @@ pub fn get_nf1(schema_name: &str, schemas: &indexmap::IndexMap<String, indexmap:
             Type::Repeat(n, ty) => {
                 if let Some(t) = ty.try_to_atomic_type() {
                     for i in 1..=*n {
-                        nf1.insert(format!("{} {}", name, i), t.clone());
+                        nf1.insert(SmolStr::new(format!("{} {}", name, i)), t.clone());
                     }
                 } else if let Type::Ref(s) = ty.as_ref() {
-                    let sub_nf1 = get_nf1(&s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.to_string())))?;
+                    let sub_nf1 = get_nf1(&s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
                     for i in 1..=*n {
                         for (n, t) in sub_nf1.iter() {
-                            nf1.insert(format!("{} {} {}", name, i, n), t.clone());
+                            nf1.insert(SmolStr::new(format!("{} {} {}", name, i, n)), t.clone());
                         }
                     }
                 } else {
@@ -230,9 +233,9 @@ pub fn get_nf1(schema_name: &str, schemas: &indexmap::IndexMap<String, indexmap:
                 }
             }
             Type::Ref(s) => {
-                let sub_nf1 = get_nf1(&s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.to_string())))?;
+                let sub_nf1 = get_nf1(&s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
                 for (n, t) in sub_nf1.into_iter() {
-                    nf1.insert(format!("{} {}", name, n), t);
+                    nf1.insert(SmolStr::new(format!("{} {}", name, n)), t);
                 }
             }
             _ => unreachable!("all other types should be primitive and caught by the 'if let' above"),
@@ -242,13 +245,13 @@ pub fn get_nf1(schema_name: &str, schemas: &indexmap::IndexMap<String, indexmap:
 }
 
 pub fn get_nf1_for_all(
-    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, Type>>,
-    common: &indexmap::IndexMap<String, indexmap::IndexMap<String, Type>>,
-) -> Result<indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>, NF1Error> {
+    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, Type>>,
+    common: &IndexMap<SmolStr, IndexMap<SmolStr, Type>>,
+) -> Result<IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>, NF1Error> {
     let mut joint = schemas.clone();
     joint.extend(common.clone().into_iter());
     let joint = joint;
-    let mut res = indexmap::IndexMap::new();
+    let mut res = IndexMap::new();
     for name in schemas.keys() {
         res.insert(name.clone(), get_nf1(name, &joint)?);
     }
@@ -327,7 +330,7 @@ pub fn atomic_type_describe(t: &AtomicType) -> &'static str {
 
 // Serialize, i.e. generate tbl data
 
-pub fn atomic_schema_serialization_length<S: AsRef<str>>(schema: &indexmap::IndexMap<String, AtomicValue<S>>) -> Result<u16, ()> {
+pub fn atomic_schema_serialization_length<S: AsRef<str>>(schema: &IndexMap<SmolStr, AtomicValue<S>>) -> Result<u16, ()> {
     schema.iter().map(|(_, v)| atomic_value_serialization_length(v)).fold(Ok(0), |a, b| {
         let x = a?;
         let y = b?;
@@ -389,7 +392,7 @@ pub fn serialize_atomic_value<S: AsRef<str>, F: std::io::Write>(f: &mut F, v: &A
     }
 }
 
-pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header: &str, attributes: &indexmap::IndexMap<String, AtomicValue<S>>) -> Result<usize, SerializeError> {
+pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header: &str, attributes: &IndexMap<SmolStr, AtomicValue<S>>) -> Result<usize, SerializeError> {
     let mut written = 0;
     written += serialize_c_utf8(f, header).map_err(SerializeError::IOError)?;
     let length = atomic_schema_serialization_length(attributes).map_err(|()| SerializeError::EntryDataTooLong)?;
@@ -400,7 +403,7 @@ pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header:
     Ok(written)
 }
 
-pub fn serialize_tbl_v1<'a, F>(f: &mut F, entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError>
+pub fn serialize_tbl_v1<'a, F>(f: &mut F, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError>
 where
     F: std::io::Write,
 {
@@ -421,7 +424,7 @@ where
     Ok(written)
 }
 
-pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[String], entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[SmolStr], entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
     let mut written = 0;
     let number_of_entries: Result<u16, _> = entries.len().try_into();
     match number_of_entries {
@@ -449,14 +452,14 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[String], entrie
     Ok(written)
 }
 
-pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
     let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
     let written = serialize_tbl_v1(&mut f, entries)?;
     f.flush().map_err(SerializeError::IOError)?;
     Ok(written)
 }
 
-pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[String], entries: &[(String, indexmap::IndexMap<String, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[SmolStr], entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
     let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
     let written = serialize_tbl_v2(&mut f, headers, entries)?;
     f.flush().map_err(SerializeError::IOError)?;
@@ -470,9 +473,9 @@ pub enum DeserializeErrorDetail {
     IO(std::io::Error),
     UTF8(std::str::Utf8Error),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
-    DuplicateHeader(String),
+    DuplicateHeader(SmolStr),
     EntryHeaderNotInTblHeader { missing: String },
-    EntryCountDoesNotMatchHeaderEntry { header: String, expected: u32, actual: usize },
+    EntryCountDoesNotMatchHeaderEntry { header: SmolStr, expected: u32, actual: usize },
     EntryDataLengthMismatch { expected: u16, actual: Option<u16> },
     TrailingData,
 }
@@ -487,7 +490,7 @@ pub enum DeserializeErrorPosition {
     EntryHeader,
     EntryData,
     Value(AtomicType),
-    Attribute(String),
+    Attribute(SmolStr),
     End,
 }
 
@@ -663,7 +666,7 @@ fn deserialize_header_v1<F: std::io::Read + std::io::Seek>(f: &mut F) -> Result<
 }
 
 /// deserialize tbl header for trails of cold steel 2 - 5 (includes list of headers at the start)
-fn deserialize_header_v2<F: std::io::Read + std::io::Seek>(f: &mut F, log: &mut WarningLogger<DeserializeError>, strict: bool) -> Result<(u16, indexmap::IndexMap<String, u32>), DeserializeError> {
+fn deserialize_header_v2<F: std::io::Read + std::io::Seek>(f: &mut F, log: &mut WarningLogger<DeserializeError>, strict: bool) -> Result<(u16, IndexMap<SmolStr, u32>), DeserializeError> {
     let number_of_entries = read_bytes(f).map(|a| u16::from_le_bytes(a)).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: f.stream_position().ok(),
@@ -694,7 +697,7 @@ fn deserialize_header_v2<F: std::io::Read + std::io::Seek>(f: &mut F, log: &mut 
     Ok((number_of_entries, header_counts))
 }
 
-fn deserialize_header_counts<F: std::io::Read + std::io::Seek>(f: &mut F, log: &mut WarningLogger<DeserializeError>, strict: bool) -> Result<indexmap::IndexMap<String, u32>, DeserializeError> {
+fn deserialize_header_counts<F: std::io::Read + std::io::Seek>(f: &mut F, log: &mut WarningLogger<DeserializeError>, strict: bool) -> Result<IndexMap<SmolStr, u32>, DeserializeError> {
     let number_of_headers = u32::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: f.stream_position().ok(),
@@ -702,7 +705,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek>(f: &mut F, log: &
     })?);
     log::trace!("number of headers in the file: {}", number_of_headers);
 
-    let mut header_counts = indexmap::IndexMap::new();
+    let mut header_counts = IndexMap::new();
     for i in 0..number_of_headers {
         let hdr = deserialize_c_utf8(f, log, strict).map_err(|mut e| {
             e.context.push(DeserializeErrorPosition::TblHeaderEntry { entry_number: i });
@@ -714,7 +717,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek>(f: &mut F, log: &
             context: vec![DeserializeErrorPosition::TblHeaderEntry { entry_number: i }],
         })?);
         log::trace!("header '{}': {} entries", hdr, count);
-        let entry = header_counts.entry(hdr);
+        let entry = header_counts.entry(SmolStr::new(hdr));
         match entry {
             indexmap::map::Entry::Occupied(mut e) => {
                 let hdr = e.key();
@@ -745,10 +748,10 @@ pub fn deserialize_entry_data<F: std::io::Read + std::io::Seek>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
-    schema: &indexmap::IndexMap<String, AtomicType>,
-) -> Result<indexmap::IndexMap<String, AtomicValue<String>>, DeserializeError> {
+    schema: &IndexMap<SmolStr, AtomicType>,
+) -> Result<IndexMap<SmolStr, AtomicValue<String>>, DeserializeError> {
     // TODO: use smol_str for index?
-    let mut values = indexmap::IndexMap::new();
+    let mut values = IndexMap::new();
     for (attr, ty) in schema.iter() {
         let val = deserialize_atomic_value(f, log, strict, ty).map_err(|mut e| {
             e.context.push(DeserializeErrorPosition::Attribute(attr.clone()));
@@ -764,16 +767,16 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
-    header_counts: Option<&indexmap::IndexMap<String, u32>>,
-    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
-) -> Result<(String, indexmap::IndexMap<String, AtomicValue<String>>), DeserializeError> {
+    header_counts: Option<&IndexMap<SmolStr, u32>>,
+    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
+) -> Result<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>), DeserializeError> {
     // read header name and check that it's ok (if necessary)
     let hdr = deserialize_c_utf8(f, log, strict).map_err(|mut e| {
         e.context.push(DeserializeErrorPosition::EntryHeader);
         e
     })?;
     if let Some(allowed) = header_counts {
-        if !allowed.contains_key(&hdr) {
+        if !allowed.contains_key(&hdr as &str) {
             let e = DeserializeError {
                 detail: DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing: hdr.clone() },
                 position: f.stream_position().ok(),
@@ -796,20 +799,21 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek>(
         context: vec![],
     })?);
     log::trace!("entry data length: {}", len);
-    let data = if let Some(schema) = schemas.get(&hdr) {
+    let (hdr, data) = if let Some((hdr, schema)) = schemas.get_key_value(&hdr as &str) {
         log::debug!("parsing data according to schema");
-        deserialize_entry_data(f, log, strict, schema).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::EntryData);
-            e
-        })?
-    } else {
-        log::debug!("parsing data with general parser");
-        let x = deserialize_atomic_value(f, log, strict, &AtomicType::X(len.into())).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::Attribute("data".to_string()));
+        let data = deserialize_entry_data(f, log, strict, schema).map_err(|mut e| {
             e.context.push(DeserializeErrorPosition::EntryData);
             e
         })?;
-        [("data".to_string(), x)].into_iter().collect()
+        (hdr.clone(), data)
+    } else {
+        log::debug!("parsing data with general parser");
+        let x = deserialize_atomic_value(f, log, strict, &AtomicType::X(len.into())).map_err(|mut e| {
+            e.context.push(DeserializeErrorPosition::Attribute(SmolStr::new("data")));
+            e.context.push(DeserializeErrorPosition::EntryData);
+            e
+        })?;
+        (SmolStr::new(hdr), [(SmolStr::new("data"), x)].into_iter().collect())
     };
     let actual_len = atomic_schema_serialization_length(&data).ok();
     if actual_len != Some(len) {
@@ -834,9 +838,9 @@ fn deserialize_all_entries<F: std::io::Read + std::io::Seek>(
     log: &mut WarningLogger<DeserializeError>,
     number_of_entries: u16,
     strict: bool,
-    header_counts: Option<&indexmap::IndexMap<String, u32>>,
-    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
-) -> Result<std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>, DeserializeError> {
+    header_counts: Option<&IndexMap<SmolStr, u32>>,
+    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
+) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>, DeserializeError> {
     let mut entries = std::vec::Vec::new();
 
     // parse number of entries equal to tbl header
@@ -893,8 +897,8 @@ pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
-    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
-) -> Result<std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>, DeserializeError> {
+    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
+) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>, DeserializeError> {
     log::debug!("parsing tbl");
     let number_of_entries = deserialize_header_v1(f)?;
     deserialize_all_entries(f, log, number_of_entries, strict, None, schemas)
@@ -904,8 +908,8 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
-    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
-) -> Result<(indexmap::IndexMap<String, u32>, std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>), DeserializeError> {
+    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
+) -> Result<(IndexMap<SmolStr, u32>, std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>), DeserializeError> {
     log::debug!("parsing tbl");
     let (number_of_entries, header_counts) = deserialize_header_v2(f, log, strict)?;
     let entries = deserialize_all_entries(f, log, number_of_entries, strict, Some(&header_counts), schemas)?;
@@ -916,8 +920,8 @@ pub fn load_file_v1<P: AsRef<std::path::Path>>(
     path: P,
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
-    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
-) -> Result<std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>, DeserializeError> {
+    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
+) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>, DeserializeError> {
     let mut f = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: None,
@@ -930,8 +934,8 @@ pub fn load_file_v2<P: AsRef<std::path::Path>>(
     path: P,
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
-    schemas: &indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>>,
-) -> Result<(indexmap::IndexMap<String, u32>, std::vec::Vec<(String, indexmap::IndexMap<String, AtomicValue<String>>)>), DeserializeError> {
+    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
+) -> Result<(IndexMap<SmolStr, u32>, std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>), DeserializeError> {
     let mut f = std::fs::File::open(path).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: None,
@@ -943,18 +947,18 @@ pub fn load_file_v2<P: AsRef<std::path::Path>>(
 // schemas
 
 lazy_static::lazy_static! {
-    pub static ref SCHEMAS_CS1 : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
+    pub static ref SCHEMAS_CS1 : IndexMap<SmolStr, IndexMap<SmolStr, Type>> = [
     ].into_iter().collect();
-    pub static ref SCHEMAS_CS1_COMMON : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
-    ].into_iter().collect();
-
-    pub static ref SCHEMAS_CS2 : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
-    ].into_iter().collect();
-    pub static ref SCHEMAS_CS2_COMMON : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
+    pub static ref SCHEMAS_CS1_COMMON : IndexMap<SmolStr, IndexMap<SmolStr, Type>> = [
     ].into_iter().collect();
 
-    pub static ref SCHEMAS_CS3 : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
-        ("ActiveVoiceTableData".to_string(), [
+    pub static ref SCHEMAS_CS2 : IndexMap<SmolStr, IndexMap<SmolStr, Type>> = [
+    ].into_iter().collect();
+    pub static ref SCHEMAS_CS2_COMMON : IndexMap<SmolStr, IndexMap<SmolStr, Type>> = [
+    ].into_iter().collect();
+
+    pub static ref SCHEMAS_CS3 : IndexMap<SmolStr, IndexMap<SmolStr, Type>> = [
+        (SmolStr::new("ActiveVoiceTableData"), [
             ("unknown_short_1", Type::U16),
             ("unknown_short_2", Type::U16),
             ("unknown_short_3", Type::U16),
@@ -965,12 +969,12 @@ lazy_static::lazy_static! {
             ("unknown_float_1", Type::F32),
             ("unknown_float_2", Type::F32),
             ("unknown_data", Type::X(12)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("AssetCache".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("AssetCache"), [
             ("unknown_data", Type::X(2)),
             ("unknown_string", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("AtBonus".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("AtBonus"), [
             ("unknown_int", Type::U32),
             ("inverse_chance", Type::U8),
             ("hp_10_perc", Type::U8),
@@ -996,19 +1000,19 @@ lazy_static::lazy_static! {
             ("vanish", Type::U8),
             ("cp_200", Type::U8),
             ("cp_0", Type::U8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("AttachTableData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("AttachTableData"), [
             ("character", Type::U16),
             ("unknown_data", Type::X(20)),
             ("model", Type::CUtf8),
             ("unknown_string", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("Bgm".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("Bgm"), [
             ("id", Type::U16),
             ("track", Type::CUtf8),
             ("unknown_data", Type::X(2)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("char_revise".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("char_revise"), [
             ("char", Type::CUtf8),
             ("hp", Type::U16),
             ("str", Type::U16),
@@ -1017,40 +1021,40 @@ lazy_static::lazy_static! {
             ("adf", Type::U16),
             ("spd", Type::U16),
             ("brk", Type::U16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("CharData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("CharData"), [
             ("unknown_shorts", Type::Repeat(3, Box::new(Type::U16))),
             ("unknown_floats", Type::Repeat(5, Box::new(Type::F32))),
             ("unknown_data", Type::X(12)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("CompHelpData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("CompHelpData"), [
             ("type", Type::U16),
             ("text", Type::CUtf8),
             ("value", Type::I32),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("EventTableData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("EventTableData"), [
             ("id", Type::U16),
             ("unknown_string_1", Type::CUtf8),
             ("unknown_string_2", Type::CUtf8),
             ("unknown_data_1", Type::X(6)),
             ("unknown_string_3", Type::CUtf8),
             ("unknown_data_2", Type::X(18)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("FootStepData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("FootStepData"), [
             ("unknown_string", Type::CUtf8),
             ("unknown_byte", Type::U8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("game_difficulty".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("game_difficulty"), [
             ("difficulty", Type::U16),
             ("modifier", Type::I16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("hkitugi_lst".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("hkitugi_lst"), [
             ("unknown_short", Type::U16),
             ("unknown_data", Type::X(2)),
             ("text", Type::CUtf8),
             ("description", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("item".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("item"), [
             ("id", Type::U16),
             ("character_restriction", Type::U16),
             ("flags", Type::CUtf8),
@@ -1067,7 +1071,7 @@ lazy_static::lazy_static! {
             ("unknown_float_1", Type::F32),
             ("unknown_float_2", Type::F32),
             ("unknown_float_3", Type::F32),
-            ("effects", Type::Repeat(5, Box::new(Type::Ref("effect".to_string())))),
+            ("effects", Type::Repeat(5, Box::new(Type::Ref(SmolStr::new("effect"))))),
             ("str", Type::I16),
             ("def", Type::I16),
             ("ats", Type::I16),
@@ -1085,8 +1089,8 @@ lazy_static::lazy_static! {
             ("name", Type::CUtf8),
             ("description", Type::CUtf8),
             ("unknown_data", Type::X(8)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("item_q".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("item_q"), [
             ("id", Type::U16),
             ("unknown_short_1", Type::U16),
             ("flags", Type::CUtf8),
@@ -1098,7 +1102,7 @@ lazy_static::lazy_static! {
             ("rating", Type::F32),
             ("unknown_byte_1", Type::U8),
             ("unknown_data_2", Type::X(12)),
-            ("effects", Type::Repeat(5, Box::new(Type::Ref("effect".to_string())))),
+            ("effects", Type::Repeat(5, Box::new(Type::Ref(SmolStr::new("effect"))))),
             ("str", Type::I16),
             ("def", Type::I16),
             ("ats", Type::I16),
@@ -1120,23 +1124,23 @@ lazy_static::lazy_static! {
             ("prio_magical", Type::U16),
             ("prio_speed", Type::U16),
             ("arts", Type::Repeat(6, Box::new(Type::I16))),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("ItemHelpData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("ItemHelpData"), [
             ("effect", Type::U16),
             ("text", Type::CUtf8),
             ("unknown_data", Type::X(9)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("KisinPilotData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("KisinPilotData"), [
             ("unknown_data", Type::X(8)),
             ("unknown_string_1", Type::CUtf8),
             ("unknown_string_2", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("LinkAbText".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("LinkAbText"), [
             ("id", Type::U8),
             ("name", Type::CUtf8),
             ("description", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("magic".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("magic"), [
             ("id", Type::U16),
             ("character_restriction", Type::U16),
             ("flags", Type::CUtf8),
@@ -1150,7 +1154,7 @@ lazy_static::lazy_static! {
             ("unknown_float_1", Type::F32),
             ("unknown_float_2", Type::F32),
             ("unknown_float_3", Type::F32),
-            ("effects", Type::Repeat(5, Box::new(Type::Ref("effect".to_string())))),
+            ("effects", Type::Repeat(5, Box::new(Type::Ref(SmolStr::new("effect"))))),
             ("cast_delay", Type::U8),
             ("recovery_delay", Type::U8),
             ("cost", Type::U16),
@@ -1161,28 +1165,28 @@ lazy_static::lazy_static! {
             ("animation", Type::CUtf8),
             ("name", Type::CUtf8),
             ("description", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("magicbo".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("magicbo"), [
             ("id", Type::U16),
-            ("effects", Type::Repeat(5, Box::new(Type::Ref("effect".to_string())))),
+            ("effects", Type::Repeat(5, Box::new(Type::Ref(SmolStr::new("effect"))))),
             ("turns", Type::U16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MapJumpData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MapJumpData"), [
             ("unknown_data_1", Type::X(5)),
             ("name", Type::CUtf8),
             ("unknown_data_2", Type::X(4)),
             ("unknown_string_1", Type::CUtf8),
             ("unknown_string_2", Type::CUtf8),
             ("unknown_data_3", Type::X(24)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MarkerTableData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MarkerTableData"), [
             ("unknown_data_1", Type::X(6)),
             ("unknown_string_1", Type::CUtf8),
             ("unknown_data_2", Type::X(9)),
             ("unknown_string_2", Type::CUtf8),
             ("unknown_data_3", Type::X(12)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MasterQuartzBase".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MasterQuartzBase"), [
             ("item_id", Type::U16),
             ("mq_id", Type::U16),
             ("unknown_short", Type::U16),
@@ -1193,24 +1197,24 @@ lazy_static::lazy_static! {
             ("ats_pattern", Type::U16),
             ("adf_pattern", Type::U16),
             ("spd_pattern", Type::U16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MasterQuartzData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MasterQuartzData"), [
             ("item_id", Type::U16),
             ("level", Type::U16),
             ("effect_data", Type::Repeat(9, Box::new(Type::F32))),
             ("arts", Type::Repeat(2, Box::new(Type::I16))),
             ("memos", Type::Repeat(9, Box::new(Type::I16))),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MasterQuartzDummy".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MasterQuartzDummy"), [
             ("dummy_id", Type::I16),
             ("original_id", Type::I16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MasterQuartzMemo".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MasterQuartzMemo"), [
             ("item_id", Type::I16),
             ("memo_id", Type::I16),
             ("text", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MasterQuartzStatus".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MasterQuartzStatus"), [
             ("pattern_id", Type::U8),
             ("level", Type::U16),
             ("main_hp", Type::I16),
@@ -1227,8 +1231,8 @@ lazy_static::lazy_static! {
             ("sub_ats", Type::I16),
             ("sub_adf", Type::I16),
             ("sub_spd", Type::I16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MG08Card".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MG08Card"), [
             ("id", Type::U16),
             ("type", Type::U16),
             ("element", Type::U16),
@@ -1256,16 +1260,16 @@ lazy_static::lazy_static! {
             ("effect_arg_1", Type::I16),
             ("effect_arg_2", Type::I16),
             ("effect_description", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MG08CharMsg".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MG08CharMsg"), [
             ("character", Type::U16),
             ("id", Type::U16),
             ("unknown_int", Type::U16),
             ("text", Type::CUtf8),
             ("voice", Type::U16),
             ("unknown_data", Type::X(4)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MG08EnemyAi".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MG08EnemyAi"), [
             ("character", Type::U16),
             ("id", Type::U16),
             ("unknown_short_1", Type::U16),
@@ -1274,25 +1278,25 @@ lazy_static::lazy_static! {
             ("unknown_short_4", Type::U16),
             ("master", Type::U16),
             ("cards", Type::Repeat(20, Box::new(Type::U16))),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MG08PlyMsg".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MG08PlyMsg"), [
             ("character", Type::U16),
             ("id", Type::U16),
             ("unknown_int", Type::U16),
             ("text", Type::CUtf8),
             ("voice", Type::U16),
             ("unknown_data", Type::X(4)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MG08PresetDeck".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MG08PresetDeck"), [
             ("id", Type::U8),
             ("master", Type::U8),
             ("cards", Type::Repeat(20, Box::new(Type::U8))),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("MG08Text".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MG08Text"), [
             ("id", Type::U16),
             ("text", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("NameTableData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("NameTableData"), [
             ("character", Type::U16),
             ("name", Type::CUtf8),
             ("model", Type::CUtf8),
@@ -1304,17 +1308,17 @@ lazy_static::lazy_static! {
             ("unknown_floats", Type::Repeat(2, Box::new(Type::F32))),
             ("unknown_shorts", Type::Repeat(2, Box::new(Type::I16))),
             ("unknown_data_2", Type::X(3)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("NameVis".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("NameVis"), [
             ("unknown_string", Type::CUtf8),
             ("unknown_data", Type::X(8)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("NaviTextData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("NaviTextData"), [
             ("unknown_data_1", Type::X(4)),
             ("text", Type::CUtf8),
             ("unknown_data_2", Type::X(7)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("PlaceTableData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("PlaceTableData"), [
             ("unknown_data_1", Type::X(4)),
             ("unknown_string_1", Type::CUtf8),
             ("unknown_data_2", Type::X(4)),
@@ -1323,26 +1327,26 @@ lazy_static::lazy_static! {
             ("unknown_string_4", Type::CUtf8),
             ("unknown_string_5", Type::CUtf8),
             ("unknown_string_6", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("PopupMsgFaceCharData".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("PopupMsgFaceCharData"), [
             ("unknown_short", Type::U16),
             ("unknown_string", Type::CUtf8),
             ("unknown_data", Type::X(44)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSBook".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSBook"), [
             ("unknown_short_1", Type::U16),
             ("unknown_short_2", Type::U16),
             ("title", Type::CUtf8),
             ("unknown_text_1", Type::CUtf8),
             ("unknown_text_2", Type::CUtf8),
             ("unknown_data", Type::X(5)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSChapter".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSChapter"), [
             ("section_id", Type::U16),
             ("section_name", Type::CUtf8),
             ("unknown_short", Type::U16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSChar".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSChar"), [
             ("character", Type::U16),
             ("unknown_data", Type::X(6)),
             ("unknown_text_1", Type::CUtf8),
@@ -1359,63 +1363,63 @@ lazy_static::lazy_static! {
             ("note_4", Type::CUtf8),
             ("note_5_title", Type::CUtf8),
             ("note_5", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSCook".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSCook"), [
             ("regular_name", Type::CUtf8),
             ("unknown_data_1", Type::X(34)),
-            ("superb", Type::Ref("QSCookVariantDescription".to_string())),
-            ("regular", Type::Ref("QSCookVariantDescription".to_string())),
-            ("peculiar", Type::Ref("QSCookVariantDescription".to_string())),
-            ("unique", Type::Ref("QSCookVariantDescription".to_string())),
+            ("superb", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
+            ("regular", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
+            ("peculiar", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
+            ("unique", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
             ("unknown_data_2", Type::X(48)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSFish".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSFish"), [
             ("id", Type::U16),
             ("unknown_string", Type::CUtf8),
             ("name", Type::CUtf8),
             ("unknown_data", Type::X(167)),
             ("description", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSText".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSText"), [
             ("id", Type::U16),
             ("unknown_byte_1", Type::U8),
             ("text", Type::CUtf8),
             ("unknown_byte_2", Type::U8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSTitle".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSTitle"), [
             ("unknown_short", Type::U16),
             ("unknown_byte", Type::U8),
             ("title", Type::CUtf8),
             ("persons", Type::CUtf8),
             ("unknown_data", Type::X(13)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSMons".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSMons"), [
             ("enemy", Type::CUtf8),
             ("unknown_string", Type::CUtf8),
             ("section_id", Type::U16),
             ("unknown_short", Type::U16),
             ("is_extra", Type::U8),
             ("unknown_byte", Type::U8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSRank".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSRank"), [
             ("id", Type::U16),
             ("text", Type::CUtf8),
             ("unknown_data", Type::X(6)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSText".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSText"), [
             ("id", Type::U16),
             ("unknown_byte_1", Type::U8),
             ("text", Type::CUtf8),
             ("unknown_byte_2", Type::U8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSTitle".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSTitle"), [
             ("unknown_short", Type::U16),
             ("unknown_byte", Type::U8),
             ("title", Type::CUtf8),
             ("persons", Type::CUtf8),
             ("unknown_data", Type::X(13)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QuartzCost".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QuartzCost"), [
             ("id", Type::I16),
             ("earth_sepith_cost", Type::U16),
             ("water_sepith_cost", Type::U16),
@@ -1424,13 +1428,13 @@ lazy_static::lazy_static! {
             ("time_sepith_cost", Type::U16),
             ("space_sepith_cost", Type::U16),
             ("mirage_sepith_cost", Type::U16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("SchoolGrade".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("SchoolGrade"), [
             ("id", Type::U16),
             ("text", Type::CUtf8),
             ("unknown_data", Type::X(6)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("se".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("se"), [
             ("id", Type::U16),
             ("unknown_string_1", Type::CUtf8),
             ("unknown_string_2", Type::CUtf8),
@@ -1439,8 +1443,8 @@ lazy_static::lazy_static! {
             ("unknown_float_2", Type::F32),
             ("unknown_data_2", Type::X(4)),
             ("unknown_float_3", Type::F32),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("SlotCost".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("SlotCost"), [
             ("slot_position", Type::I16),
             ("level", Type::I16),
             ("earth_sepith_cost", Type::U16),
@@ -1450,8 +1454,8 @@ lazy_static::lazy_static! {
             ("time_sepith_cost", Type::U16),
             ("space_sepith_cost", Type::U16),
             ("mirage_sepith_cost", Type::U16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("status".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("status"), [
             ("script", Type::CUtf8),
             ("texture", Type::CUtf8),
             ("model", Type::CUtf8),
@@ -1545,8 +1549,8 @@ lazy_static::lazy_static! {
             ("flags", Type::CUtf8),
             ("name", Type::CUtf8),
             ("description", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("status_p".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("status_p"), [
             ("id", Type::U16),
             ("script", Type::CUtf8),
             ("texture", Type::CUtf8),
@@ -1641,8 +1645,8 @@ lazy_static::lazy_static! {
             ("flags", Type::CUtf8),
             ("name", Type::CUtf8),
             ("description", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("status_revise".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("status_revise"), [
             ("difficulty", Type::U16),
             ("hp", Type::U16),
             ("str", Type::U16),
@@ -1651,47 +1655,50 @@ lazy_static::lazy_static! {
             ("adf", Type::U16),
             ("spd", Type::U16),
             ("brk", Type::U16),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("TacticalBonus".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("TacticalBonus"), [
             ("id", Type::U16),
             ("name", Type::CUtf8),
             ("bonus", Type::F32),
             ("unknown_data", Type::X(2)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("text_lest".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("text_lest"), [
             ("id", Type::U16),
             ("text", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("voice".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("voice"), [
             ("id", Type::U16),
             ("unknown_byte", Type::U8),
             ("clip", Type::CUtf8),
             ("unknown_short", Type::U16),
             ("unknown_float", Type::F32),
             ("unknown_data", Type::X(12)),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     ].into_iter().collect();
-    pub static ref SCHEMAS_CS3_COMMON : indexmap::IndexMap<String, indexmap::IndexMap<String, Type>> = [
-        ("effect".to_string(), [
+    pub static ref SCHEMAS_CS3_COMMON : IndexMap<SmolStr, IndexMap<SmolStr, Type>> = [
+        (SmolStr::new("effect"), [
             ("id", Type::U16),
             ("data", Type::Repeat(3, Box::new(Type::I32))),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
-        ("QSCookVariantDescription".to_string(), [
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSCookVariantDescription"), [
             ("item_id", Type::I16),
             ("description_1", Type::CUtf8),
             ("description_2", Type::CUtf8),
-        ].into_iter().map(|(s, t)| (s.to_string(), t)).collect()),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     ].into_iter().collect();
 
 
-    pub static ref SCHEMAS_CS1_ATOMIC : indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS1, &SCHEMAS_CS1_COMMON).expect("");
-    pub static ref SCHEMAS_CS2_ATOMIC : indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS2, &SCHEMAS_CS2_COMMON).expect("");
-    pub static ref SCHEMAS_CS3_ATOMIC : indexmap::IndexMap<String, indexmap::IndexMap<String, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS3, &SCHEMAS_CS3_COMMON).expect("");
+    pub static ref SCHEMAS_CS1_ATOMIC : IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS1, &SCHEMAS_CS1_COMMON).expect("");
+    pub static ref SCHEMAS_CS2_ATOMIC : IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS2, &SCHEMAS_CS2_COMMON).expect("");
+    pub static ref SCHEMAS_CS3_ATOMIC : IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> = get_nf1_for_all(&SCHEMAS_CS3, &SCHEMAS_CS3_COMMON).expect("");
 }
 
 #[cfg(test)]
 mod test {
-    use super::{deserialize_tbl_v1, serialize_tbl_v1, deserialize_tbl_v2, serialize_tbl_v2, DeserializeError, WarningLogger, SCHEMAS_CS1_ATOMIC, SCHEMAS_CS2_ATOMIC, SCHEMAS_CS3_ATOMIC};
+    use super::{deserialize_tbl_v1, deserialize_tbl_v2, serialize_tbl_v1, serialize_tbl_v2, DeserializeError, WarningLogger, SCHEMAS_CS1_ATOMIC, SCHEMAS_CS2_ATOMIC, SCHEMAS_CS3_ATOMIC};
+
+    use indexmap::IndexMap;
+    use smol_str::SmolStr;
 
     static INIT_LOG: std::sync::Once = std::sync::Once::new();
 
@@ -1719,7 +1726,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
                     let _ = serialize_tbl_v1(&mut serialized, &e).unwrap();
                     serialized.into_inner()
                 };
@@ -1751,7 +1758,7 @@ mod test {
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let entries = deserialize_tbl_v1(&mut f, &mut logger, false, &SCHEMAS_CS1_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
                 let _ = serialize_tbl_v1(&mut serialized, &e).unwrap();
                 // no comparison here
             }
@@ -1782,7 +1789,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                     let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                     serialized.into_inner()
@@ -1815,7 +1822,7 @@ mod test {
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &SCHEMAS_CS2_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
                 let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                 let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                 // no comparison here
@@ -1842,7 +1849,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                     let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                     serialized.into_inner()
@@ -1870,7 +1877,7 @@ mod test {
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &SCHEMAS_CS3_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(String, indexmap::IndexMap<String, super::AtomicValue<String>>)] = &entries;
+                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
                 let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                 let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                 // no comparison here

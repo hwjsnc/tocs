@@ -9,12 +9,15 @@ use std::fmt::Write;
 
 use clap::Parser;
 
-type Attributes = indexmap::IndexMap<String, tocs::tbl::AtomicType>;
-type AttributeValues = indexmap::IndexMap<String, tocs::tbl::AtomicValue<String>>;
+use indexmap::IndexMap;
+use smol_str::SmolStr;
+
+type Attributes = IndexMap<SmolStr, tocs::tbl::AtomicType>;
+type AttributeValues = IndexMap<SmolStr, tocs::tbl::AtomicValue<String>>;
 
 // Given rows in any order, collect all rows with the same header together
-fn partition_entries_with_headers(headers: indexmap::IndexMap<String, u32>, entries: std::vec::Vec<(String, AttributeValues)>) -> indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> {
-    let mut entries_for_header: indexmap::IndexMap<String, std::vec::Vec<AttributeValues>> = headers.into_iter().map(|(hdr, _)| (hdr, vec![])).collect();
+fn partition_entries_with_headers(headers: IndexMap<SmolStr, u32>, entries: std::vec::Vec<(SmolStr, AttributeValues)>) -> IndexMap<SmolStr, std::vec::Vec<AttributeValues>> {
+    let mut entries_for_header: IndexMap<SmolStr, std::vec::Vec<AttributeValues>> = headers.into_iter().map(|(hdr, _)| (hdr, vec![])).collect();
     for (hdr, data) in entries.into_iter() {
         match entries_for_header.entry(hdr) {
             indexmap::map::Entry::Occupied(mut e) => {
@@ -62,7 +65,7 @@ struct CliArgs {
 }
 
 lazy_static::lazy_static! {
-    pub static ref VERSION_SELECTOR_OPTIONS: indexmap::IndexMap<&'static str, TblVersion> = [
+    pub static ref VERSION_SELECTOR_OPTIONS: IndexMap<&'static str, TblVersion> = [
         ("CS1 (XSeed PC, EN)", TblVersion::CS1),
         ("CS2 (XSeed PC)", TblVersion::CS2),
         ("CS3 (NISA PC)", TblVersion::CS3),
@@ -90,9 +93,9 @@ struct Widgets {
 }
 
 pub struct AppData {
-    schemas: indexmap::IndexMap<String, Attributes>,
-    entries: indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>,
-    active: Option<String>,
+    schemas: IndexMap<SmolStr, Attributes>,
+    entries: IndexMap<SmolStr, std::vec::Vec<AttributeValues>>,
+    active: Option<SmolStr>,
     strict: bool,
     warnlog: tocs::tbl::WarningLogger<tocs::tbl::DeserializeError>,
     //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
@@ -239,7 +242,7 @@ impl App {
                     } else {
                         CellType::OddRow
                     };
-                    draw_data(&value, x, y, w, h, celltype);
+                    draw_data(value, x, y, w, h, celltype);
                 }
                 _ => (),
             }
@@ -365,14 +368,14 @@ impl App {
                         self.widgets.warn_button.hide();
                     }
                     // reset header selector
-                    *active = self.widgets.header_selector.value().and_then(|hdr| entries.get(&hdr).map(|_| hdr.to_string()));
+                    *active = self.widgets.header_selector.value().and_then(|hdr| entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
                     self.widgets.header_selector.clear();
                     for hdr in state.entries.keys() {
                         self.widgets.header_selector.add(&hdr);
                     }
                     if let Some((hdr, _)) = state.entries.iter().next() {
                         self.widgets.header_selector.set_value(hdr);
-                        state.active = Some(hdr.to_string());
+                        state.active = Some(hdr.clone());
                     }
                 }
                 // Note: mutex must be free for this function because it triggers table redraws:
@@ -381,7 +384,7 @@ impl App {
             Some(Msg::UpdateTable) => {
                 let mut state = self.state.lock().unwrap();
                 log::trace!("boop");
-                state.active = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr).map(|_| hdr.to_string()));
+                state.active = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
                 if let Some(hdr) = &state.active {
                     log::trace!("beep");
                     // width of each column = max(header width, width of each entry in that column)
@@ -495,13 +498,13 @@ fn get_cell_value<'a>(state: &'a mut AppData, row: i32, col: i32) -> Option<&'a 
     let AppData { active, entries, .. } = state;
     active
         .as_ref()
-        .and_then(|hdr: &String| entries.get_mut(*&hdr))
+        .and_then(|hdr| entries.get_mut(hdr))
         .and_then(|rows| rows.get_mut(row))
         .and_then(|row| row.get_index_mut(col))
         .map(|(_, val)| val)
 }
 
-fn schemas_for_version(version: TblVersion) -> indexmap::IndexMap<String, Attributes> {
+fn schemas_for_version(version: TblVersion) -> IndexMap<SmolStr, Attributes> {
     match version {
         TblVersion::CS1 => tocs::tbl::SCHEMAS_CS1_ATOMIC.clone(),
         TblVersion::CS2 => tocs::tbl::SCHEMAS_CS2_ATOMIC.clone(),
@@ -514,18 +517,18 @@ fn load_tbl_file(
     version: TblVersion,
     warnings: &mut tocs::tbl::WarningLogger<tocs::tbl::DeserializeError>,
     strict: bool,
-) -> Result<indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>, tocs::tbl::DeserializeError> {
+) -> Result<IndexMap<SmolStr, std::vec::Vec<AttributeValues>>, tocs::tbl::DeserializeError> {
     match version {
-        TblVersion::CS1 => tocs::tbl::load_file_v1(path, warnings, strict, &tocs::tbl::SCHEMAS_CS1_ATOMIC).map(|entries| (indexmap::IndexMap::new(), entries)),
+        TblVersion::CS1 => tocs::tbl::load_file_v1(path, warnings, strict, &tocs::tbl::SCHEMAS_CS1_ATOMIC).map(|entries| (IndexMap::new(), entries)),
         TblVersion::CS2 => tocs::tbl::load_file_v2(path, warnings, strict, &tocs::tbl::SCHEMAS_CS2_ATOMIC),
         TblVersion::CS3 => tocs::tbl::load_file_v2(path, warnings, strict, &tocs::tbl::SCHEMAS_CS3_ATOMIC),
     }
     .map(|(headers, entries)| partition_entries_with_headers(headers, entries))
 }
 
-fn save_tbl_file(path: &std::path::Path, version: TblVersion, entries: &indexmap::IndexMap<String, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
-    let headers: std::vec::Vec<String> = entries.keys().cloned().collect();
-    let entries: std::vec::Vec<(String, AttributeValues)> = entries.iter().map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).flatten().collect();
+fn save_tbl_file(path: &std::path::Path, version: TblVersion, entries: &IndexMap<SmolStr, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
+    let headers: std::vec::Vec<SmolStr> = entries.keys().cloned().collect();
+    let entries: std::vec::Vec<(SmolStr, AttributeValues)> = entries.iter().map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).flatten().collect();
     match version {
         TblVersion::CS1 => tocs::tbl::save_file_v1(path, &entries),
         TblVersion::CS2 => tocs::tbl::save_file_v2(path, &headers, &entries),
@@ -559,8 +562,8 @@ fn main() {
         }
         _ => AppData {
             active: None,
-            schemas: indexmap::IndexMap::new(),
-            entries: indexmap::IndexMap::new(),
+            schemas: IndexMap::new(),
+            entries: IndexMap::new(),
             strict: true,
             warnlog,
         },

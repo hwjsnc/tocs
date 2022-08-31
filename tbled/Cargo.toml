@@ -13,4 +13,5 @@ lazy_static = "1.4"
 log = { version = "0.4.14" }
 native-dialog="0.5.1"
 simple_logger = { version = "1", default-features = false, features = ["stderr"] }
+smol_str = { version = "0.1.23", default-features = false }
 tocs = { path = "../tocs" }
