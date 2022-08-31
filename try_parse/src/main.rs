@@ -4,8 +4,6 @@ extern crate tocs;
 
 use clap::Parser;
 
-use ioutil::tbl::TblEntry as _;
-
 #[derive(Debug, Parser)]
 enum Subcommand {
     /// Try to parse all data files
@@ -25,9 +23,6 @@ enum Subcommand {
         /// Don't attempt to fix game data with hardcoded values
         #[clap(short, long)]
         raw: bool,
-        /// Print data for parsed entries as text, to the extent possible
-        #[clap(short, long)]
-        print_data: bool,
     },
 }
 
@@ -58,10 +53,10 @@ pub fn main() {
 
     match Subcommand::parse() {
         Subcommand::All { raw } => parse_all(!raw),
-        Subcommand::File { game, path, raw, print_data } => match game {
-            GameVersion::CS1 => parse_file_cs1(&path, !raw, print_data),
-            GameVersion::CS2 => parse_file_cs2(&path, !raw, print_data),
-            GameVersion::CS3 => parse_file_cs3(&path, !raw, print_data),
+        Subcommand::File { game, path, raw } => match game {
+            GameVersion::CS1 => parse_file_cs1(&path, !raw),
+            GameVersion::CS2 => parse_file_cs2(&path, !raw),
+            GameVersion::CS3 => parse_file_cs3(&path, !raw),
         },
     }
 }
@@ -189,106 +184,28 @@ pub fn parse_all(fix_data: bool) {
     }
 }
 
-pub fn parse_file_cs1(path: &std::path::Path, fix_data: bool, print_data: bool) {
+pub fn parse_file_cs1(path: &std::path::Path, fix_data: bool) {
     let data = if fix_data {
         tocs::cs1::tbl::fix(&std::fs::read(path).unwrap())
     } else {
         std::fs::read(path).unwrap()
     };
-    let ctx = ioutil::ParseContext::start_of(&data);
-    let (number_of_entries, mut ctx) = match ioutil::tbl::parse_tbl_header_v1(ctx) {
-        Ok(result) => result,
-        Err(e) => {
-            panic!("Error: {}", e.to_msg(&data));
-        }
-    };
-    println!("number of entries: {number_of_entries}");
-    let mut i = 0;
-    loop {
-        let parsers = std::collections::HashMap::<_, _>::new();
-        match ioutil::tbl::parse_entry::<tocs::cs1::tbl::Entry>(&parsers, ctx.clone(), i + 1, number_of_entries) {
-            Ok((entry, entry_ctx)) => {
-                match entry {
-                    tocs::cs1::tbl::Entry::Generic(tocs::cs1::tbl::entry_data::Generic { header, data }) => {
-                        println!(" - Generic entry ({} of {}, offset {} / 0x{:x})", i + 1, number_of_entries, ctx.position(), ctx.position());
-                        println!("   - header name: '{}'", header);
-                        println!("   - data length: {} / 0x{:x}", data.len(), data.len());
-                        if print_data {
-                            println!("   - data: {}", String::from_utf8_lossy(&data).escape_debug())
-                        }
-                    }
-                    _ => {
-                        println!(" - Specific entry ({} of {}, offset {} / 0x{:x})", i + 1, number_of_entries, ctx.position(), ctx.position());
-                        println!("   - header name: '{}'", entry.header_name());
-                        if print_data {
-                            println!("   - data omitted");
-                        }
-                    }
-                }
-                ctx = entry_ctx;
-            }
-            Err(e) => {
-                if let ioutil::tbl::ParseErrorDetail::Primitive(ref e) = e.detail {
-                    if matches!(e, ioutil::PrimitiveParseError::UnexpectedEOF { .. }) && e.position() == ctx.position() && i == number_of_entries {
-                        println!("Reached EOF as expected, done.");
-                        break;
-                    }
-                }
-                panic!("Error: {}. {} bytes remaining.", e.to_msg(&data), data.len() - ctx.position());
-            }
-        };
-        i += 1;
-    }
+    let mut log = tocs::tbl::WarningLogger::new();
+    let _ = tocs::tbl::deserialize_tbl_v1(&mut std::io::Cursor::new(data), &mut log, true, &tocs::tbl::SCHEMAS_CS1_ATOMIC);
 }
 
-pub fn parse_file_cs2(path: &std::path::Path, _fix_data: bool, print_data: bool) {
+pub fn parse_file_cs2(path: &std::path::Path, _fix_data: bool) {
     let data = std::fs::read(path).unwrap();
-    let ctx = ioutil::ParseContext::start_of(&data);
-    let (number_of_entries, header_names_with_counts, mut ctx) = match ioutil::tbl::parse_tbl_header_v2(ctx) {
-        Ok(result) => result,
-        Err(e) => {
-            panic!("Error: {}", e.to_msg(&data));
-        }
-    };
-    println!("number of entries: {number_of_entries}");
-    println!("headers:");
-    for (h, n) in header_names_with_counts.iter() {
-        println!(" - {h}, expecting {n} entries");
-    }
-    println!("entries:");
-    let mut i = 0;
-    loop {
-        let parsers = std::collections::HashMap::<_, _>::new();
-        match ioutil::tbl::parse_entry::<tocs::cs2::tbl::Entry>(&parsers, ctx.clone(), i + 1, number_of_entries) {
-            Ok((entry, entry_ctx)) => {
-                match entry {
-                    tocs::cs2::tbl::Entry::Generic(tocs::cs2::tbl::entry_data::Generic { header, data }) => {
-                        println!(" - Generic entry ({} of {}, offset {} / 0x{:x})", i + 1, number_of_entries, ctx.position(), ctx.position());
-                        println!("   - header name: '{}'", header);
-                        println!("   - data length: {} / 0x{:x}", data.len(), data.len());
-                        if print_data {
-                            println!("   - data: {}", String::from_utf8_lossy(&data).escape_debug())
-                        }
-                    }
-                }
-                ctx = entry_ctx;
-            }
-            Err(e) => {
-                if let ioutil::tbl::ParseErrorDetail::Primitive(ref e) = e.detail {
-                    if matches!(e, ioutil::PrimitiveParseError::UnexpectedEOF { .. }) && e.position() == ctx.position() && i == number_of_entries {
-                        println!("Reached EOF as expected, done.");
-                        break;
-                    }
-                }
-                panic!("Error: {}. {} bytes remaining.", e.to_msg(&data), data.len() - ctx.position());
-            }
-        };
-        i += 1;
-    }
+    let mut log = tocs::tbl::WarningLogger::new();
+    let _ = tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(data), &mut log, true, &tocs::tbl::SCHEMAS_CS2_ATOMIC);
 }
 
-pub fn parse_file_cs3(path: &std::path::Path, fix_data: bool, print_data: bool) {
-    let mut f = std::fs::File::open(path).unwrap();
-    let mut log = tocs::tbl::WarningLogger::new(true);
-    tocs::tbl::deserialize_tbl_v2(&mut f, &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC);
+pub fn parse_file_cs3(path: &std::path::Path, fix_data: bool) {
+    let data = if fix_data {
+        tocs::cs1::tbl::fix(&std::fs::read(path).unwrap())
+    } else {
+        std::fs::read(path).unwrap()
+    };
+    let mut log = tocs::tbl::WarningLogger::new();
+    let _ = tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(data), &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC);
 }
