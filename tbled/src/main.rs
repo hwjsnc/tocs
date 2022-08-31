@@ -112,7 +112,7 @@ impl App {
     pub fn new(state: AppData) -> Self {
         let state = std::sync::Arc::new(std::sync::Mutex::new(state));
 
-        fltk::draw::set_font(fltk::enums::Font::Helvetica, 12);
+        fltk::draw::set_font(fltk::enums::Font::Helvetica, 14);
 
         let (w, h) = (1280, 720);
         let app = fltk::app::App::default();
@@ -143,10 +143,12 @@ impl App {
         load_button.emit(sender.clone(), Msg::SelectAndLoadFile);
         flex_row.set_size(&load_button, 140);
 
+        /*
         let mut save_button = fltk::button::Button::default().with_label("Save");
         save_button.emit(sender.clone(), Msg::SaveFile);
         save_button.set_color(fltk::enums::Color::FrameDefault.inactive());
         flex_row.set_size(&save_button, 60);
+        */
 
         let mut save_button = fltk::button::Button::default().with_label("Select && save file");
         save_button.emit(sender.clone(), Msg::SelectAndSaveFile);
