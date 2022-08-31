@@ -137,20 +137,20 @@ impl App {
         tbl_version_selector.set_value_index(0);
         tbl_version_selector.input().set_align(fltk::enums::Align::Left);
         tbl_version_selector.input().set_readonly(true);
-        flex_row.set_size(&mut tbl_version_selector, 160);
+        flex_row.set_size(&tbl_version_selector, 160);
 
         let mut load_button = fltk::button::Button::default().with_label("Select && load file");
         load_button.emit(sender.clone(), Msg::SelectAndLoadFile);
-        flex_row.set_size(&mut load_button, 140);
+        flex_row.set_size(&load_button, 140);
 
         let mut save_button = fltk::button::Button::default().with_label("Save");
         save_button.emit(sender.clone(), Msg::SaveFile);
         save_button.set_color(fltk::enums::Color::FrameDefault.inactive());
-        flex_row.set_size(&mut save_button, 60);
+        flex_row.set_size(&save_button, 60);
 
         let mut save_button = fltk::button::Button::default().with_label("Select && save file");
         save_button.emit(sender.clone(), Msg::SelectAndSaveFile);
-        flex_row.set_size(&mut save_button, 140);
+        flex_row.set_size(&save_button, 140);
 
         let _ = fltk::widget::Widget::default(); // just for spacing
 
@@ -159,27 +159,27 @@ impl App {
         warn_button.set_color(fltk::enums::Color::Red);
         warn_button.hide();
 
-        flex_row.set_size(&mut save_button, 140);
+        flex_row.set_size(&save_button, 140);
 
         let _ = fltk::widget::Widget::default(); // just for spacing
 
         //let mut label = fltk::output::Output::default();//.with_label("tbl header:");
         //label.set_value("tbl header: ");
-        let mut label = fltk::widget::Widget::default().with_label("tbl header:");
-        flex_row.set_size(&mut label, 100);
+        let label = fltk::widget::Widget::default().with_label("tbl header:");
+        flex_row.set_size(&label, 100);
 
         let mut header_selector = fltk::misc::InputChoice::default().with_label("tbl header");
         header_selector.emit(sender.clone(), Msg::UpdateTable);
         header_selector.input().set_readonly(true);
-        flex_row.set_size(&mut header_selector, 200);
+        flex_row.set_size(&header_selector, 200);
 
         flex_row.end();
-        flex.set_size(&mut flex_row, 26);
+        flex.set_size(&flex_row, 26);
 
         let mut input = fltk::input::Input::default();
         input.set_trigger(fltk::enums::CallbackTrigger::EnterKeyAlways);
         input.emit(sender.clone(), Msg::DoneEditing);
-        flex.set_size(&mut input, 26);
+        flex.set_size(&input, 26);
 
         let mut table = fltk::table::Table::default();
         table.set_col_header(true);
@@ -188,7 +188,7 @@ impl App {
         table.set_row_header(true);
         table.set_row_resize(true);
 
-        table.emit(sender.clone(), Msg::TableEvent);
+        table.emit(sender, Msg::TableEvent);
 
         let state_clone = state.clone();
         table.draw_cell(move |table, ctx, row, col, x, y, w, h| {
@@ -371,7 +371,7 @@ impl App {
                     *active = self.widgets.header_selector.value().and_then(|hdr| entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
                     self.widgets.header_selector.clear();
                     for hdr in state.entries.keys() {
-                        self.widgets.header_selector.add(&hdr);
+                        self.widgets.header_selector.add(hdr);
                     }
                     if let Some((hdr, _)) = state.entries.iter().next() {
                         self.widgets.header_selector.set_value(hdr);
@@ -401,7 +401,7 @@ impl App {
                     let mut row_height = 1;
                     for row in entries {
                         for (i, (_, val)) in row.iter().enumerate() {
-                            let (w, h) = fltk::draw::measure(&tocs::tbl::atomic_value_to_string(&val), false);
+                            let (w, h) = fltk::draw::measure(&tocs::tbl::atomic_value_to_string(val), false);
                             column_widths[i] = std::cmp::max(column_widths[i], w);
                             row_height = std::cmp::max(row_height, h);
                         }
@@ -445,10 +445,10 @@ impl App {
                             let text = input.value();
                             let cell_value = get_cell_value(&mut *state, row, col).unwrap();
                             let ty = &tocs::tbl::atomic_type(cell_value);
-                            if let Ok(value) = tocs::tbl::try_atomic_value_from_str(&ty, &text) {
+                            if let Ok(value) = tocs::tbl::try_atomic_value_from_str(ty, &text) {
                                 *cell_value = value;
                             } else {
-                                fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", tocs::tbl::atomic_type_describe(&ty)));
+                                fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", tocs::tbl::atomic_type_describe(ty)));
                             }
                         }
                         table.redraw();
@@ -464,7 +464,7 @@ impl App {
                         Some(warnlog.warnings().fold(
                             "the following non-fatal error(s) occured loading the file.\nplease study them carefully and, if necessary, fix them before continuing!\n\n".to_string(),
                             |mut s, warn| {
-                                write!(s, "{}\n", warn).unwrap();
+                                writeln!(s, "{}", warn).unwrap();
                                 s
                             },
                         ))
@@ -492,7 +492,7 @@ impl App {
     }
 }
 
-fn get_cell_value<'a>(state: &'a mut AppData, row: i32, col: i32) -> Option<&'a mut tocs::tbl::AtomicValue<String>> {
+fn get_cell_value(state: &mut AppData, row: i32, col: i32) -> Option<&mut tocs::tbl::AtomicValue<String>> {
     let row: usize = row.try_into().unwrap();
     let col: usize = col.try_into().unwrap();
     let AppData { active, entries, .. } = state;
@@ -528,7 +528,7 @@ fn load_tbl_file(
 
 fn save_tbl_file(path: &std::path::Path, version: TblVersion, entries: &IndexMap<SmolStr, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
     let headers: std::vec::Vec<SmolStr> = entries.keys().cloned().collect();
-    let entries: std::vec::Vec<(SmolStr, AttributeValues)> = entries.iter().map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).flatten().collect();
+    let entries: std::vec::Vec<(SmolStr, AttributeValues)> = entries.iter().flat_map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).collect();
     match version {
         TblVersion::CS1 => tocs::tbl::save_file_v1(path, &entries),
         TblVersion::CS2 => tocs::tbl::save_file_v2(path, &headers, &entries),
@@ -572,7 +572,6 @@ fn main() {
     log::debug!("starting app");
     let app = App::new(appstate);
     app.run();
-    return;
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
