@@ -5,7 +5,7 @@ find . -name 'Cargo.toml' | while read path; do
   printf "%s\n" "$dir"
   cd "$dir"
   cargo fmt --check
-  cargo test
+  cargo test --release
   cargo clippy
   cd -
 done
