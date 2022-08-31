@@ -225,7 +225,7 @@ pub fn get_nf1(schema_name: &SmolStr, schemas: &IndexMap<SmolStr, IndexMap<SmolS
                     let sub_nf1 = get_nf1(s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
                     for i in 1..=*n {
                         for (n, t) in sub_nf1.iter() {
-                            nf1.insert(SmolStr::new(format!("{} {} {}", name, i, n)), *t);
+                            nf1.insert(SmolStr::new(format!("{}[{}] {}", name, i, n)), *t);
                         }
                     }
                 } else {
@@ -1376,12 +1376,6 @@ lazy_static::lazy_static! {
             ("unknown_data", Type::X(167)),
             ("description", Type::CUtf8),
         ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-        (SmolStr::new("QSText"), [
-            ("id", Type::U16),
-            ("unknown_byte_1", Type::U8),
-            ("text", Type::CUtf8),
-            ("unknown_byte_2", Type::U8),
-        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
         (SmolStr::new("QSTitle"), [
             ("unknown_short", Type::U16),
             ("unknown_byte", Type::U8),
@@ -1658,7 +1652,7 @@ lazy_static::lazy_static! {
             ("bonus", Type::F32),
             ("unknown_data", Type::X(2)),
         ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-        (SmolStr::new("text_lest"), [
+        (SmolStr::new("text_lst"), [
             ("id", Type::U16),
             ("text", Type::CUtf8),
         ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),

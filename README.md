@@ -35,15 +35,7 @@ Here's a short overview:
   If you want to upgrade and need to persist the data from the database, first convert it to tbl files, then convert the tbls back to a new database after the upgrade.
 
 - `tbled` is a GUI tbl editor.
-  It is a work in progress and rather janky.
-  Select the game version, then load a .tbl file, and finally select a header name to view the entries in form of a table.
-  On the row below the save & load buttons and above the table, there is an input field.
-  Double-clicking on a cell in the table will copy the contents of that cell into the field.
-  You can then edit it there.
-  Once you're done editing, press Enter to copy the contents of the input field into the currently selected cell (it doesn't have to be the original one).
-  Note that multi-selections will have no effect.
-  Many patterns you may accustomed to, such as undo/redo or save/load confirmations are not present.
-  Back up your data frequently!
+  For more information, see [its own README](tbled/README.md).
 
 - `try_parse` is a CLI program that attempts to parse all game data and prints any errors.
   It's there for finding instances where the game data doesn't follow the rules we've reverse engineered.
@@ -62,3 +54,8 @@ related & alternative projects
 - https://github.com/nnguyen259/SenSchema
 - https://github.com/Ouroboros/Falcom
 - https://github.com/TwnKey/SenScriptsDecompiler
+
+license
+-------
+
+¯\\\_(ツ)_/¯

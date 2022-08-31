@@ -67,7 +67,7 @@ struct CliArgs {
 lazy_static::lazy_static! {
     pub static ref VERSION_SELECTOR_OPTIONS: IndexMap<&'static str, TblVersion> = [
         ("CS1 (XSeed PC, EN)", TblVersion::CS1),
-        ("CS2 (XSeed PC)", TblVersion::CS2),
+        ("CS2 (XSeed PC, EN)", TblVersion::CS2),
         ("CS3 (NISA PC)", TblVersion::CS3),
     ].into_iter().collect();
 }
@@ -112,7 +112,7 @@ impl App {
     pub fn new(state: AppData) -> Self {
         let state = std::sync::Arc::new(std::sync::Mutex::new(state));
 
-        fltk::draw::set_font(fltk::enums::Font::Helvetica, 14);
+        fltk::draw::set_font(fltk::enums::Font::Helvetica, 12);
 
         let (w, h) = (1280, 720);
         let app = fltk::app::App::default();
@@ -163,12 +163,9 @@ impl App {
 
         let _ = fltk::widget::Widget::default(); // just for spacing
 
-        //let mut label = fltk::output::Output::default();//.with_label("tbl header:");
-        //label.set_value("tbl header: ");
-        let label = fltk::widget::Widget::default().with_label("tbl header:");
-        flex_row.set_size(&label, 100);
-
-        let mut header_selector = fltk::misc::InputChoice::default().with_label("tbl header");
+        //let label = fltk::widget::Widget::default().with_label("entry type:");
+        //flex_row.set_size(&label, 100);
+        let mut header_selector = fltk::misc::InputChoice::default().with_label("entry type");
         header_selector.emit(sender.clone(), Msg::UpdateTable);
         header_selector.input().set_readonly(true);
         flex_row.set_size(&header_selector, 200);
