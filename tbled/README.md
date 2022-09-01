@@ -44,4 +44,7 @@ Make sure the game version is still correct!
 
 ![A screenshot of `tbled` in action. Some UI elements are labeled](screenshot.png)
 
-TODO: download link
+Download
+--------
+
+[tbled v0.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.1/tbled.exe)
