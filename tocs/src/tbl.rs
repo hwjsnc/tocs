@@ -581,7 +581,7 @@ fn read_bytes<const N: usize, F: std::io::Read>(f: &mut F) -> Result<[u8; N], st
 }
 
 fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>, strict: bool) -> Result<String, DeserializeError> {
-    let mut buf = std::vec::Vec::new();
+    let mut buf: smallvec::SmallVec<[u8; 32]> = smallvec::SmallVec::new();
     loop {
         let x = read_byte(f).map_err(|e| DeserializeError {
             detail: DeserializeErrorDetail::IO(e),
