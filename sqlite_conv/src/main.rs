@@ -4,6 +4,9 @@ extern crate tocs;
 extern crate walkdir;
 
 use clap::Parser;
+use indexmap::IndexMap;
+use smol_str::SmolStr;
+
 use std::io::Write as _;
 use std::str::FromStr as _;
 
@@ -221,63 +224,17 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
     let tx = db.transaction().unwrap();
 
     let create_tables = || -> rusqlite::Result<()> {
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Generic>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ActiveVoiceTableData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AssetCache>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AtBonus>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::AttachTableData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Bgm>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CharRevise>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CharData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::CompHelpData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::EventTableData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::FootStepData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::GameDifficulty>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::HkitugiLst>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Item>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ItemQ>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::ItemHelpData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::KisinPilotData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::LinkAbText>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Magic>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MagicBo>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MapJumpData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MarkerTableData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzBase>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzDummy>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzMemo>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MasterQuartzStatus>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08Card>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08CharMsg>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08EnemyAI>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08PlyMsg>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08PresetDeck>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::MG08Text>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NameTableData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NameVis>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::NaviTextData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::PlaceTableData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::PopupMsgFaceCharData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSBook>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSCook>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChapter>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSChar>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSFish>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSHelp>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSMons>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSRank>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSText>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::QSTitle>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SchoolGrade>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SE>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::SlotCost>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Status>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::StatusP>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::TacticalBonus>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::TextLst>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::TextTableData>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs3_entry_data::Voice>(&tx)?;
+        sqlite_recreate_table_destroy_if_exists_unsafe_new(
+            &tx,
+            "generic",
+            &[("header", tocs::tbl::AtomicType::CUtf8), ("data", tocs::tbl::AtomicType::X(0))]
+                .into_iter()
+                .map(|(s, ty)| (s.into(), ty))
+                .collect(),
+        )?;
+        for (table, schema) in tocs::tbl::SCHEMAS_CS3_ATOMIC.iter() {
+            sqlite_recreate_table_destroy_if_exists_unsafe_new(&tx, table, schema);
+        }
         Ok(())
     };
     match create_tables() {
@@ -294,77 +251,31 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
             println!("Reading {}", path.display());
             let path_for_db = path.strip_prefix(tblpath).expect("child path should have parent as prefix").display().to_string();
-            let data = match std::fs::read(path).map(|data| cs3_tbl::fix(&data)) {
+            let data = match std::fs::read(path) {
                 Ok(x) => x,
                 Err(e) => panic!("Couldn't read tbl file: {e}"),
             };
-            let tbl = match cs3_tbl::load(&data) {
+            let data = cs3_tbl::fix(&data);
+            let mut logger = tocs::tbl::WarningLogger::new();
+            let (_, entries) = match tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&data), &mut logger, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC) {
                 Ok(x) => x,
-                Err(e) => panic!("Couldn't parse tbl file: {}", e.to_msg(&data)),
+                Err(e) => panic!("Couldn't parse tbl file: {}", e),
             };
-            for (n, tblentry) in tbl.entries.iter().enumerate() {
-                let insert_result = match tblentry {
-                    CS3Entry::Generic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::ActiveVoiceTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::AssetCache(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::AtBonus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::AttachTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::Bgm(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::CharRevise(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::CharData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::CompHelpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::EventTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::FootStepData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::GameDifficulty(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::HkitugiLst(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::Item(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::ItemQ(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::ItemHelpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::KisinPilotData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::LinkAbText(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::Magic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MagicBo(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MapJumpData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MarkerTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MasterQuartzBase(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MasterQuartzData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MasterQuartzDummy(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MasterQuartzMemo(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MasterQuartzStatus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MG08Card(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MG08CharMsg(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MG08EnemyAI(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MG08PlyMsg(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MG08PresetDeck(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::MG08Text(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::NameTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::NameVis(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::NaviTextData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::PlaceTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::PopupMsgFaceCharData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSBook(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSCook(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSChapter(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSChar(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSFish(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSHelp(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSMons(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSRank(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSText(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::QSTitle(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::SchoolGrade(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::SE(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::SlotCost(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::Status(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::StatusP(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::TacticalBonus(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::TextLst(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::TextTableData(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS3Entry::Voice(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
+            for (n, (header, values)) in entries.iter().enumerate() {
+                // TODO: use logs here
+                let insert_result = if let Some(_) = tocs::tbl::SCHEMAS_CS3_ATOMIC.get(header) {
+                    sqlite_insert_unsafe_new(&tx, header.as_ref(), &path_for_db, values)
+                } else {
+                    let mut values_with_header = IndexMap::new();
+                    values_with_header.insert(SmolStr::from("header"), tocs::tbl::AtomicValue::CUtf8(header.clone()));
+                    for (attr, val) in values {
+                        values_with_header.insert(attr.clone(), val.clone());
+                    }
+                    sqlite_insert_unsafe_new(&tx, "generic", &path_for_db, &values_with_header)
                 };
                 match insert_result {
                     Ok(_) => (),
-                    Err(e) => panic!("Couldn't insert entry {} of {} into table: {}", n + 1, tbl.entries.len(), e),
+                    Err(e) => panic!("Couldn't insert entry {} of {} into table: {}", n + 1, entries.len(), e),
                 };
             }
         }
@@ -377,9 +288,10 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
 }
 
 // WARNING: The following functions could be extremely dangerous in a general settings:
-// We are interpolating the 'table' string directly into the sql statement, without sanitization.
+// We are interpolating the table and column names directly into the sql statement, without sanitization.
 // This bears the risk of SQL injection.
 // Since the table names all come from an attribute which we supply ourselves in the source code, this should not become a problem.
+
 fn sqlite_schema_unsafe<T: sqliteio::SqliteIO>() -> String {
     let s = format!(
         "create table {} (\nfile,\n{}\n)",
@@ -399,6 +311,19 @@ fn sqlite_recreate_table_destroy_if_exists_unsafe<T: sqliteio::SqliteIO>(tx: &ru
     Ok(())
 }
 
+fn sqlite_recreate_table_destroy_if_exists_unsafe_new(tx: &rusqlite::Transaction, table_name: &str, schema: &IndexMap<SmolStr, tocs::tbl::AtomicType>) -> rusqlite::Result<()> {
+    tx.execute(&format!("drop table if exists '{}'", table_name), [])?;
+    tx.execute(
+        &format!(
+            "create table '{}' (\nfile,\n{}\n)",
+            table_name,
+            schema.iter().map(|(cname, ty)| format!("  '{}' {}", cname, ty.sqlite_type())).collect::<std::vec::Vec<_>>().join(",\n")
+        ),
+        [],
+    )?;
+    Ok(())
+}
+
 fn sqlite_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filename: &str, x: &T) -> rusqlite::Result<usize> {
     let mut vals: std::vec::Vec<&dyn rusqlite::ToSql> = vec![&filename];
     let x_vals = x.sqlite_to_tup();
@@ -409,6 +334,20 @@ fn sqlite_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filen
         "insert into {} values ({})",
         T::sqlite_table(),
         (0..vals.len()).map(|i| format!("?{}", i + 1)).collect::<std::vec::Vec<_>>().join(", ")
+    );
+    let mut insert = tx.prepare_cached(&s)?;
+    insert.execute(&*vals)
+}
+
+fn sqlite_insert_unsafe_new(tx: &rusqlite::Transaction, table: &str, filename: &str, values: &indexmap::IndexMap<SmolStr, tocs::tbl::AtomicValue>) -> rusqlite::Result<usize> {
+    let mut vals: std::vec::Vec<&dyn rusqlite::ToSql> = vec![&filename];
+    for x in values.values() {
+        vals.push(x);
+    }
+    let s = format!(
+        "insert into '{}' values ({})",
+        table,
+        std::iter::repeat("?").take(vals.len()).collect::<std::vec::Vec<_>>().join(", "),
     );
     let mut insert = tx.prepare_cached(&s)?;
     insert.execute(&*vals)

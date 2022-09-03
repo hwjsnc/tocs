@@ -6,6 +6,9 @@ use indexmap::IndexMap;
 use smol_str::SmolStr;
 use smallvec::SmallVec;
 
+#[cfg(feature = "rusqlite")]
+use rusqlite::types::FromSql as _;
+
 // Generic helpers
 
 pub struct WarningLogger<W> {
@@ -333,54 +336,60 @@ pub fn atomic_type_describe(t: &AtomicType) -> &'static str {
 
 // conversion to and from sqlite
 
-#[cfg(feature = "sqlite")]
+#[cfg(feature = "rusqlite")]
 impl rusqlite::ToSql for AtomicValue {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::ToSqlOutput<'_>> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         match self {
-            AtomicValue::I8(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
-            AtomicValue::I16(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
-            AtomicValue::I32(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
-            AtomicValue::U8(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
-            AtomicValue::U16(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
-            AtomicValue::U32(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
-            AtomicValue::F64(x) => {
+            AtomicValue::I8(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer((*x).into()))),
+            AtomicValue::I16(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer((*x).into()))),
+            AtomicValue::I32(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer((*x).into()))),
+            AtomicValue::U8(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer((*x).into()))),
+            AtomicValue::U16(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer((*x).into()))),
+            AtomicValue::U32(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer((*x).into()))),
+            AtomicValue::F32(x) => {
+                // We want "nice" numbers when editing the f32 as f64, so we go through String which implements a pretty-print algorithm with appropriate rounding.
+                // This conversion is no less accurate than "as" conversion, only slower, but this shouldn't matter.
                 let s = x.to_string();
-                let y = f64::try_from(s).expect("f32 string should parse as f64");
+                let y = str::parse::<f64>(&s).expect("f32 string should parse as f64");
                 Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Real(y)))
             }
-            AtomicValue::CUtf8 => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::Value::Text(s))),
-            AtomicValue::X(data) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::Value::Blob(&data))),
+            AtomicValue::CUtf8(s) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::ValueRef::Text(s.as_ref()))),
+            AtomicValue::X(data) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::ValueRef::Blob(&data))),
         }
     }
 }
 
-#[cfg(feature = "sqlite")]
+#[cfg(feature = "rusqlite")]
 /// attempt to convert a sqlite type to a given atomic type.
 ///
 /// The blob size is intentionally ignored in the type (i.e. if the blob length does not match the length of the input value, this issue is ignored.)
 ///
 /// Integer/float conversion to blob is currently unspecified.
-pub fn from_sql_value_ref(ty: AtomicType, val: rusqlite::types::ValueRef<'_>) -> rusqlite::FromSqlResult<Self> {
-    match self {
-        AtomicType::I8 => AtomicValue::I8(i8::column_result(val)?),
-        AtomicType::I16 => AtomicValue::I16(i16::column_result(val)?),
-        AtomicType::I32 => AtomicValue::I32(i32::column_result(val)?),
-        AtomicType::U8 => AtomicValue::U8(u8::column_result(val)?),
-        AtomicType::U16 => AtomicValue::U16(u16::column_result(val)?),
-        AtomicType::U32 => AtomicValue::U32(u32::column_result(val)?),
-        AtomicType::F32 => AtomicValue::F32(f32::column_result(val)?),
-        AtomicType::CUtf8 => AtomicValue::CUtf8(str::column_result(val)?.into()),
-        AtomicType::X(_) => AtomicValue::X(std::vec::Vec::<u8>::column_result(val)?.into()),
+impl AtomicValue {
+    pub fn from_sql_value_ref(ty: AtomicType, val: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        match ty {
+            AtomicType::I8 => i8::column_result(val).map(AtomicValue::I8),
+            AtomicType::I16 => i16::column_result(val).map(AtomicValue::I16),
+            AtomicType::I32 => i32::column_result(val).map(AtomicValue::I32),
+            AtomicType::U8 => u8::column_result(val).map(AtomicValue::U8),
+            AtomicType::U16 => u16::column_result(val).map(AtomicValue::U16),
+            AtomicType::U32 => u32::column_result(val).map(AtomicValue::U32),
+            AtomicType::F32 => f32::column_result(val).map(AtomicValue::F32),
+            AtomicType::CUtf8 => val.as_str().map(SmolStr::from).map(AtomicValue::CUtf8),
+            AtomicType::X(_) => val.as_blob().map(SmallBuf::from).map(AtomicValue::X),
+        }
     }
 }
 
-#[cfg(feature = "sqlite")]
-pub fn sqlite_type(t: &tocs::tbl::AtomicType) -> &'static str {
-    match t {
-        tocs::tbl::AtomicType::I8 | tocs::tbl::AtomicType::I16 | tocs::tbl::AtomicType::I32 | tocs::tbl::AtomicType::U8 | tocs::tbl::AtomicType::U16 | tocs::tbl::AtomicType::U32 => "int",
-        tocs::tbl::AtomicType::F32 => "real",
-        tocs::tbl::AtomicType::CUtf8 => "text",
-        tocs::tbl::AtomicType::X(_) => "blob",
+#[cfg(feature = "rusqlite")]
+impl AtomicType {
+    pub fn sqlite_type(&self) -> &'static str {
+        match self {
+            AtomicType::I8 | AtomicType::I16 | AtomicType::I32 | AtomicType::U8 | AtomicType::U16 | AtomicType::U32 => "int",
+            AtomicType::F32 => "real",
+            AtomicType::CUtf8 => "text",
+            AtomicType::X(_) => "blob",
+        }
     }
 }
 
