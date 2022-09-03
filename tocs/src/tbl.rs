@@ -4,6 +4,7 @@ use std::str::FromStr as _;
 
 use indexmap::IndexMap;
 use smol_str::SmolStr;
+use smallvec::SmallVec;
 
 // Generic helpers
 
@@ -111,9 +112,11 @@ pub enum AtomicType {
     X(usize),
 }
 
+pub type SmallBuf = SmallVec<[u8; 32]>;
+
 // Atomic values - values corresponding to the atomic types
 #[derive(Clone, Debug)]
-pub enum AtomicValue<S> {
+pub enum AtomicValue {
     I8(i8),
     I16(i16),
     I32(i32),
@@ -121,8 +124,8 @@ pub enum AtomicValue<S> {
     U16(u16),
     U32(u32),
     F32(f32),
-    CUtf8(S),
-    X(std::vec::Vec<u8>),
+    CUtf8(SmolStr),
+    X(SmallBuf),
 }
 
 // Type -> Atomic Types (unrolling sequences, dereferencing common structures such as effects)
@@ -265,7 +268,7 @@ pub enum AtomicValueFromStringError {
     LengthMismatch { expected: usize, actual: usize },
 }
 
-pub fn try_atomic_value_from_str(t: &AtomicType, s: &str) -> Result<AtomicValue<String>, AtomicValueFromStringError> {
+pub fn try_atomic_value_from_str(t: &AtomicType, s: &str) -> Result<AtomicValue, AtomicValueFromStringError> {
     match t {
         AtomicType::I8 => Ok(AtomicValue::I8(i8::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
         AtomicType::I16 => Ok(AtomicValue::I16(i16::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
@@ -274,19 +277,19 @@ pub fn try_atomic_value_from_str(t: &AtomicType, s: &str) -> Result<AtomicValue<
         AtomicType::U16 => Ok(AtomicValue::U16(u16::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
         AtomicType::U32 => Ok(AtomicValue::U32(u32::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
         AtomicType::F32 => Ok(AtomicValue::F32(f32::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
-        AtomicType::CUtf8 => Ok(AtomicValue::CUtf8(s.to_string())),
+        AtomicType::CUtf8 => Ok(AtomicValue::CUtf8(SmolStr::from(s))),
         AtomicType::X(n) => {
-            let data = std::vec::Vec::<u8>::from_hex(s).map_err(|_| AtomicValueFromStringError::Generic)?;
+            let data = std::vec::Vec::<u8>::from_hex(s).map_err(|_| AtomicValueFromStringError::Generic)?; // TODO: SmallVec<_> from hex
             if data.len() != *n {
                 Err(AtomicValueFromStringError::LengthMismatch { expected: *n, actual: data.len() })
             } else {
-                Ok(AtomicValue::X(data))
+                Ok(AtomicValue::X(data.into()))
             }
         }
     }
 }
 
-pub fn atomic_value_to_string<S: AsRef<str>>(v: &AtomicValue<S>) -> String {
+pub fn atomic_value_to_string(v: &AtomicValue) -> impl AsRef<str> {
     match v {
         AtomicValue::I8(x) => x.to_string(),
         AtomicValue::I16(x) => x.to_string(),
@@ -295,12 +298,12 @@ pub fn atomic_value_to_string<S: AsRef<str>>(v: &AtomicValue<S>) -> String {
         AtomicValue::U16(x) => x.to_string(),
         AtomicValue::U32(x) => x.to_string(),
         AtomicValue::F32(x) => x.to_string(),
-        AtomicValue::CUtf8(x) => x.as_ref().to_string(),
+        AtomicValue::CUtf8(x) => x.to_string(),
         AtomicValue::X(x) => hex::encode(x),
     }
 }
 
-pub fn atomic_type<S>(v: &AtomicValue<S>) -> AtomicType {
+pub fn atomic_type(v: &AtomicValue) -> AtomicType {
     match v {
         AtomicValue::I8(_) => AtomicType::I8,
         AtomicValue::I16(_) => AtomicType::I16,
@@ -328,9 +331,63 @@ pub fn atomic_type_describe(t: &AtomicType) -> &'static str {
     }
 }
 
+// conversion to and from sqlite
+
+#[cfg(feature = "sqlite")]
+impl rusqlite::ToSql for AtomicValue {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::ToSqlOutput<'_>> {
+        match self {
+            AtomicValue::I8(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
+            AtomicValue::I16(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
+            AtomicValue::I32(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
+            AtomicValue::U8(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
+            AtomicValue::U16(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
+            AtomicValue::U32(x) => Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Integer(x.into()))),
+            AtomicValue::F64(x) => {
+                let s = x.to_string();
+                let y = f64::try_from(s).expect("f32 string should parse as f64");
+                Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Real(y)))
+            }
+            AtomicValue::CUtf8 => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::Value::Text(s))),
+            AtomicValue::X(data) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::Value::Blob(&data))),
+        }
+    }
+}
+
+#[cfg(feature = "sqlite")]
+/// attempt to convert a sqlite type to a given atomic type.
+///
+/// The blob size is intentionally ignored in the type (i.e. if the blob length does not match the length of the input value, this issue is ignored.)
+///
+/// Integer/float conversion to blob is currently unspecified.
+pub fn from_sql_value_ref(ty: AtomicType, val: rusqlite::types::ValueRef<'_>) -> rusqlite::FromSqlResult<Self> {
+    match self {
+        AtomicType::I8 => AtomicValue::I8(i8::column_result(val)?),
+        AtomicType::I16 => AtomicValue::I16(i16::column_result(val)?),
+        AtomicType::I32 => AtomicValue::I32(i32::column_result(val)?),
+        AtomicType::U8 => AtomicValue::U8(u8::column_result(val)?),
+        AtomicType::U16 => AtomicValue::U16(u16::column_result(val)?),
+        AtomicType::U32 => AtomicValue::U32(u32::column_result(val)?),
+        AtomicType::F32 => AtomicValue::F32(f32::column_result(val)?),
+        AtomicType::CUtf8 => AtomicValue::CUtf8(str::column_result(val)?.into()),
+        AtomicType::X(_) => AtomicValue::X(std::vec::Vec::<u8>::column_result(val)?.into()),
+    }
+}
+
+#[cfg(feature = "sqlite")]
+pub fn sqlite_type(t: &tocs::tbl::AtomicType) -> &'static str {
+    match t {
+        tocs::tbl::AtomicType::I8 | tocs::tbl::AtomicType::I16 | tocs::tbl::AtomicType::I32 | tocs::tbl::AtomicType::U8 | tocs::tbl::AtomicType::U16 | tocs::tbl::AtomicType::U32 => "int",
+        tocs::tbl::AtomicType::F32 => "real",
+        tocs::tbl::AtomicType::CUtf8 => "text",
+        tocs::tbl::AtomicType::X(_) => "blob",
+    }
+}
+
+
 // Serialize, i.e. generate tbl data
 
-pub fn atomic_schema_serialization_length<S: AsRef<str>>(schema: &IndexMap<SmolStr, AtomicValue<S>>) -> Result<u16, ()> {
+pub fn atomic_schema_serialization_length(schema: &IndexMap<SmolStr, AtomicValue>) -> Result<u16, ()> {
     schema.iter().map(|(_, v)| atomic_value_serialization_length(v)).fold(Ok(0), |a, b| {
         let x = a?;
         let y = b?;
@@ -338,7 +395,7 @@ pub fn atomic_schema_serialization_length<S: AsRef<str>>(schema: &IndexMap<SmolS
     })
 }
 
-pub fn atomic_value_serialization_length<S: AsRef<str>>(v: &AtomicValue<S>) -> Result<u16, ()> {
+pub fn atomic_value_serialization_length(v: &AtomicValue) -> Result<u16, ()> {
     match v {
         AtomicValue::I8(_) => Ok(1),
         AtomicValue::I16(_) => Ok(2),
@@ -347,7 +404,7 @@ pub fn atomic_value_serialization_length<S: AsRef<str>>(v: &AtomicValue<S>) -> R
         AtomicValue::U16(_) => Ok(2),
         AtomicValue::U32(_) => Ok(4),
         AtomicValue::F32(_) => Ok(4),
-        AtomicValue::CUtf8(s) => (s.as_ref().bytes().len() + 1).try_into().map_err(|_| ()),
+        AtomicValue::CUtf8(s) => (s.len() + 1).try_into().map_err(|_| ()),
         AtomicValue::X(data) => data.len().try_into().map_err(|_| ()),
     }
 }
@@ -378,7 +435,7 @@ pub fn serialize_c_utf8<F: std::io::Write>(f: &mut F, s: &str) -> Result<usize, 
     Ok(written)
 }
 
-pub fn serialize_atomic_value<S: AsRef<str>, F: std::io::Write>(f: &mut F, v: &AtomicValue<S>) -> Result<usize, std::io::Error> {
+pub fn serialize_atomic_value<F: std::io::Write>(f: &mut F, v: &AtomicValue) -> Result<usize, std::io::Error> {
     match v {
         AtomicValue::I8(x) => f.write(&x.to_le_bytes()),
         AtomicValue::I16(x) => f.write(&x.to_le_bytes()),
@@ -392,7 +449,7 @@ pub fn serialize_atomic_value<S: AsRef<str>, F: std::io::Write>(f: &mut F, v: &A
     }
 }
 
-pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header: &str, attributes: &IndexMap<SmolStr, AtomicValue<S>>) -> Result<usize, SerializeError> {
+pub fn nf1_schema_serialize<F: std::io::Write>(f: &mut F, header: &str, attributes: &IndexMap<SmolStr, AtomicValue>) -> Result<usize, SerializeError> {
     let mut written = 0;
     written += serialize_c_utf8(f, header).map_err(SerializeError::IOError)?;
     let length = atomic_schema_serialization_length(attributes).map_err(|()| SerializeError::EntryDataTooLong)?;
@@ -403,7 +460,7 @@ pub fn nf1_schema_serialize<S: AsRef<str>, F: std::io::Write>(f: &mut F, header:
     Ok(written)
 }
 
-pub fn serialize_tbl_v1<F: std::io::Write>(f: &mut F, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn serialize_tbl_v1<F: std::io::Write>(f: &mut F, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue>)]) -> Result<usize, SerializeError> {
     let mut written = 0;
     let number_of_entries: Result<u16, _> = entries.len().try_into();
     match number_of_entries {
@@ -421,7 +478,7 @@ pub fn serialize_tbl_v1<F: std::io::Write>(f: &mut F, entries: &[(SmolStr, Index
     Ok(written)
 }
 
-pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[SmolStr], entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[SmolStr], entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue>)]) -> Result<usize, SerializeError> {
     let mut written = 0;
     let number_of_entries: Result<u16, _> = entries.len().try_into();
     match number_of_entries {
@@ -449,14 +506,14 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[SmolStr], entri
     Ok(written)
 }
 
-pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue>)]) -> Result<usize, SerializeError> {
     let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
     let written = serialize_tbl_v1(&mut f, entries)?;
     f.flush().map_err(SerializeError::IOError)?;
     Ok(written)
 }
 
-pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[SmolStr], entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)]) -> Result<usize, SerializeError> {
+pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[SmolStr], entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue>)]) -> Result<usize, SerializeError> {
     let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
     let written = serialize_tbl_v2(&mut f, headers, entries)?;
     f.flush().map_err(SerializeError::IOError)?;
@@ -471,7 +528,7 @@ pub enum DeserializeErrorDetail {
     UTF8(std::str::Utf8Error, String),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
     DuplicateHeader(SmolStr),
-    EntryHeaderNotInTblHeader { missing: String },
+    EntryHeaderNotInTblHeader { missing: SmolStr },
     EntryCountDoesNotMatchHeaderEntry { header: SmolStr, expected: u32, actual: usize },
     EntryDataLengthMismatch { expected: u16, actual: Option<u16> },
     TrailingData,
@@ -580,8 +637,8 @@ fn read_bytes<const N: usize, F: std::io::Read>(f: &mut F) -> Result<[u8; N], st
     Ok(buf)
 }
 
-fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>, strict: bool) -> Result<String, DeserializeError> {
-    let mut buf: smallvec::SmallVec<[u8; 32]> = smallvec::SmallVec::new();
+fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>, strict: bool) -> Result<SmolStr, DeserializeError> {
+    let mut buf: SmallBuf = smallvec::SmallVec::new();
     loop {
         let x = read_byte(f).map_err(|e| DeserializeError {
             detail: DeserializeErrorDetail::IO(e),
@@ -595,7 +652,7 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mu
         }
     }
     match std::str::from_utf8(buf.as_ref()) {
-        Ok(s) => Ok(s.to_string()),
+        Ok(s) => Ok(SmolStr::from(s)),
         Err(utf8err) => {
             let s = String::from_utf8_lossy(buf.as_ref());
             let position = (|| {
@@ -615,13 +672,13 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mu
             } else {
                 log::warn!("{e}");
                 warnings.log(e);
-                Ok(s.into_owned())
+                Ok(SmolStr::from(s))
             }
         }
     }
 }
 
-pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek>(f: &mut F, log: &mut WarningLogger<DeserializeError>, strict: bool, t: &AtomicType) -> Result<AtomicValue<String>, DeserializeError> {
+pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek>(f: &mut F, log: &mut WarningLogger<DeserializeError>, strict: bool, t: &AtomicType) -> Result<AtomicValue, DeserializeError> {
     let wrap_err = |e: std::io::Error, f: &mut F| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: f.stream_position().ok(),
@@ -637,7 +694,10 @@ pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek>(f: &mut F, log
         AtomicType::F32 => AtomicValue::F32(f32::from_le_bytes(read_bytes(f).map_err(|e| wrap_err(e, f))?)),
         AtomicType::CUtf8 => AtomicValue::CUtf8(deserialize_c_utf8(f, log, strict)?),
         AtomicType::X(n) => {
-            let mut buf = vec![0; *n];
+            let mut buf = SmallBuf::with_capacity(*n);
+            for _ in 0..*n {
+                buf.push(0);
+            }
             f.read_exact(&mut buf).map_err(|e| wrap_err(e, f))?;
             AtomicValue::X(buf)
         }
@@ -703,7 +763,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek>(f: &mut F, log: &
             context: vec![DeserializeErrorPosition::TblHeaderEntry { entry_number: i }],
         })?);
         log::trace!("header '{}': {} entries", hdr, count);
-        let entry = header_counts.entry(SmolStr::new(hdr));
+        let entry = header_counts.entry(hdr);
         match entry {
             indexmap::map::Entry::Occupied(mut e) => {
                 let hdr = e.key();
@@ -735,7 +795,7 @@ pub fn deserialize_entry_data<F: std::io::Read + std::io::Seek>(
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
     schema: &IndexMap<SmolStr, AtomicType>,
-) -> Result<IndexMap<SmolStr, AtomicValue<String>>, DeserializeError> {
+) -> Result<IndexMap<SmolStr, AtomicValue>, DeserializeError> {
     // TODO: use smol_str for index?
     let mut values = IndexMap::new();
     for (attr, ty) in schema.iter() {
@@ -755,7 +815,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek>(
     strict: bool,
     header_counts: Option<&IndexMap<SmolStr, u32>>,
     schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>), DeserializeError> {
+) -> Result<(SmolStr, IndexMap<SmolStr, AtomicValue>), DeserializeError> {
     // read header name and check that it's ok (if necessary)
     let hdr = deserialize_c_utf8(f, log, strict).map_err(|mut e| {
         e.context.push(DeserializeErrorPosition::EntryHeader);
@@ -799,7 +859,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek>(
             e.context.push(DeserializeErrorPosition::EntryData);
             e
         })?;
-        (SmolStr::new(hdr), [(SmolStr::new("data"), x)].into_iter().collect())
+        (hdr, [(SmolStr::new("data"), x)].into_iter().collect())
     };
     let actual_len = atomic_schema_serialization_length(&data).ok();
     if actual_len != Some(len) {
@@ -826,7 +886,7 @@ fn deserialize_all_entries<F: std::io::Read + std::io::Seek>(
     strict: bool,
     header_counts: Option<&IndexMap<SmolStr, u32>>,
     schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>, DeserializeError> {
+) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>, DeserializeError> {
     let mut entries = std::vec::Vec::new();
 
     // parse number of entries equal to tbl header
@@ -884,7 +944,7 @@ pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek>(
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
     schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>, DeserializeError> {
+) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>, DeserializeError> {
     log::debug!("parsing tbl");
     let number_of_entries = deserialize_header_v1(f)?;
     deserialize_all_entries(f, log, number_of_entries, strict, None, schemas)
@@ -895,7 +955,7 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek>(
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
     schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<(IndexMap<SmolStr, u32>, std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>), DeserializeError> {
+) -> Result<(IndexMap<SmolStr, u32>, std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>), DeserializeError> {
     log::debug!("parsing tbl");
     let (number_of_entries, header_counts) = deserialize_header_v2(f, log, strict)?;
     let entries = deserialize_all_entries(f, log, number_of_entries, strict, Some(&header_counts), schemas)?;
@@ -907,7 +967,7 @@ pub fn load_file_v1<P: AsRef<std::path::Path>>(
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
     schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>, DeserializeError> {
+) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>, DeserializeError> {
     let mut f = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: None,
@@ -921,7 +981,7 @@ pub fn load_file_v2<P: AsRef<std::path::Path>>(
     log: &mut WarningLogger<DeserializeError>,
     strict: bool,
     schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<(IndexMap<SmolStr, u32>, std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue<String>>)>), DeserializeError> {
+) -> Result<(IndexMap<SmolStr, u32>, std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>), DeserializeError> {
     let mut f = std::fs::File::open(path).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: None,
@@ -993,7 +1053,7 @@ lazy_static::lazy_static! {
             ("model", Type::CUtf8),
             ("unknown_string", Type::CUtf8),
         ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-        (SmolStr::new("Bgm"), [
+        (SmolStr::new("bgm"), [
             ("id", Type::U16),
             ("track", Type::CUtf8),
             ("unknown_data", Type::X(2)),
@@ -1366,6 +1426,11 @@ lazy_static::lazy_static! {
             ("unknown_data", Type::X(167)),
             ("description", Type::CUtf8),
         ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSHelp"), [
+            ("unknown_short_1", Type::U16),
+            ("unknown_short_2", Type::U16),
+            ("text", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
         (SmolStr::new("QSTitle"), [
             ("unknown_short", Type::U16),
             ("unknown_byte", Type::U8),
@@ -1646,6 +1711,10 @@ lazy_static::lazy_static! {
             ("id", Type::U16),
             ("text", Type::CUtf8),
         ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("TextTableData"), [
+            ("id", Type::U16),
+            ("text", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
         (SmolStr::new("voice"), [
             ("id", Type::U16),
             ("unknown_byte", Type::U8),
@@ -1706,7 +1775,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
+                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                     let _ = serialize_tbl_v1(&mut serialized, &e).unwrap();
                     serialized.into_inner()
                 };
@@ -1738,7 +1807,7 @@ mod test {
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let entries = deserialize_tbl_v1(&mut f, &mut logger, false, &SCHEMAS_CS1_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
+                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                 let _ = serialize_tbl_v1(&mut serialized, &e).unwrap();
                 // no comparison here
             }
@@ -1769,7 +1838,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
+                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                     let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                     serialized.into_inner()
@@ -1802,7 +1871,7 @@ mod test {
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &SCHEMAS_CS2_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
+                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                 let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                 let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                 // no comparison here
@@ -1829,7 +1898,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
+                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                     let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                     serialized.into_inner()
@@ -1857,7 +1926,7 @@ mod test {
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &SCHEMAS_CS3_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue<String>>)] = &entries;
+                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                 let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                 let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
                 // no comparison here

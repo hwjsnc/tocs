@@ -13,7 +13,7 @@ use indexmap::IndexMap;
 use smol_str::SmolStr;
 
 type Attributes = IndexMap<SmolStr, tocs::tbl::AtomicType>;
-type AttributeValues = IndexMap<SmolStr, tocs::tbl::AtomicValue<String>>;
+type AttributeValues = IndexMap<SmolStr, tocs::tbl::AtomicValue>;
 
 // Given rows in any order, collect all rows with the same header together
 fn partition_entries_with_headers(headers: IndexMap<SmolStr, u32>, entries: std::vec::Vec<(SmolStr, AttributeValues)>) -> IndexMap<SmolStr, std::vec::Vec<AttributeValues>> {
@@ -400,7 +400,7 @@ impl App {
                     let mut row_height = 1;
                     for row in entries {
                         for (i, (_, val)) in row.iter().enumerate() {
-                            let (w, h) = fltk::draw::measure(&tocs::tbl::atomic_value_to_string(val), false);
+                            let (w, h) = fltk::draw::measure(tocs::tbl::atomic_value_to_string(val).as_ref(), false);
                             column_widths[i] = std::cmp::max(column_widths[i], w);
                             row_height = std::cmp::max(row_height, h);
                         }
@@ -422,7 +422,7 @@ impl App {
                                 // copy table value to input
                                 log::debug!("double click on cell");
                                 let mut state = self.state.lock().unwrap();
-                                self.widgets.input.set_value(&tocs::tbl::atomic_value_to_string(get_cell_value(&mut *state, row, col).unwrap()));
+                                self.widgets.input.set_value(tocs::tbl::atomic_value_to_string(get_cell_value(&mut *state, row, col).unwrap()).as_ref());
                                 self.widgets.input.take_focus().unwrap();
                                 self.widgets.input.redraw();
                             }
@@ -443,11 +443,11 @@ impl App {
                             let mut state = self.state.lock().unwrap();
                             let text = input.value();
                             let cell_value = get_cell_value(&mut *state, row, col).unwrap();
-                            let ty = &tocs::tbl::atomic_type(cell_value);
-                            if let Ok(value) = tocs::tbl::try_atomic_value_from_str(ty, &text) {
+                            let ty = tocs::tbl::atomic_type(cell_value);
+                            if let Ok(value) = tocs::tbl::try_atomic_value_from_str(&ty, &text) {
                                 *cell_value = value;
                             } else {
-                                fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", tocs::tbl::atomic_type_describe(ty)));
+                                fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", tocs::tbl::atomic_type_describe(&ty)));
                             }
                         }
                         table.redraw();
@@ -491,7 +491,7 @@ impl App {
     }
 }
 
-fn get_cell_value(state: &mut AppData, row: i32, col: i32) -> Option<&mut tocs::tbl::AtomicValue<String>> {
+fn get_cell_value(state: &mut AppData, row: i32, col: i32) -> Option<&mut tocs::tbl::AtomicValue> {
     let row: usize = row.try_into().unwrap();
     let col: usize = col.try_into().unwrap();
     let AppData { active, entries, .. } = state;
@@ -588,7 +588,7 @@ pub enum CellType {
     Changed,  // cell was changed since last save
 }
 
-fn draw_data(value: &tocs::tbl::AtomicValue<String>, x: i32, y: i32, w: i32, h: i32, celltype: CellType) {
+fn draw_data(value: &tocs::tbl::AtomicValue, x: i32, y: i32, w: i32, h: i32, celltype: CellType) {
     fltk::draw::push_clip(x, y, w, h);
     fltk::draw::set_draw_color(fltk::enums::Color::from_u32(match celltype {
         CellType::OddRow => 0x00_ff_ff_ff,
@@ -615,6 +615,6 @@ fn draw_data(value: &tocs::tbl::AtomicValue<String>, x: i32, y: i32, w: i32, h: 
 
     let (x, w) = if w > 5 { (x + 2, w - 4) } else { (x, w) };
     let (y, h) = if h > 5 { (y + 2, h - 4) } else { (y, h) };
-    fltk::draw::draw_text2(&tocs::tbl::atomic_value_to_string(value), x, y, w, h, text_alignment);
+    fltk::draw::draw_text2(tocs::tbl::atomic_value_to_string(value).as_ref(), x, y, w, h, text_alignment);
     fltk::draw::pop_clip();
 }
