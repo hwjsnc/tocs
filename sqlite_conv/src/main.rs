@@ -73,6 +73,8 @@ impl std::str::FromStr for Game {
 }
 
 pub fn main() {
+    simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
+
     match Args::parse() {
         Args::To_Sql { tbl_path, db_path, game } => {
             to_new_db(&tbl_path, &db_path, game);
@@ -120,6 +122,7 @@ fn to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: Game
         let direntry = direntry.map_err(|e| format!("error walking directory: {e}")).unwrap();
         let path = direntry.path();
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
+            log::info!("reading file {}", path.display());
             let path_for_db = path.strip_prefix(tblpath.as_ref()).expect("child path should have parent as prefix").display().to_string();
             let data = std::fs::read(path).map_err(|e| format!("couldn't read tbl file: {e}")).unwrap();
             let mut logger = tocs::tbl::WarningLogger::new();
@@ -232,7 +235,7 @@ fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bo
         .map(|row| row.expect("sqlite_schema row"))
         .collect();
     for table in tables.iter() {
-        println!("Reading table {table}");
+        log::info!("Reading table {table}");
         match table.as_str() {
             "generic" => {
                 for (s, e) in sqlite_read_table_unsafe_or_panic::<cs3_entry_data::Generic>(&tx, table) {
@@ -608,11 +611,11 @@ fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bo
 
     // write the tbls
     for (filename, data) in serialized.into_iter() {
-        println!("Writing {}", filename.display());
+        log::info!("Writing {}", filename.display());
         if let Some(parent) = filename.parent() {
             match std::fs::create_dir_all(parent) {
                 Ok(()) => (),
-                Err(e) => println!("Couldn't create parent path of tbl {}: {}", filename.display(), e),
+                Err(e) => panic!("Couldn't create parent path of tbl {}: {}", filename.display(), e),
             };
         }
         let mut options = std::fs::OpenOptions::new();

@@ -368,7 +368,9 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "indexmap",
+ "log",
  "rusqlite",
+ "simple_logger",
  "smol_str",
  "sqliteio",
  "sqliteio_derive",
