@@ -115,7 +115,7 @@ pub enum AtomicType {
     X(usize),
 }
 
-pub type SmallBuf = SmallVec<[u8; 32]>;
+pub type SmallBuf = SmallVec<[u8; 16]>;
 
 // Atomic values - values corresponding to the atomic types
 #[derive(Clone, Debug)]
@@ -647,7 +647,7 @@ fn read_bytes<const N: usize, F: std::io::Read>(f: &mut F) -> Result<[u8; N], st
 }
 
 fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>, strict: bool) -> Result<SmolStr, DeserializeError> {
-    let mut buf: SmallBuf = smallvec::SmallVec::new();
+    let mut buf: smallvec::SmallVec<[u8; 256]> = smallvec::SmallVec::new();
     loop {
         let x = read_byte(f).map_err(|e| DeserializeError {
             detail: DeserializeErrorDetail::IO(e),
