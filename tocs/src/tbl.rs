@@ -3,8 +3,8 @@ use std::io::Write as _;
 use std::str::FromStr as _;
 
 use indexmap::IndexMap;
-use smol_str::SmolStr;
 use smallvec::SmallVec;
+use smol_str::SmolStr;
 
 #[cfg(feature = "rusqlite")]
 use rusqlite::types::FromSql as _;
@@ -392,7 +392,6 @@ impl AtomicType {
         }
     }
 }
-
 
 // Serialize, i.e. generate tbl data
 
@@ -1003,8 +1002,240 @@ pub fn load_file_v2<P: AsRef<std::path::Path>>(
 
 lazy_static::lazy_static! {
     pub static ref SCHEMAS_CS1 : IndexMap<SmolStr, IndexMap<SmolStr, Type>> = [
+        (SmolStr::new("ActiveVoiceTableData"), [
+            ("unknown_short_1", Type::U16),
+            ("unknown_string_1", Type::CUtf8),
+            ("unknown_data_1", Type::X(4)),
+            ("unknown_string_2", Type::CUtf8),
+            ("unknown_float_1", Type::F32),
+            ("unknown_float_2", Type::F32),
+            ("unknown_data", Type::X(12)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("AttachTableData"), [
+            ("character", Type::U16),
+            ("unknown_data", Type::X(20)),
+            ("model", Type::CUtf8),
+            ("unknown_string", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("bgm"), [
+            ("id", Type::U16),
+            ("track", Type::CUtf8),
+            ("unknown_data", Type::X(2)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("char_revise"), [
+            ("char", Type::CUtf8),
+            ("unknown_prob_hp", Type::U16),
+            ("unknown_prob_str", Type::U16),
+            ("unknown_prob_def", Type::U16),
+            ("unknown_prob_ats", Type::U16),
+            ("unknown_prob_adf", Type::U16),
+            ("unknown_prob_spd", Type::U16),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("dlc"), [
+            ("id", Type::I16),
+            ("unknown_text_1", Type::CUtf8),
+            ("unknown_text_2", Type::CUtf8),
+            ("name", Type::CUtf8),
+            ("description", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("FaceSupplementTableData"), [
+            ("character", Type::I16),
+            ("unknown_data_1", Type::X(16)),
+            ("uknown_string", Type::CUtf8),
+            ("unknown_data_2", Type::X(8)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("FootStepData"), [
+            ("unknown_text", Type::CUtf8),
+            ("unknown_byte", Type::U8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("item"), [
+            ("id", Type::U16),
+            ("character_restriction", Type::U16),
+            ("flags", Type::CUtf8),
+            ("unknown_data", Type::X(44)),
+            ("unknown_short", Type::U16),
+            ("name", Type::CUtf8),
+            ("description", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("LinkAbList"), [
+            ("unknown_data", Type::X(5)),
+            ("name", Type::CUtf8),
+            ("description", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MG02Text"), [
+            ("character", Type::I16),
+            ("id", Type::U16),
+            ("unknown_short", Type::U16),
+            ("text", Type::CUtf8),
+            ("unknown_data", Type::X(6)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("magic"), [
+            ("id", Type::U16),
+            ("character_restriction", Type::U16),
+            ("flags", Type::CUtf8),
+            ("unknown_data", Type::X(24)),
+            ("animation", Type::CUtf8),
+            ("name", Type::CUtf8),
+            ("description", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MapJumpData"), [
+            ("unknown_data_1", Type::X(4)),
+            ("name", Type::CUtf8),
+            ("unknown_data_2", Type::X(4)),
+            ("unknown_string_1", Type::CUtf8),
+            ("unknown_string_2", Type::CUtf8),
+            ("unknown_data_3", Type::X(28)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("MasterQuartzMemo"), [
+            ("item_id", Type::I16),
+            ("memo_id", Type::I16),
+            ("text", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("NameTableData"), [
+            ("character", Type::U16),
+            ("name", Type::CUtf8),
+            ("unknown_string_1", Type::CUtf8),
+            ("unknown_string_2", Type::CUtf8),
+            ("unknown_string_3", Type::CUtf8),
+            ("unknown_string_4", Type::CUtf8),
+            ("unknown_string_5", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("NaviTextData"), [
+            ("unknown_short", Type::U16),
+            ("text", Type::CUtf8),
+            ("unknown_data_2", Type::X(4)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("PlaceTableData"), [
+            ("unknown_short_1", Type::I16),
+            ("unknown_short_2", Type::I16),
+            ("map", Type::CUtf8),
+            ("name", Type::CUtf8),
+            ("unknown_string", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSBook"), [
+            ("unknown_short_1", Type::U16),
+            ("unknown_short_2", Type::U16),
+            ("title", Type::CUtf8),
+            ("unknown_text_1", Type::CUtf8),
+            ("unknown_text_2", Type::CUtf8),
+            ("unknown_data", Type::X(2)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSChapter"), [
+            ("id", Type::I16),
+            ("chapter", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSBookScp"), [
+            ("unknown_text", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSChar"), [
+            ("character", Type::U16),
+            ("unknown_data", Type::X(4)),
+            ("name_short", Type::CUtf8),
+            ("name_long", Type::CUtf8),
+            ("affiliation_short", Type::CUtf8),
+            ("note_1", Type::CUtf8),
+            ("note_2_title", Type::CUtf8),
+            ("note_2", Type::CUtf8),
+            ("note_3_title", Type::CUtf8),
+            ("note_3", Type::CUtf8),
+            ("note_4_title", Type::CUtf8),
+            ("note_4", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSCook"), [
+            ("regular_name", Type::CUtf8),
+            ("unknown_data_1", Type::X(34)),
+            ("superb", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
+            ("regular", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
+            ("peculiar", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
+            ("unique", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
+            ("unknown_data_2", Type::X(11)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSFish"), [
+            ("id", Type::U16),
+            ("name", Type::CUtf8),
+            ("unknown_data_1", Type::X(96)),
+            ("description", Type::CUtf8),
+            ("unknown_data_2", Type::X(62)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSHelp"), [
+            ("unknown_short_1", Type::U16),
+            ("unknown_short_2", Type::U16),
+            ("text", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSMons"), [
+            ("enemy", Type::CUtf8),
+            ("unknown_short_1", Type::I16),
+            ("unknown_short_2", Type::I16),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSText"), [
+            ("id", Type::U16),
+            ("unknown_byte_1", Type::U8),
+            ("text", Type::CUtf8),
+            ("unknown_byte_2", Type::U8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("QSTitle"), [
+            ("unknown_short", Type::I16),
+            ("unknown_byte", Type::U8),
+            ("title", Type::CUtf8),
+            ("persons", Type::CUtf8),
+            ("unknown_data", Type::X(9)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("ShopTitle"), [
+            ("unknown_short", Type::I16),
+            ("unknown_byte", Type::U8),
+            ("name", Type::CUtf8),
+            ("unknown_data", Type::X(8)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("status"), [
+            ("script", Type::CUtf8),
+            ("texture", Type::CUtf8),
+            ("model", Type::CUtf8),
+            ("unknown_float_1", Type::F32),
+            ("unknown_float_2", Type::F32),
+            ("unknown_float_3", Type::F32),
+            ("unknown_data", Type::X(100)),
+            ("flags", Type::CUtf8),
+            ("name", Type::CUtf8),
+            ("description", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("status_revise"), [
+            ("difficulty", Type::U16),
+            ("unknown_short_1", Type::U16),
+            ("unknown_short_2", Type::U16),
+            ("unknown_short_3", Type::U16),
+            ("unknown_short_4", Type::U16),
+            ("unknown_short_5", Type::U16),
+            ("unknown_short_6", Type::U16),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("TacticalBonus"), [
+            ("id", Type::U16),
+            ("name", Type::CUtf8),
+            ("bonus", Type::F32),
+            ("unknown_data", Type::X(2)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("TextTableData"), [
+            ("id", Type::U16),
+            ("text", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("text_lst"), [
+            ("id", Type::U16),
+            ("text", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+        (SmolStr::new("voice"), [
+            ("id", Type::U16),
+            ("unknown_byte", Type::U8),
+            ("clip", Type::CUtf8),
+            ("unknown_short", Type::U16),
+            ("unknown_float", Type::F32),
+            ("unknown_data", Type::X(8)),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     ].into_iter().collect();
     pub static ref SCHEMAS_CS1_COMMON : IndexMap<SmolStr, IndexMap<SmolStr, Type>> = [
+        (SmolStr::new("QSCookVariantDescription"), [
+            ("item_id", Type::I16),
+            ("description_1", Type::CUtf8),
+            ("description_2", Type::CUtf8),
+        ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     ].into_iter().collect();
 
     pub static ref SCHEMAS_CS2 : IndexMap<SmolStr, IndexMap<SmolStr, Type>> = [
