@@ -95,6 +95,7 @@ struct Widgets {
 pub struct AppData {
     entries: IndexMap<SmolStr, std::vec::Vec<AttributeValues>>,
     tbl_version: TblVersion,
+    path: std::path::PathBuf,
     active_entry_type: Option<SmolStr>,
     strict: bool,
     warnlog: tocs::tbl::WarningLogger<tocs::tbl::DeserializeError>,
@@ -143,12 +144,10 @@ impl App {
         load_button.emit(sender.clone(), Msg::SelectAndLoadFile);
         flex_row.set_size(&load_button, 140);
 
-        /*
         let mut save_button = fltk::button::Button::default().with_label("Save");
         save_button.emit(sender.clone(), Msg::SaveFile);
         save_button.set_color(fltk::enums::Color::FrameDefault.inactive());
         flex_row.set_size(&save_button, 60);
-        */
 
         let mut save_button = fltk::button::Button::default().with_label("Select && save file");
         save_button.emit(sender.clone(), Msg::SelectAndSaveFile);
@@ -300,6 +299,7 @@ impl App {
                     let AppData {
                         active_entry_type,
                         tbl_version,
+                        path: _,
                         entries,
                         strict,
                         warnlog,
@@ -313,9 +313,11 @@ impl App {
                     match result {
                         Ok(entries) => {
                             state.entries = entries;
+                            state.path = path
                         }
                         Err(e) => {
                             fltk::dialog::alert(400, 200, &format!("error loading file: {}", e));
+                            state.path = std::path::PathBuf::new();
                         }
                     }
                 }
@@ -323,7 +325,17 @@ impl App {
                 self.update(&Some(Msg::FileReloaded));
             }
             Some(Msg::SaveFile) => {
-                fltk::dialog::alert_default("saving in place is not yet implemented\nfor now, choose a different file to save to");
+                // try saving data to file
+                let state = self.state.lock().unwrap();
+                let result = save_tbl_file(&state.path, state.tbl_version, &state.entries);
+                match result {
+                    Ok(_) => {
+                        // TODO: clear changed cell flags
+                    }
+                    Err(e) => {
+                        fltk::dialog::alert_default(&format!("error saving file: {:?}", e));
+                    }
+                }
             }
             Some(Msg::SelectAndSaveFile) => {
                 // open a file browser dialog to select the file
@@ -341,7 +353,7 @@ impl App {
                         // TODO: clear changed cell flags
                     }
                     Err(e) => {
-                        fltk::dialog::alert_default(&format!("error loading file: {:?}", e));
+                        fltk::dialog::alert_default(&format!("error saving file: {:?}", e));
                     }
                 }
             }
@@ -351,6 +363,7 @@ impl App {
                     let AppData {
                         active_entry_type,
                         tbl_version: _,
+                        path: _,
                         entries,
                         strict: _,
                         warnlog,
@@ -544,6 +557,7 @@ fn main() {
             AppData {
                 active_entry_type,
                 tbl_version,
+                path,
                 entries,
                 strict: !nonstrict,
                 warnlog,
@@ -556,6 +570,7 @@ fn main() {
         _ => AppData {
             active_entry_type: None,
             tbl_version: TblVersion::CS1,
+            path: std::path::PathBuf::new(),
             entries: IndexMap::new(),
             strict: true,
             warnlog,

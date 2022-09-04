@@ -39,7 +39,7 @@ Double clicking a cell copies the content of that cell into the edit field.
 To edit the text in the edit field, make sure it is selected (e.g. by clicking on it).
 Once you're done editing, press Enter to copy the content of the edit field into the currently selected cell.
 
-If you want to save your changes, select "Select & save file" (saving in place is not yet supported).
+If you want to save your changes, select "Save" to overwrite the current file or "Select & save file" to write to a different file.
 
 ![A screenshot of `tbled` in action. Some UI elements are labeled](screenshot.png)
 
