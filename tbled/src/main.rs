@@ -93,9 +93,9 @@ struct Widgets {
 }
 
 pub struct AppData {
-    schemas: IndexMap<SmolStr, Attributes>,
     entries: IndexMap<SmolStr, std::vec::Vec<AttributeValues>>,
-    active: Option<SmolStr>,
+    tbl_version: TblVersion,
+    active_entry_type: Option<SmolStr>,
     strict: bool,
     warnlog: tocs::tbl::WarningLogger<tocs::tbl::DeserializeError>,
     //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
@@ -194,7 +194,7 @@ impl App {
             log::trace!("table draw");
             // called when the table is drawn (both the first time and due to events)
             let state = state_clone.lock().unwrap();
-            let header = if let Some(hdr) = state.active.as_ref() {
+            let header = if let Some(hdr) = state.active_entry_type.as_ref() {
                 hdr
             } else {
                 return;
@@ -298,14 +298,14 @@ impl App {
                     // reset state related to tbl data
                     let mut state = self.state.lock().unwrap();
                     let AppData {
-                        active,
-                        schemas,
+                        active_entry_type,
+                        tbl_version,
                         entries,
                         strict,
                         warnlog,
                     } = &mut *state;
-                    *active = None;
-                    *schemas = schemas_for_version(version);
+                    *active_entry_type = None;
+                    *tbl_version = version;
                     entries.clear();
                     warnlog.clear();
                     // try loading data from file
@@ -333,20 +333,15 @@ impl App {
                 if path.as_os_str().is_empty() {
                     return;
                 }
-                // get tbl version from the ui element
-                let version: &str = &self.widgets.tbl_version_selector.value().unwrap();
-                let version: TblVersion = *VERSION_SELECTOR_OPTIONS.get(version).unwrap();
-                {
-                    // try saving data to file
-                    let state = self.state.lock().unwrap();
-                    let result = save_tbl_file(&path, version, &state.entries);
-                    match result {
-                        Ok(_) => {
-                            // TODO: clear changed cell flags
-                        }
-                        Err(e) => {
-                            fltk::dialog::alert_default(&format!("error loading file: {:?}", e));
-                        }
+                // try saving data to file
+                let state = self.state.lock().unwrap();
+                let result = save_tbl_file(&path, state.tbl_version, &state.entries);
+                match result {
+                    Ok(_) => {
+                        // TODO: clear changed cell flags
+                    }
+                    Err(e) => {
+                        fltk::dialog::alert_default(&format!("error loading file: {:?}", e));
                     }
                 }
             }
@@ -354,8 +349,8 @@ impl App {
                 {
                     let mut state = self.state.lock().unwrap();
                     let AppData {
-                        active,
-                        schemas: _,
+                        active_entry_type,
+                        tbl_version: _,
                         entries,
                         strict: _,
                         warnlog,
@@ -367,14 +362,14 @@ impl App {
                         self.widgets.warn_button.hide();
                     }
                     // reset header selector
-                    *active = self.widgets.header_selector.value().and_then(|hdr| entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
+                    *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
                     self.widgets.header_selector.clear();
                     for hdr in state.entries.keys() {
                         self.widgets.header_selector.add(hdr);
                     }
                     if let Some((hdr, _)) = state.entries.iter().next() {
                         self.widgets.header_selector.set_value(hdr);
-                        state.active = Some(hdr.clone());
+                        state.active_entry_type = Some(hdr.clone());
                     }
                 }
                 // Note: mutex must be free for this function because it triggers table redraws:
@@ -383,12 +378,12 @@ impl App {
             Some(Msg::UpdateTable) => {
                 let mut state = self.state.lock().unwrap();
                 log::trace!("boop");
-                state.active = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
-                if let Some(hdr) = &state.active {
+                state.active_entry_type = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
+                if let Some(hdr) = &state.active_entry_type {
                     log::trace!("beep");
                     // width of each column = max(header width, width of each entry in that column)
                     // width of each row = max(width of all entries in all rows)
-                    let mut column_widths: std::vec::Vec<i32> = if let Some(attrs) = state.schemas.get(hdr) {
+                    let mut column_widths: std::vec::Vec<i32> = if let Some(attrs) = schemas_for_version(state.tbl_version).get(hdr) {
                         // known schema, get text widths of the attributes (names)
                         attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect()
                     } else {
@@ -494,8 +489,8 @@ impl App {
 fn get_cell_value(state: &mut AppData, row: i32, col: i32) -> Option<&mut tocs::tbl::AtomicValue> {
     let row: usize = row.try_into().unwrap();
     let col: usize = col.try_into().unwrap();
-    let AppData { active, entries, .. } = state;
-    active
+    let AppData { active_entry_type, entries, .. } = state;
+    active_entry_type
         .as_ref()
         .and_then(|hdr| entries.get_mut(hdr))
         .and_then(|rows| rows.get_mut(row))
@@ -542,14 +537,13 @@ fn main() {
 
     let mut warnlog = tocs::tbl::WarningLogger::new();
     let appstate = match (game_version, file) {
-        (Some(ver), Some(path)) => {
-            log::debug!("parsing {} as a {:?} file", path.display(), ver);
-            let active = None;
-            let schemas = schemas_for_version(ver);
-            let entries = load_tbl_file(&path, ver, &mut warnlog, !nonstrict).unwrap();
+        (Some(tbl_version), Some(path)) => {
+            log::debug!("parsing {} as a {:?} file", path.display(), tbl_version);
+            let active_entry_type = None;
+            let entries = load_tbl_file(&path, tbl_version, &mut warnlog, !nonstrict).unwrap();
             AppData {
-                active,
-                schemas,
+                active_entry_type,
+                tbl_version,
                 entries,
                 strict: !nonstrict,
                 warnlog,
@@ -560,8 +554,8 @@ fn main() {
             return;
         }
         _ => AppData {
-            active: None,
-            schemas: IndexMap::new(),
+            active_entry_type: None,
+            tbl_version: TblVersion::CS1,
             entries: IndexMap::new(),
             strict: true,
             warnlog,
