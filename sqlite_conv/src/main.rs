@@ -14,14 +14,6 @@ extern crate sqliteio;
 
 use tocs::cs1::tbl::TblEntry as _;
 
-use tocs::cs1::tbl as cs1_tbl;
-use tocs::cs1::tbl::entry_data as cs1_entry_data;
-use tocs::cs1::tbl::Entry as CS1Entry;
-
-use tocs::cs2::tbl as cs2_tbl;
-use tocs::cs2::tbl::entry_data as cs2_entry_data;
-use tocs::cs2::tbl::Entry as CS2Entry;
-
 use tocs::cs3::tbl as cs3_tbl;
 use tocs::cs3::tbl::entry_data as cs3_entry_data;
 use tocs::cs3::tbl::Entry as CS3Entry;
@@ -83,11 +75,7 @@ impl std::str::FromStr for Game {
 pub fn main() {
     match Args::parse() {
         Args::To_Sql { tbl_path, db_path, game } => {
-            match game {
-                Game::CS1 => to_new_db_cs1(&tbl_path, &db_path),
-                Game::CS2 => to_new_db_cs2(&tbl_path, &db_path),
-                Game::CS3 => to_new_db_cs3(&tbl_path, &db_path),
-            };
+            to_new_db(&tbl_path, &db_path, game);
         }
         Args::To_Tbl { db_path, tbl_path, game, force } => {
             match game {
@@ -99,192 +87,76 @@ pub fn main() {
     }
 }
 
-fn to_new_db_cs1(tblpath: &std::path::Path, dbpath: &std::path::Path) {
-    if dbpath.exists() {
-        panic!("Database output path {} exists, refusing to overwrite", dbpath.display());
+fn to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: Game) {
+    if dbpath.as_ref().exists() {
+        panic!("database output path {} exists, refusing to overwrite.", dbpath.as_ref().display());
     }
 
     let mut db = rusqlite::Connection::open(dbpath).expect("opening new database file");
     db.execute("pragma foreign_keys = on", []).unwrap();
 
-    let tx = db.transaction().unwrap();
-
-    let create_tables = || -> rusqlite::Result<()> {
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs1_entry_data::Generic>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs1_entry_data::Item>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs1_entry_data::QSText>(&tx)?;
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs1_entry_data::Status>(&tx)?;
-        Ok(())
+    let schemas = match tbl_version {
+        Game::CS1 => &*tocs::tbl::SCHEMAS_CS1_ATOMIC,
+        Game::CS2 => &*tocs::tbl::SCHEMAS_CS2_ATOMIC,
+        Game::CS3 => &*tocs::tbl::SCHEMAS_CS3_ATOMIC,
     };
-    match create_tables() {
-        Ok(()) => (),
-        Err(e) => panic!("Error creating sql tables: {e}"),
-    };
-
-    for direntry in walkdir::WalkDir::new(tblpath).into_iter() {
-        let direntry = match direntry {
-            Ok(x) => x,
-            Err(e) => panic!("Error walking directory: {e}"),
-        };
-        let path = direntry.path();
-        if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            println!("Reading {}", path.display());
-            let path_for_db = path.strip_prefix(tblpath).expect("child path should have parent as prefix").display().to_string();
-            let data = match std::fs::read(path).map(|data| cs1_tbl::fix(&data)) {
-                Ok(x) => x,
-                Err(e) => panic!("Couldn't read tbl file: {e}"),
-            };
-            let tbl = match cs1_tbl::load(&data) {
-                Ok(x) => x,
-                Err(e) => panic!("Couldn't parse tbl file: {}", e.to_msg(&data)),
-            };
-            for (n, tblentry) in tbl.entries.iter().enumerate() {
-                let insert_result = match tblentry {
-                    CS1Entry::Generic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS1Entry::Item(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS1Entry::QSText(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                    CS1Entry::Status(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                };
-                match insert_result {
-                    Ok(_) => (),
-                    Err(e) => panic!("Couldn't insert entry {} of {} into table: {}", n + 1, tbl.entries.len(), e),
-                };
-            }
-        }
-    }
-
-    match tx.commit() {
-        Ok(_) => (),
-        Err(e) => panic!("couldn't commit database transaction: {e}"),
-    };
-}
-
-fn to_new_db_cs2(tblpath: &std::path::Path, dbpath: &std::path::Path) {
-    if dbpath.exists() {
-        panic!("Database output path {} exists, refusing to overwrite", dbpath.display());
-    }
-
-    let mut db = rusqlite::Connection::open(dbpath).expect("opening new database file");
-    db.execute("pragma foreign_keys = on", []).unwrap();
 
     let tx = db.transaction().unwrap();
 
     let create_tables = || -> rusqlite::Result<()> {
-        sqlite_recreate_table_destroy_if_exists_unsafe::<cs2_entry_data::Generic>(&tx)?;
-        Ok(())
-    };
-    match create_tables() {
-        Ok(()) => (),
-        Err(e) => panic!("Error creating sql tables: {e}"),
-    };
-
-    for direntry in walkdir::WalkDir::new(tblpath).into_iter() {
-        let direntry = match direntry {
-            Ok(x) => x,
-            Err(e) => panic!("Error walking directory: {e}"),
-        };
-        let path = direntry.path();
-        if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            println!("Reading {}", path.display());
-            let path_for_db = path.strip_prefix(tblpath).expect("child path should have parent as prefix").display().to_string();
-            let data = match std::fs::read(path) {
-                Ok(x) => x,
-                Err(e) => panic!("Couldn't read tbl file: {e}"),
-            };
-            let tbl = match cs2_tbl::load(&data) {
-                Ok(x) => x,
-                Err(e) => panic!("Couldn't parse tbl file: {}", e.to_msg(&data)),
-            };
-            for (n, tblentry) in tbl.entries.iter().enumerate() {
-                let insert_result = match tblentry {
-                    CS2Entry::Generic(data) => sqlite_insert_unsafe(&tx, &path_for_db, data),
-                };
-                match insert_result {
-                    Ok(_) => (),
-                    Err(e) => panic!("Couldn't insert entry {} of {} into table: {}", n + 1, tbl.entries.len(), e),
-                };
-            }
-        }
-    }
-
-    match tx.commit() {
-        Ok(_) => (),
-        Err(e) => panic!("couldn't commit database transaction: {e}"),
-    };
-}
-
-fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
-    if dbpath.exists() {
-        panic!("Database output path {} exists, refusing to overwrite", dbpath.display());
-    }
-
-    let mut db = rusqlite::Connection::open(dbpath).expect("opening new database file");
-    db.execute("pragma foreign_keys = on", []).unwrap();
-
-    let tx = db.transaction().unwrap();
-
-    let create_tables = || -> rusqlite::Result<()> {
-        sqlite_recreate_table_destroy_if_exists_unsafe_new(
-            &tx,
-            "generic",
-            &[("header", tocs::tbl::AtomicType::CUtf8), ("data", tocs::tbl::AtomicType::X(0))]
-                .into_iter()
-                .map(|(s, ty)| (s.into(), ty))
-                .collect(),
-        )?;
-        for (table, schema) in tocs::tbl::SCHEMAS_CS3_ATOMIC.iter() {
-            sqlite_recreate_table_destroy_if_exists_unsafe_new(&tx, table, schema);
+        let generic_schema: IndexMap<SmolStr, tocs::tbl::AtomicType> = [("header", tocs::tbl::AtomicType::CUtf8), ("data", tocs::tbl::AtomicType::X(0))]
+            .map(|(s, t)| (SmolStr::from(s), t))
+            .into_iter()
+            .collect();
+        sqlite_recreate_table_destroy_if_exists_unsafe(&tx, "generic", &generic_schema)?;
+        for (table, schema) in schemas.iter() {
+            sqlite_recreate_table_destroy_if_exists_unsafe(&tx, table, schema)?;
         }
         Ok(())
     };
-    match create_tables() {
-        Ok(()) => (),
-        Err(e) => panic!("Error creating sql tables: {e}"),
-    };
+    create_tables().map_err(|e| format!("couldn't create tables: {e}")).unwrap();
 
-    for direntry in walkdir::WalkDir::new(tblpath).into_iter() {
-        let direntry = match direntry {
-            Ok(x) => x,
-            Err(e) => panic!("Error walking directory: {e}"),
-        };
+    for direntry in walkdir::WalkDir::new(tblpath.as_ref()).into_iter() {
+        let direntry = direntry.map_err(|e| format!("error walking directory: {e}")).unwrap();
         let path = direntry.path();
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            println!("Reading {}", path.display());
-            let path_for_db = path.strip_prefix(tblpath).expect("child path should have parent as prefix").display().to_string();
-            let data = match std::fs::read(path) {
-                Ok(x) => x,
-                Err(e) => panic!("Couldn't read tbl file: {e}"),
-            };
-            let data = cs3_tbl::fix(&data);
+            let path_for_db = path.strip_prefix(tblpath.as_ref()).expect("child path should have parent as prefix").display().to_string();
+            let data = std::fs::read(path).map_err(|e| format!("couldn't read tbl file: {e}")).unwrap();
             let mut logger = tocs::tbl::WarningLogger::new();
-            let (_, entries) = match tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&data), &mut logger, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC) {
-                Ok(x) => x,
-                Err(e) => panic!("Couldn't parse tbl file: {}", e),
+            let entries = match tbl_version {
+                Game::CS1 => tocs::tbl::deserialize_tbl_v1(&mut std::io::Cursor::new(&tocs::cs1::tbl::fix(&data)), &mut logger, true, &schemas)
+                    .map_err(|e| format!("couldn't parse tbl file: {e}"))
+                    .unwrap(),
+                Game::CS2 => {
+                    tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&data), &mut logger, true, &schemas)
+                        .map_err(|e| format!("couldn't parse tbl file: {e}"))
+                        .unwrap()
+                        .1
+                }
+                Game::CS3 => {
+                    tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&tocs::cs3::tbl::fix(&data)), &mut logger, true, &schemas)
+                        .map_err(|e| format!("couldn't parse tbl file: {e}"))
+                        .unwrap()
+                        .1
+                }
             };
             for (n, (header, values)) in entries.iter().enumerate() {
-                // TODO: use logs here
-                let insert_result = if let Some(_) = tocs::tbl::SCHEMAS_CS3_ATOMIC.get(header) {
-                    sqlite_insert_unsafe_new(&tx, header.as_ref(), &path_for_db, values)
+                let insert_result = if let Some(_) = schemas.get(header) {
+                    sqlite_insert_unsafe(&tx, header.as_ref(), &path_for_db, values)
                 } else {
                     let mut values_with_header = IndexMap::new();
                     values_with_header.insert(SmolStr::from("header"), tocs::tbl::AtomicValue::CUtf8(header.clone()));
                     for (attr, val) in values {
                         values_with_header.insert(attr.clone(), val.clone());
                     }
-                    sqlite_insert_unsafe_new(&tx, "generic", &path_for_db, &values_with_header)
+                    sqlite_insert_unsafe(&tx, "generic", &path_for_db, &values_with_header)
                 };
-                match insert_result {
-                    Ok(_) => (),
-                    Err(e) => panic!("Couldn't insert entry {} of {} into table: {}", n + 1, entries.len(), e),
-                };
+                insert_result.map_err(|e| format!("couldn't insert entry {} of {} into table: {}", n + 1, entries.len(), e)).unwrap();
             }
         }
     }
 
-    match tx.commit() {
-        Ok(_) => (),
-        Err(e) => panic!("couldn't commit database transaction: {e}"),
-    };
+    tx.commit().map_err(|e| format!("couldn't commit database transaction: {e}")).unwrap();
 }
 
 // WARNING: The following functions could be extremely dangerous in a general settings:
@@ -292,26 +164,7 @@ fn to_new_db_cs3(tblpath: &std::path::Path, dbpath: &std::path::Path) {
 // This bears the risk of SQL injection.
 // Since the table names all come from an attribute which we supply ourselves in the source code, this should not become a problem.
 
-fn sqlite_schema_unsafe<T: sqliteio::SqliteIO>() -> String {
-    let s = format!(
-        "create table {} (\nfile,\n{}\n)",
-        T::sqlite_table(),
-        T::sqlite_columns()
-            .iter()
-            .map(|(cname, ctype)| format!("  '{cname}' {ctype}"))
-            .collect::<std::vec::Vec<_>>()
-            .join(",\n")
-    );
-    s
-}
-
-fn sqlite_recreate_table_destroy_if_exists_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction) -> rusqlite::Result<()> {
-    tx.execute(&format!("drop table if exists {}", T::sqlite_table()), [])?;
-    tx.execute(&sqlite_schema_unsafe::<T>(), [])?;
-    Ok(())
-}
-
-fn sqlite_recreate_table_destroy_if_exists_unsafe_new(tx: &rusqlite::Transaction, table_name: &str, schema: &IndexMap<SmolStr, tocs::tbl::AtomicType>) -> rusqlite::Result<()> {
+fn sqlite_recreate_table_destroy_if_exists_unsafe(tx: &rusqlite::Transaction, table_name: &str, schema: &IndexMap<SmolStr, tocs::tbl::AtomicType>) -> rusqlite::Result<()> {
     tx.execute(&format!("drop table if exists '{}'", table_name), [])?;
     tx.execute(
         &format!(
@@ -324,31 +177,12 @@ fn sqlite_recreate_table_destroy_if_exists_unsafe_new(tx: &rusqlite::Transaction
     Ok(())
 }
 
-fn sqlite_insert_unsafe<T: sqliteio::SqliteIO>(tx: &rusqlite::Transaction, filename: &str, x: &T) -> rusqlite::Result<usize> {
-    let mut vals: std::vec::Vec<&dyn rusqlite::ToSql> = vec![&filename];
-    let x_vals = x.sqlite_to_tup();
-    for e in x_vals.iter() {
-        vals.push(e.as_ref());
-    }
-    let s = format!(
-        "insert into {} values ({})",
-        T::sqlite_table(),
-        (0..vals.len()).map(|i| format!("?{}", i + 1)).collect::<std::vec::Vec<_>>().join(", ")
-    );
-    let mut insert = tx.prepare_cached(&s)?;
-    insert.execute(&*vals)
-}
-
-fn sqlite_insert_unsafe_new(tx: &rusqlite::Transaction, table: &str, filename: &str, values: &indexmap::IndexMap<SmolStr, tocs::tbl::AtomicValue>) -> rusqlite::Result<usize> {
+fn sqlite_insert_unsafe(tx: &rusqlite::Transaction, table: &str, filename: &str, values: &indexmap::IndexMap<SmolStr, tocs::tbl::AtomicValue>) -> rusqlite::Result<usize> {
     let mut vals: std::vec::Vec<&dyn rusqlite::ToSql> = vec![&filename];
     for x in values.values() {
         vals.push(x);
     }
-    let s = format!(
-        "insert into '{}' values ({})",
-        table,
-        std::iter::repeat("?").take(vals.len()).collect::<std::vec::Vec<_>>().join(", "),
-    );
+    let s = format!("insert into '{}' values ({})", table, std::iter::repeat("?").take(vals.len()).collect::<std::vec::Vec<_>>().join(", "),);
     let mut insert = tx.prepare_cached(&s)?;
     insert.execute(&*vals)
 }
