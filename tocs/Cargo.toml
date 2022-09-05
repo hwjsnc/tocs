@@ -12,9 +12,7 @@ default = ["roundtrip-cs1", "roundtrip-cs2", "roundtrip-cs3"]
 roundtrip-cs1 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs1.
 roundtrip-cs2 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs2.
 roundtrip-cs3 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs3.
-rusqlite = ["dep:sqliteio", "dep:sqliteio", "dep:rusqlite"]
-sqliteio_derive = ["dep:sqliteio", "dep:sqliteio", "dep:rusqlite"]
-sqliteio = ["dep:sqliteio", "dep:sqliteio_derive", "dep:rusqlite"]
+rusqlite = ["dep:rusqlite"]
 
 [dependencies]
 lazy_static = "1.4"
@@ -30,8 +28,6 @@ tbl_serialize_length_derive = { path = "../tocs_internal/tbl_serialize_length_de
 simple_logger = { version = "1", default-features = false, features = ["stderr"], optional = true }
 smallvec = "1.9.0"
 smol_str = { version = "0.1.23", default-features = false }
-sqliteio = { path = "../tocs_internal/sqliteio", optional = true }
-sqliteio_derive = { path = "../tocs_internal/sqliteio_derive", optional = true }
 rusqlite = { version = "0.27", optional = true }
 
 

@@ -27,15 +27,9 @@ pub enum Entry {
 }
 
 pub mod entry_data {
-    #[cfg(feature = "sqliteio")]
-    extern crate sqliteio_derive;
-    #[cfg(feature = "sqliteio")]
-    use sqliteio_derive::SqliteIO;
-
     use tbl_serialize_derive::Serialize;
     use tbl_serialize_length_derive::SerializeLength;
 
-    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "generic"))]
     #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Generic {
         #[serialize(ignore)] // header is serialized separately

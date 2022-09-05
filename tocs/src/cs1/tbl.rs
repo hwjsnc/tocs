@@ -33,16 +33,10 @@ pub enum Entry {
 }
 
 pub mod entry_data {
-    #[cfg(feature = "sqliteio")]
-    extern crate sqliteio_derive;
-    #[cfg(feature = "sqliteio")]
-    use sqliteio_derive::SqliteIO;
-
     use tbl_deserialize_derive::Deserialize;
     use tbl_serialize_derive::Serialize;
     use tbl_serialize_length_derive::SerializeLength;
 
-    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "generic"))]
     #[derive(Clone, Debug, Serialize, SerializeLength)]
     pub struct Generic {
         #[serialize(ignore)] // header is serialized separately
@@ -50,7 +44,6 @@ pub mod entry_data {
         pub data: Vec<u8>,
     }
 
-    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "item"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Item {
         pub id: u16,
@@ -63,7 +56,6 @@ pub mod entry_data {
         pub description: String,
     }
 
-    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "QSText"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct QSText {
         pub unknown_short: u16,
@@ -72,7 +64,6 @@ pub mod entry_data {
         pub unknown_byte_2: u8,
     }
 
-    #[cfg_attr(feature = "sqliteio", derive(SqliteIO), sqlite(table = "Status"))]
     #[derive(Clone, Debug, Deserialize, Serialize, SerializeLength)]
     pub struct Status {
         pub unknown_text_1: String,

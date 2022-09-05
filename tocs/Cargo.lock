@@ -288,24 +288,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7475118a28b7e3a2e157ce0131ba8c5526ea96e90ee601d9f6bb2e286a35ab44"
 
 [[package]]
-name = "sqliteio"
-version = "0.1.0"
-dependencies = [
- "rusqlite",
-]
-
-[[package]]
-name = "sqliteio_derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "rusqlite",
- "sqliteio",
- "syn",
-]
-
-[[package]]
 name = "subtle"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -367,8 +349,6 @@ dependencies = [
  "simple_logger",
  "smallvec",
  "smol_str",
- "sqliteio",
- "sqliteio_derive",
  "tbl_deserialize_derive",
  "tbl_serialize_derive",
  "tbl_serialize_length_derive",
