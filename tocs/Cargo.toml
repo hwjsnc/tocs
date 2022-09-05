@@ -26,6 +26,7 @@ tbl_deserialize_derive = { path = "../tocs_internal/tbl_deserialize_derive" }
 tbl_serialize_derive = { path = "../tocs_internal/tbl_serialize_derive" }
 tbl_serialize_length_derive = { path = "../tocs_internal/tbl_serialize_length_derive" }
 simple_logger = { version = "1", default-features = false, features = ["stderr"], optional = true }
+sjis = { path = "../tocs_internal/sjis" }
 smallvec = "1.9.0"
 smol_str = { version = "0.1.23", default-features = false }
 rusqlite = { version = "0.27", optional = true }
