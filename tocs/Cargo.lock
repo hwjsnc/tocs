@@ -82,15 +82,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "encoding_rs"
-version = "0.8.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
-dependencies = [
- "cfg-if",
-]
-
-[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,13 +276,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sjis"
-version = "1.0.0"
-dependencies = [
- "encoding_rs",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -363,7 +347,6 @@ dependencies = [
  "log",
  "rusqlite",
  "simple_logger",
- "sjis",
  "smallvec",
  "smol_str",
  "tbl_deserialize_derive",
