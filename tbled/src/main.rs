@@ -166,9 +166,7 @@ impl App {
             Msg::SelectAndSaveFile,
         );
 
-        menu.add("Warnings", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
-
-        menu.find_item("Warnings").unwrap().add_emit(
+        menu.add_emit(
             "&Warnings/Show warnings...\t",
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
@@ -377,9 +375,9 @@ impl App {
                     } = &mut *state;
                     // if there are warnings, show button to display them
                     if warnlog.has_warnings() {
-                        self.widgets.menu.find_item("Warnings").unwrap().activate();
+                        self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap().activate();
                     } else {
-                        self.widgets.menu.find_item("Warnings").unwrap().deactivate();
+                        self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap().deactivate();
                     }
                     // reset header selector
                     *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
