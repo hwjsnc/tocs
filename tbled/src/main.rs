@@ -2,6 +2,7 @@
 
 use fltk::prelude::GroupExt as _;
 use fltk::prelude::InputExt as _;
+use fltk::prelude::MenuExt as _;
 use fltk::prelude::TableExt as _;
 use fltk::prelude::WidgetExt as _;
 
@@ -74,19 +75,18 @@ lazy_static::lazy_static! {
 
 #[derive(Clone, Debug)]
 enum Msg {
-    SelectAndLoadFile, // user pushed button to load a file
-    SaveFile,          // user pushed button to save to the same file
-    SelectAndSaveFile, // user pushed button to save a file
-    ShowWarnings,      // user pushed button to show warnings
-    FileReloaded,      // user loaded a different tbl file and we have to update all widgets accordingly
-    UpdateTable,       // user selected a different header; update the table widget
-    TableEvent,        // An arbitrary event on the table
-    DoneEditing,       // user is done editing, now the value should be updated
+    SelectAndLoadFile(TblVersion), // user pushed button to load a file
+    SaveFile,                      // user pushed button to save to the same file
+    SelectAndSaveFile,             // user pushed button to save a file
+    ShowWarnings,                  // user pushed button to show warnings
+    FileReloaded,                  // user loaded a different tbl file and we have to update all widgets accordingly
+    UpdateTable,                   // user selected a different header; update the table widget
+    TableEvent,                    // An arbitrary event on the table
+    DoneEditing,                   // user is done editing, now the value should be updated
 }
 
 struct Widgets {
-    warn_button: fltk::button::Button,
-    tbl_version_selector: fltk::misc::InputChoice,
+    menu: fltk::menu::SysMenuBar,
     input: fltk::input::Input,
     header_selector: fltk::misc::InputChoice,
     table: fltk::table::Table,
@@ -131,53 +131,67 @@ impl App {
         let mut flex_row = fltk::group::Flex::default().size_of_parent();
         flex_row.set_type(fltk::group::FlexType::Row);
 
-        let mut tbl_version_selector = fltk::misc::InputChoice::default();
-        for (s, _) in VERSION_SELECTOR_OPTIONS.iter() {
-            tbl_version_selector.add(s);
-        }
-        tbl_version_selector.set_value_index(0);
-        tbl_version_selector.input().set_align(fltk::enums::Align::Left);
-        tbl_version_selector.input().set_readonly(true);
-        flex_row.set_size(&tbl_version_selector, 160);
+        let mut menu = fltk::menu::SysMenuBar::default();
+        menu.add_emit(
+            "&Load/Load CS1 tbl (XSeed PC version, English)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::SelectAndLoadFile(TblVersion::CS1),
+        );
 
-        let mut load_button = fltk::button::Button::default().with_label("Select && load file");
-        load_button.emit(sender.clone(), Msg::SelectAndLoadFile);
-        flex_row.set_size(&load_button, 140);
+        menu.add_emit(
+            "&Load/Load CS2 tbl (XSeed PC version, English)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::SelectAndLoadFile(TblVersion::CS2),
+        );
 
-        let mut save_button = fltk::button::Button::default().with_label("Save");
-        save_button.emit(sender.clone(), Msg::SaveFile);
-        save_button.set_color(fltk::enums::Color::FrameDefault.inactive());
-        flex_row.set_size(&save_button, 60);
+        menu.add_emit(
+            "&Load/Load CS3 tbl (NISA PC version)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::SelectAndLoadFile(TblVersion::CS3),
+        );
 
-        let mut save_button = fltk::button::Button::default().with_label("Select && save file");
-        save_button.emit(sender.clone(), Msg::SelectAndSaveFile);
-        flex_row.set_size(&save_button, 140);
+        menu.add_emit("&Save/Save\t", fltk::enums::Shortcut::Ctrl | 's', fltk::menu::MenuFlag::Normal, sender.clone(), Msg::SaveFile);
 
-        let _ = fltk::widget::Widget::default(); // just for spacing
+        menu.add_emit(
+            "&Save/Save as...\t",
+            fltk::enums::Shortcut::Ctrl | fltk::enums::Shortcut::Shift | 's',
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::SelectAndSaveFile,
+        );
 
-        let mut warn_button = fltk::button::Button::default().with_label("show warnings");
-        warn_button.emit(sender.clone(), Msg::ShowWarnings);
-        warn_button.set_color(fltk::enums::Color::Red);
-        warn_button.hide();
+        menu.add("Warnings", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
 
-        flex_row.set_size(&save_button, 140);
+        menu.find_item("Warnings").unwrap().add_emit(
+            "&Warnings/Show warnings...\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ShowWarnings,
+        );
 
-        let _ = fltk::widget::Widget::default(); // just for spacing
-
-        //let label = fltk::widget::Widget::default().with_label("entry type:");
-        //flex_row.set_size(&label, 100);
-        let mut header_selector = fltk::misc::InputChoice::default().with_label("entry type");
+        let mut header_selector = fltk::misc::InputChoice::default();
         header_selector.emit(sender.clone(), Msg::UpdateTable);
         header_selector.input().set_readonly(true);
         flex_row.set_size(&header_selector, 200);
 
         flex_row.end();
         flex.set_size(&flex_row, 26);
+        let mut flex_row = fltk::group::Flex::default().size_of_parent();
+        flex_row.set_type(fltk::group::FlexType::Row);
 
         let mut input = fltk::input::Input::default();
         input.set_trigger(fltk::enums::CallbackTrigger::EnterKeyAlways);
         input.emit(sender.clone(), Msg::DoneEditing);
-        flex.set_size(&input, 26);
+
+        flex_row.end();
+        flex.set_size(&flex_row, 26);
 
         let mut table = fltk::table::Table::default();
         table.set_col_header(true);
@@ -255,13 +269,7 @@ impl App {
         let mut this = Self {
             app,
             receiver,
-            widgets: Widgets {
-                warn_button,
-                tbl_version_selector,
-                header_selector,
-                input,
-                table,
-            },
+            widgets: Widgets { menu, header_selector, input, table },
             state,
         };
 
@@ -282,17 +290,15 @@ impl App {
     pub fn update(&mut self, msg: &Option<Msg>) {
         log::debug!("update: {msg:?}");
         match msg {
-            Some(Msg::SelectAndLoadFile) => {
+            Some(Msg::SelectAndLoadFile(version)) => {
                 // open a file browser dialog to select the file
                 let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
+                diag.set_title("Select .tbl file to load ...");
                 diag.show();
                 let path = diag.filename();
                 if path.as_os_str().is_empty() {
                     return;
                 }
-                // get tbl version from the ui element
-                let version: &str = &self.widgets.tbl_version_selector.value().unwrap();
-                let version: TblVersion = *VERSION_SELECTOR_OPTIONS.get(version).unwrap();
                 {
                     // reset state related to tbl data
                     let mut state = self.state.lock().unwrap();
@@ -305,11 +311,11 @@ impl App {
                         warnlog,
                     } = &mut *state;
                     *active_entry_type = None;
-                    *tbl_version = version;
+                    *tbl_version = *version;
                     entries.clear();
                     warnlog.clear();
                     // try loading data from file
-                    let result = load_tbl_file(&path, version, warnlog, *strict);
+                    let result = load_tbl_file(&path, *version, warnlog, *strict);
                     match result {
                         Ok(entries) => {
                             state.entries = entries;
@@ -340,6 +346,7 @@ impl App {
             Some(Msg::SelectAndSaveFile) => {
                 // open a file browser dialog to select the file
                 let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseSaveFile);
+                diag.set_title("Select .tbl file to save to ...");
                 diag.show();
                 let path = diag.filename();
                 if path.as_os_str().is_empty() {
@@ -370,9 +377,9 @@ impl App {
                     } = &mut *state;
                     // if there are warnings, show button to display them
                     if warnlog.has_warnings() {
-                        self.widgets.warn_button.show();
+                        self.widgets.menu.find_item("Warnings").unwrap().activate();
                     } else {
-                        self.widgets.warn_button.hide();
+                        self.widgets.menu.find_item("Warnings").unwrap().deactivate();
                     }
                     // reset header selector
                     *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
@@ -467,17 +474,13 @@ impl App {
                 let warnstring = {
                     let mut state = self.state.lock().unwrap();
                     let AppData { warnlog, .. } = &mut *state;
-                    if warnlog.has_warnings() {
-                        Some(warnlog.warnings().fold(
-                            "the following non-fatal error(s) occured loading the file.\nplease study them carefully and, if necessary, fix them before continuing!\n\n".to_string(),
-                            |mut s, warn| {
-                                writeln!(s, "{}", warn).unwrap();
-                                s
-                            },
-                        ))
-                    } else {
-                        None
-                    }
+                    Some(warnlog.warnings().fold(
+                        "the following non-fatal error(s) occured loading the file.\nplease study them carefully and, if necessary, fix them before continuing!\n\n".to_string(),
+                        |mut s, warn| {
+                            writeln!(s, "{}", warn).unwrap();
+                            s
+                        },
+                    ))
                 };
                 if let Some(s) = warnstring {
                     fltk::dialog::message_default(&s);
