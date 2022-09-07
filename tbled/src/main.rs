@@ -74,6 +74,8 @@ enum Msg {
     ShowWarnings,                  // user wants to see warnings
     FileReloaded,                  // user loaded a different tbl file and we have to update all widgets accordingly
     UpdateTable,                   // user selected a different header; update the table widget
+    DuplicateEntry,                // user wants to duplicate the current row
+    DeleteEntry,                   // user wants to delete the current row
     TableEvent,                    // an arbitrary event on the table
     DoneEditing,                   // user is done editing, now the value should be updated
 }
@@ -168,6 +170,22 @@ impl App {
         );
 
         menu.add_emit("&Export/Export to csv...\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Normal, sender.clone(), Msg::ExportCSV);
+
+        menu.add_emit(
+            "&Edit/Duplicate currently selected row\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::DuplicateEntry,
+        );
+
+        menu.add_emit(
+            "&Edit/Delete currently selected row\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::DeleteEntry,
+        );
 
         let mut header_selector = fltk::misc::InputChoice::default();
         header_selector.emit(sender.clone(), Msg::UpdateTable);
@@ -436,6 +454,38 @@ impl App {
                     self.update_table(&column_widths, nrows, row_height);
                 }
             }
+            Some(Msg::DuplicateEntry) => {
+                if let Some(row) = try_get_selected_row(&self.widgets.table) {
+                    let row: usize = row.try_into().unwrap();
+                    let mut state = self.state.lock().unwrap();
+                    let AppData { active_entry_type, entries, .. } = &mut *state;
+                    if let Some(hdr) = active_entry_type {
+                        let active_entries = entries.get_mut(hdr).unwrap();
+                        active_entries.insert(row, active_entries[row].clone());
+                    }
+                    drop(state);
+                    // Note: mutex must be free for this function because it triggers table redraws:
+                    self.update(&Some(Msg::UpdateTable));
+                } else {
+                    fltk::dialog::alert_default("please select exactly one row");
+                }
+            }
+            Some(Msg::DeleteEntry) => {
+                if let Some(row) = try_get_selected_row(&self.widgets.table) {
+                    let row: usize = row.try_into().unwrap();
+                    let mut state = self.state.lock().unwrap();
+                    let AppData { active_entry_type, entries, .. } = &mut *state;
+                    if let Some(hdr) = active_entry_type {
+                        let active_entries = entries.get_mut(hdr).unwrap();
+                        active_entries.remove(row);
+                    }
+                    drop(state);
+                    // Note: mutex must be free for this function because it triggers table redraws:
+                    self.update(&Some(Msg::UpdateTable));
+                } else {
+                    fltk::dialog::alert_default("please select exactly one row");
+                }
+            }
             Some(Msg::TableEvent) => {
                 match fltk::app::event() {
                     fltk::enums::Event::Released if fltk::app::event_clicks() => {
@@ -627,6 +677,15 @@ fn try_get_selected_cell(table: &fltk::table::Table) -> Option<(i32, i32)> {
     let (row1, col1, row2, col2) = table.try_get_selection()?;
     if row1 == row2 && col1 == col2 {
         Some((row1, col1))
+    } else {
+        None
+    }
+}
+
+fn try_get_selected_row(table: &fltk::table::Table) -> Option<i32> {
+    let (row1, col1, row2, col2) = table.try_get_selection()?;
+    if row1 == row2 && col1 == 0 && col2 == table.cols() - 1 {
+        Some(row1)
     } else {
         None
     }
