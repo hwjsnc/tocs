@@ -665,7 +665,7 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mu
             let position = (|| {
                 let pos: u64 = f.stream_position().ok()?;
                 let pos: usize = pos.try_into().ok()?;
-                let pos = pos.checked_sub(buf.len())?.checked_add(utf8err.valid_up_to() - 1)?;
+                let pos = pos.checked_sub(buf.len()?.checked_sub(utf8err.valid_up_to())?)?;
                 pos.try_into().ok()
             })();
             let e = DeserializeError {
