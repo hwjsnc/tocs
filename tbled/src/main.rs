@@ -442,16 +442,13 @@ impl App {
                         // find currently selected cell (if it's exactly one)
                         let table = &mut self.widgets.table;
                         log::debug!("double click on table");
-                        match table.try_get_selection() {
-                            Some((row, col, row2, col2)) if row == row2 && col == col2 => {
-                                // copy table value to input
-                                log::debug!("double click on cell");
-                                let mut state = self.state.lock().unwrap();
-                                self.widgets.input.set_value(tocs::tbl::atomic_value_to_string(get_cell_value(&mut *state, row, col).unwrap()).as_ref());
-                                self.widgets.input.take_focus().unwrap();
-                                self.widgets.input.redraw();
-                            }
-                            _ => {}
+                        if let Some((row, col)) = try_get_selected_cell(table) {
+                            // copy table value to input
+                            log::debug!("double click on cell");
+                            let mut state = self.state.lock().unwrap();
+                            self.widgets.input.set_value(tocs::tbl::atomic_value_to_string(get_cell_value(&mut *state, row, col).unwrap()).as_ref());
+                            self.widgets.input.take_focus().unwrap();
+                            self.widgets.input.redraw();
                         }
                     }
                     _ => {}
@@ -461,23 +458,20 @@ impl App {
                 // find the currently selected cell (if it's exactly one)
                 let input = &mut self.widgets.input;
                 let table = &mut self.widgets.table;
-                match table.try_get_selection() {
-                    Some((row, col, row2, col2)) if row == row2 && col == col2 => {
-                        // copy text input to selected cell
-                        {
-                            let mut state = self.state.lock().unwrap();
-                            let text = input.value();
-                            let cell_value = get_cell_value(&mut *state, row, col).unwrap();
-                            let ty = tocs::tbl::atomic_type(cell_value);
-                            if let Ok(value) = tocs::tbl::try_atomic_value_from_str(&ty, &text) {
-                                *cell_value = value;
-                            } else {
-                                fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", tocs::tbl::atomic_type_describe(&ty)));
-                            }
+                if let Some((row, col)) = try_get_selected_cell(table) {
+                    // copy text input to selected cell
+                    {
+                        let mut state = self.state.lock().unwrap();
+                        let text = input.value();
+                        let cell_value = get_cell_value(&mut *state, row, col).unwrap();
+                        let ty = tocs::tbl::atomic_type(cell_value);
+                        if let Ok(value) = tocs::tbl::try_atomic_value_from_str(&ty, &text) {
+                            *cell_value = value;
+                        } else {
+                            fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", tocs::tbl::atomic_type_describe(&ty)));
                         }
-                        table.redraw();
                     }
-                    _ => {}
+                    table.redraw();
                 }
             }
             Some(Msg::ShowWarnings) => {
@@ -627,6 +621,15 @@ fn main() {
     log::debug!("starting app");
     let app = App::new(appstate);
     app.run();
+}
+
+fn try_get_selected_cell(table: &fltk::table::Table) -> Option<(i32, i32)> {
+    let (row1, col1, row2, col2) = table.try_get_selection()?;
+    if row1 == row2 && col1 == col2 {
+        Some((row1, col1))
+    } else {
+        None
+    }
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
