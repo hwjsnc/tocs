@@ -16,9 +16,6 @@ Therefore it is highly recommended to BACK UP ALL DATA EARLY AND OFTEN.
 - Trails of Cold Steel II (XSeed PC version, english language only)
 - Trails of Cold Steel III (NISA PC version)
 
-Around 50 entry types of CS3 tables have special support.
-Other entry types can still be edited as hex strings.
-
 The tool does certain checks to detect discrepancies in the data it loads.
 In some cases, these checks can be too aggressive and reject data which would work perfectly well when loaded by the game.
 This can happen with a few of the original game files, or with files that have been manually hex edited.
@@ -56,7 +53,7 @@ Changelog
 - improved UI
 - improved performance
 - support for saving to the current file (overwriting)
-- added schemas for CS1
+- added schemas for CS1 & CS2
 - added a few schemas for CS3
 - CSV export
 - allow duplicating & removing entries
