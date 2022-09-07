@@ -50,7 +50,6 @@ impl<W> WarningLogger<W> {
     }
 
     pub fn clear(&mut self) {
-        println!("warnlog clear");
         self.warnings.clear();
     }
 
@@ -2089,7 +2088,7 @@ mod test {
                 }
             }
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                println!("{}", path.display());
+                log::info!("{}", path.display());
                 let fixed = crate::cs1::tbl::fix(&std::fs::read(path).unwrap());
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let entries = deserialize_tbl_v1(&mut std::io::Cursor::new(&fixed), &mut logger, true, &SCHEMAS_CS1_ATOMIC).unwrap();
@@ -2123,7 +2122,7 @@ mod test {
                 }
             }
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                println!("{}", path.display());
+                log::info!("{}", path.display());
                 let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let entries = deserialize_tbl_v1(&mut f, &mut logger, false, &SCHEMAS_CS1_ATOMIC).unwrap();
@@ -2152,7 +2151,7 @@ mod test {
                 }
             }
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                println!("{}", path.display());
+                log::info!("{}", path.display());
                 let fixed = std::fs::read(path).unwrap();
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut std::io::Cursor::new(&fixed), &mut logger, true, &SCHEMAS_CS2_ATOMIC).unwrap();
@@ -2187,7 +2186,7 @@ mod test {
                 }
             }
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                println!("{}", path.display());
+                log::info!("{}", path.display());
                 let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &SCHEMAS_CS2_ATOMIC).unwrap();
@@ -2212,7 +2211,7 @@ mod test {
             let entry = entry.unwrap();
             let path = entry.path();
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                println!("{}", path.display());
+                log::info!("{}", path.display());
                 let fixed = crate::cs3::tbl::fix(&std::fs::read(path).unwrap());
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut std::io::Cursor::new(&fixed), &mut logger, true, &SCHEMAS_CS3_ATOMIC).unwrap();
@@ -2242,7 +2241,7 @@ mod test {
             let entry = entry.unwrap();
             let path = entry.path();
             if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                println!("{}", path.display());
+                log::info!("{}", path.display());
                 let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &SCHEMAS_CS3_ATOMIC).unwrap();
