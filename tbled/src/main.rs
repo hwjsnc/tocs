@@ -75,13 +75,14 @@ lazy_static::lazy_static! {
 
 #[derive(Clone, Debug)]
 enum Msg {
-    SelectAndLoadFile(TblVersion), // user pushed button to load a file
-    SaveFile,                      // user pushed button to save to the same file
-    SelectAndSaveFile,             // user pushed button to save a file
-    ShowWarnings,                  // user pushed button to show warnings
+    SelectAndLoadFile(TblVersion), // user wants to load a file
+    SaveFile,                      // user wants to save to the same file
+    SelectAndSaveFile,             // user wants to save a file
+    ExportCSV,                     // user wants to export file to csv
+    ShowWarnings,                  // user wants to see warnings
     FileReloaded,                  // user loaded a different tbl file and we have to update all widgets accordingly
     UpdateTable,                   // user selected a different header; update the table widget
-    TableEvent,                    // An arbitrary event on the table
+    TableEvent,                    // an arbitrary event on the table
     DoneEditing,                   // user is done editing, now the value should be updated
 }
 
@@ -173,6 +174,8 @@ impl App {
             sender.clone(),
             Msg::ShowWarnings,
         );
+
+        menu.add_emit("&Export/Export to csv...\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Normal, sender.clone(), Msg::ExportCSV);
 
         let mut header_selector = fltk::misc::InputChoice::default();
         header_selector.emit(sender.clone(), Msg::UpdateTable);
@@ -362,6 +365,28 @@ impl App {
                     }
                 }
             }
+            Some(Msg::ExportCSV) => {
+                let state = self.state.lock().unwrap();
+                if let Some(hdr) = state.active_entry_type.as_ref() {
+                    // open a file browser dialog to select the file
+                    let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseSaveFile);
+                    diag.set_title("Select .tbl file to save to ...");
+                    diag.set_preset_file(&format!("{}.csv", hdr));
+                    diag.show();
+                    let path = diag.filename();
+                    if path.as_os_str().is_empty() {
+                        return;
+                    }
+                    match export_csv(&path, state.entries.get(hdr).unwrap()) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            fltk::dialog::alert_default(&format!("error exporting to csv: {:?}", e));
+                        }
+                    }
+                } else {
+                    fltk::dialog::alert_default("no entry type selected, can't export");
+                }
+            }
             Some(Msg::FileReloaded) => {
                 {
                     let mut state = self.state.lock().unwrap();
@@ -401,13 +426,8 @@ impl App {
                     log::trace!("beep");
                     // width of each column = max(header width, width of each entry in that column)
                     // width of each row = max(width of all entries in all rows)
-                    let mut column_widths: std::vec::Vec<i32> = if let Some(attrs) = schemas_for_version(state.tbl_version).get(hdr) {
-                        // known schema, get text widths of the attributes (names)
-                        attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect()
-                    } else {
-                        // no known schema
-                        vec![fltk::draw::measure("data", false).0]
-                    };
+                    let attrs = schema_for_header(hdr, &schemas_for_version(state.tbl_version));
+                    let mut column_widths: std::vec::Vec<i32> = attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect();
                     let entries = state.entries.get(hdr).unwrap();
                     let nrows = entries.len().try_into().unwrap();
                     let mut row_height = 1;
@@ -512,11 +532,20 @@ fn get_cell_value(state: &mut AppData, row: i32, col: i32) -> Option<&mut tocs::
         .map(|(_, val)| val)
 }
 
-fn schemas_for_version(version: TblVersion) -> IndexMap<SmolStr, Attributes> {
+fn schema_for_header<'a>(header: &str, schemas: &'a IndexMap<SmolStr, Attributes>) -> &'a Attributes {
+    lazy_static::lazy_static! {
+        pub static ref GENERIC : Attributes = [
+            (SmolStr::from("data"), tocs::tbl::AtomicType::X(0))
+        ].into_iter().collect();
+    };
+    schemas.get(header).unwrap_or(&GENERIC)
+}
+
+fn schemas_for_version(version: TblVersion) -> &'static IndexMap<SmolStr, Attributes> {
     match version {
-        TblVersion::CS1 => tocs::tbl::SCHEMAS_CS1_ATOMIC.clone(),
-        TblVersion::CS2 => tocs::tbl::SCHEMAS_CS2_ATOMIC.clone(),
-        TblVersion::CS3 => tocs::tbl::SCHEMAS_CS3_ATOMIC.clone(),
+        TblVersion::CS1 => &tocs::tbl::SCHEMAS_CS1_ATOMIC,
+        TblVersion::CS2 => &tocs::tbl::SCHEMAS_CS2_ATOMIC,
+        TblVersion::CS3 => &tocs::tbl::SCHEMAS_CS3_ATOMIC,
     }
 }
 
@@ -542,6 +571,31 @@ fn save_tbl_file(path: &std::path::Path, version: TblVersion, entries: &IndexMap
         TblVersion::CS2 => tocs::tbl::save_file_v2(path, &headers, &entries),
         TblVersion::CS3 => tocs::tbl::save_file_v2(path, &headers, &entries),
     }
+}
+
+fn export_csv(path: &std::path::Path, data: &[AttributeValues]) -> std::io::Result<()> {
+    log::debug!("export data as CSV to '{}'", path.display());
+    let mut csv = csv::WriterBuilder::new().quote_style(csv::QuoteStyle::Always).from_path(path)?;
+    log::debug!("writing csv header");
+    if let Some(entry) = data.get(0) {
+        for attr in entry.keys() {
+            csv.write_field(attr.as_bytes())?;
+        }
+        // end of record
+        let eor: [&str; 0] = [];
+        csv.write_record(&eor)?;
+    }
+    log::debug!("writing csv records");
+    for entry in data {
+        // one field for each attribute value
+        for val in entry.values() {
+            csv.write_field(tocs::tbl::atomic_value_to_string(val).as_ref().as_bytes())?;
+        }
+        // end of record
+        let eor: [&str; 0] = [];
+        csv.write_record(&eor)?;
+    }
+    Ok(()) // TODO
 }
 
 fn main() {
