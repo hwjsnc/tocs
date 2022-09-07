@@ -57,6 +57,7 @@ Changelog
 - improved performance
 - support for saving to the current file (overwriting)
 - added schemas for CS1
+- added a few schemas for CS3
 - CSV export
 - allow duplicating & removing entries
 
