@@ -65,14 +65,6 @@ struct CliArgs {
     file: Option<std::path::PathBuf>,
 }
 
-lazy_static::lazy_static! {
-    pub static ref VERSION_SELECTOR_OPTIONS: IndexMap<&'static str, TblVersion> = [
-        ("CS1 (XSeed PC, EN)", TblVersion::CS1),
-        ("CS2 (XSeed PC, EN)", TblVersion::CS2),
-        ("CS3 (NISA PC)", TblVersion::CS3),
-    ].into_iter().collect();
-}
-
 #[derive(Clone, Debug)]
 enum Msg {
     SelectAndLoadFile(TblVersion), // user wants to load a file
