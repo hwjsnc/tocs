@@ -47,3 +47,17 @@ Download
 --------
 
 [tbled v0.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.1/tbled.exe)
+
+Changelog
+---------
+
+### v0.2 (in development):
+
+- improved UI
+- improved performance
+- support for saving to the current file (overwriting)
+- added schemas for CS1
+
+### v0.1:
+
+- initial public version
