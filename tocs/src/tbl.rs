@@ -607,7 +607,7 @@ impl std::fmt::Display for DeserializeErrorPosition {
             DeserializeErrorPosition::EntryHeader => write!(f, "while parsing entry header name"),
             DeserializeErrorPosition::EntryData => write!(f, "while parsing entry data"),
             DeserializeErrorPosition::Value(ty) => write!(f, "while parsing a {}", atomic_type_describe(ty)),
-            DeserializeErrorPosition::Attribute(name) => write!(f, "while parsing attribute {}", name),
+            DeserializeErrorPosition::Attribute(name) => write!(f, "while parsing attribute '{}'", name),
             DeserializeErrorPosition::End => write!(f, "after parsing"),
         }
     }
@@ -665,7 +665,7 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek>(f: &mut F, warnings: &mu
             let position = (|| {
                 let pos: u64 = f.stream_position().ok()?;
                 let pos: usize = pos.try_into().ok()?;
-                let pos = pos.checked_sub(buf.len()?.checked_sub(utf8err.valid_up_to())?)?;
+                let pos = pos.checked_sub(buf.len().checked_add(1)?)?.checked_add(utf8err.valid_up_to())?;
                 pos.try_into().ok()
             })();
             let e = DeserializeError {
@@ -810,7 +810,7 @@ pub fn deserialize_entry_data<F: std::io::Read + std::io::Seek>(
             e.context.push(DeserializeErrorPosition::Attribute(attr.clone()));
             e
         })?;
-        log::trace!("attribute {} = {:?}", attr, val);
+        log::trace!("attribute '{}' = {:?}", attr, val);
         values.insert(attr.clone(), val);
     }
     Ok(values)
