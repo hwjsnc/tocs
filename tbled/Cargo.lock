@@ -649,36 +649,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tbl_deserialize_derive"
-version = "0.1.0"
-dependencies = [
- "ioutil",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "tbl_serialize_derive"
-version = "0.1.0"
-dependencies = [
- "ioutil",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "tbl_serialize_length_derive"
-version = "0.1.0"
-dependencies = [
- "ioutil",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "tbled"
 version = "0.1.0"
 dependencies = [
@@ -743,9 +713,6 @@ dependencies = [
  "simple_logger",
  "smallvec",
  "smol_str",
- "tbl_deserialize_derive",
- "tbl_serialize_derive",
- "tbl_serialize_length_derive",
 ]
 
 [[package]]

@@ -297,36 +297,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tbl_deserialize_derive"
-version = "0.1.0"
-dependencies = [
- "ioutil",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "tbl_serialize_derive"
-version = "0.1.0"
-dependencies = [
- "ioutil",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "tbl_serialize_length_derive"
-version = "0.1.0"
-dependencies = [
- "ioutil",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "termcolor"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -355,9 +325,6 @@ dependencies = [
  "simple_logger",
  "smallvec",
  "smol_str",
- "tbl_deserialize_derive",
- "tbl_serialize_derive",
- "tbl_serialize_length_derive",
 ]
 
 [[package]]
