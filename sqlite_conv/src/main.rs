@@ -83,9 +83,9 @@ fn to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: Game
     db.execute("pragma foreign_keys = on", []).unwrap();
 
     let schemas = match tbl_version {
-        Game::CS1 => &*tocs::tbl::SCHEMAS_CS1_ATOMIC,
-        Game::CS2 => &*tocs::tbl::SCHEMAS_CS2_ATOMIC,
-        Game::CS3 => &*tocs::tbl::SCHEMAS_CS3_ATOMIC,
+        Game::CS1 => &*tocs::tbl::schemas::CS1_ATOMIC,
+        Game::CS2 => &*tocs::tbl::schemas::CS2_ATOMIC,
+        Game::CS3 => &*tocs::tbl::schemas::CS3_ATOMIC,
     };
 
     let tx = db.transaction().unwrap();

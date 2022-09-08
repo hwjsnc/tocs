@@ -436,7 +436,7 @@ impl App {
                     log::trace!("beep");
                     // width of each column = max(header width, width of each entry in that column)
                     // width of each row = max(width of all entries in all rows)
-                    let attrs = schema_for_header(hdr, &schemas_for_version(state.tbl_version));
+                    let attrs = schema_for_header(hdr, schemas_for_version(state.tbl_version));
                     let mut column_widths: std::vec::Vec<i32> = attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect();
                     let entries = state.entries.get(hdr).unwrap();
                     let nrows = entries.len().try_into().unwrap();
@@ -579,9 +579,9 @@ fn schema_for_header<'a>(header: &str, schemas: &'a IndexMap<SmolStr, Attributes
 
 fn schemas_for_version(version: TblVersion) -> &'static IndexMap<SmolStr, Attributes> {
     match version {
-        TblVersion::CS1 => &tocs::tbl::SCHEMAS_CS1_ATOMIC,
-        TblVersion::CS2 => &tocs::tbl::SCHEMAS_CS2_ATOMIC,
-        TblVersion::CS3 => &tocs::tbl::SCHEMAS_CS3_ATOMIC,
+        TblVersion::CS1 => &tocs::tbl::schemas::CS1_ATOMIC,
+        TblVersion::CS2 => &tocs::tbl::schemas::CS2_ATOMIC,
+        TblVersion::CS3 => &tocs::tbl::schemas::CS3_ATOMIC,
     }
 }
 
@@ -592,9 +592,9 @@ fn load_tbl_file(
     strict: bool,
 ) -> Result<IndexMap<SmolStr, std::vec::Vec<AttributeValues>>, tocs::tbl::DeserializeError> {
     match version {
-        TblVersion::CS1 => tocs::tbl::load_file_v1(path, warnings, strict, &tocs::tbl::SCHEMAS_CS1_ATOMIC).map(|entries| (IndexMap::new(), entries)),
-        TblVersion::CS2 => tocs::tbl::load_file_v2(path, warnings, strict, &tocs::tbl::SCHEMAS_CS2_ATOMIC),
-        TblVersion::CS3 => tocs::tbl::load_file_v2(path, warnings, strict, &tocs::tbl::SCHEMAS_CS3_ATOMIC),
+        TblVersion::CS1 => tocs::tbl::load_file_v1(path, warnings, strict, schemas_for_version(version)).map(|entries| (IndexMap::new(), entries)),
+        TblVersion::CS2 => tocs::tbl::load_file_v2(path, warnings, strict, schemas_for_version(version)),
+        TblVersion::CS3 => tocs::tbl::load_file_v2(path, warnings, strict, schemas_for_version(version)),
     }
     .map(|(headers, entries)| partition_entries_with_headers(headers, entries))
 }

@@ -364,7 +364,7 @@ checksum = "7475118a28b7e3a2e157ce0131ba8c5526ea96e90ee601d9f6bb2e286a35ab44"
 
 [[package]]
 name = "sql_conv"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "indexmap",

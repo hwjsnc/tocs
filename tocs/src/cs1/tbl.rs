@@ -28,7 +28,7 @@ fn replace_byte(data: &mut [u8], location: usize, expected: u8, replacement: u8)
 
 #[allow(non_snake_case)]
 fn fix_CS1_PC_1_6_dat_us_t_main(data: &mut std::vec::Vec<u8>) {
-    // Cold Steel PC version 1.6, data/text/dat_us/t_main.tbl
+    log::info!("detected Cold Steel PC version 1.6, 'data/text/dat_us/t_main.tbl'. Applying fix.");
     assert_eq!(data.len(), 155086);
     let replace = [(127310, 0x54, 0x47), (128670, 0xa4, 0x53)];
     for (location, expected, replacement) in replace {

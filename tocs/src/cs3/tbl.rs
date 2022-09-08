@@ -33,7 +33,7 @@ fn replace_byte(data: &mut [u8], location: usize, expected: u8, replacement: u8)
 
 #[allow(non_snake_case)]
 fn fix_CS3_PC_1_05_data_text_dat_en_t_name_tbl(data: &mut std::vec::Vec<u8>) {
-    // CS3 PC version 1.05, data/text/dat_en/t_name.tbl
+    log::info!("detected CS3 PC version 1.05, 'data/text/dat_en/t_name.tbl'. Applying fixes.");
     assert_eq!(data.len(), 150070);
     let replace = [(22392, 0x57, 0x55), (22493, 0x57, 0x55), (23898, 0x55, 0x53), (23997, 0x54, 0x52)];
     for (location, expected, replacement) in replace {
@@ -43,7 +43,7 @@ fn fix_CS3_PC_1_05_data_text_dat_en_t_name_tbl(data: &mut std::vec::Vec<u8>) {
 
 #[allow(non_snake_case)]
 fn fix_CS3_PC_1_05_data_text_dat_en_t_quest_tbl(data: &mut std::vec::Vec<u8>) {
-    // CS3 PC version 1.05, data/text/dat_en/t_quest.tbl
+    log::debug!("detected CS3 PC version 1.05, 'data/text/dat_en/t_quest.tbl'. Applying fixes.");
     assert_eq!(data.len(), 58017);
     let replace = [
         (914, 0x2c, 0x30),
@@ -96,7 +96,7 @@ fn fix_CS3_PC_1_05_data_text_dat_en_t_quest_tbl(data: &mut std::vec::Vec<u8>) {
 
 #[allow(non_snake_case)]
 fn fix_CS3_PC_1_05_data_text_dat_fr_t_quest_tbl(data: &mut std::vec::Vec<u8>) {
-    // CS3 PC version 1.05, data/text/dat_fr/t_quest.tbl
+    log::info!("detected CS3 PC version 1.05, 'data/text/dat_fr/t_quest.tbl'. Applying fixes.");
     assert_eq!(data.len(), 52904);
     let replace = [
         (921, 0x27, 0x2b),
