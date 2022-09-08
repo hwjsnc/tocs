@@ -8,20 +8,13 @@ I try very hard to make sure this tool doesn't silently corrupt data.
 However, there are two important possibilities for why this still may happen:
 1\) I make mistakes sometimes.
 2\) The tool does not necessarily preserve the order of entries within a .tbl file; while I have never noticed a problem with this I can't exclude that it might become one.
-Therefore it is highly recommended to BACK UP ALL DATA EARLY AND OFTEN.
+Therefore it is highly recommended to BACK UP ALL DATA FREQUENTLY.
 
 `tbled` currently supports the following versions of the games:
 
 - Trails of Cold Steel (XSeed PC version, english language only)
 - Trails of Cold Steel II (XSeed PC version, english language only)
 - Trails of Cold Steel III (NISA PC version)
-
-The tool does certain checks to detect discrepancies in the data it loads.
-In some cases, these checks can be too aggressive and reject data which would work perfectly well when loaded by the game.
-This can happen with a few of the original game files, or with files that have been manually hex edited.
-If this happens, you can override a lot of the optional checks by running tbled from the terminal with the option `--nonstrict` (this option is intentionally hidden in the GUI).
-If you do this, it is your responsibility to check every warning and decide whether or not to fix the detected problem, as well as how to fix it.
-Failing to do this could silently corrupt the data.
 
 Usage
 -----
@@ -41,10 +34,17 @@ If you want to save your changes, select "Save" to overwrite the current file or
 
 ![A screenshot of `tbled` in action. Some UI elements are labeled](screenshot.png)
 
-Releases
---------
+The tool does certain checks to detect discrepancies in the data it loads.
+In some cases, these checks can be too aggressive and reject data which would work perfectly well when loaded by the game.
+This can happen with a few of the original game files, or with files that have been manually hex edited.
+If this happens, you can override a lot of the optional checks by running tbled from the terminal with the option `--nonstrict` (this option is intentionally hidden in the GUI).
+If you do this, it is your responsibility to check every warning and decide whether or not to fix the detected problem, as well as how to fix it.
+Failing to do this could silently corrupt the data.
 
-### v0.2 (in development):
+Releases (downloads & changelogs)
+---------------------------------
+
+### [v0.2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.2/tbled.exe):
 
 - improved UI
 - improved performance
