@@ -30,7 +30,7 @@ Double clicking a cell copies the content of that cell into the edit field.
 To edit the text in the edit field, make sure that it is active (e.g. by clicking on it).
 Once you're done editing, press Enter to copy the content of the edit field into the currently selected cell.
 
-If you want to save your changes, select "Save" to overwrite the current file or "Select & save file" to write to a different file.
+If you want to save your changes, select "Save" to overwrite the current file or "Save as" to write to a different file.
 
 ![A screenshot of `tbled` in action. Some UI elements are labeled](screenshot.png)
 
@@ -44,7 +44,7 @@ Failing to do this could silently corrupt the data.
 Releases (downloads & changelogs)
 ---------------------------------
 
-### [v0.2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.2/tbled.exe):
+### [v0.2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.2/tbled-v0.2.exe):
 
 - improved UI
 - improved performance
