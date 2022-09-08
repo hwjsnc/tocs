@@ -54,9 +54,15 @@ pub fn main() {
     match Subcommand::parse() {
         Subcommand::All { raw } => parse_all(!raw),
         Subcommand::File { game, path, raw } => match game {
-            GameVersion::CS1 => parse_file_cs1(&path, !raw),
-            GameVersion::CS2 => parse_file_cs2(&path, !raw),
-            GameVersion::CS3 => parse_file_cs3(&path, !raw),
+            GameVersion::CS1 => {
+                roundtrip_cs1(&path, !raw);
+            }
+            GameVersion::CS2 => {
+                roundtrip_cs2(&path, !raw);
+            }
+            GameVersion::CS3 => {
+                roundtrip_cs3(&path, !raw);
+            }
         },
     }
 }
@@ -68,40 +74,8 @@ pub fn parse_all(fix_data: bool) {
         let entry = entry.unwrap();
         let path = entry.path();
         if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            let original = if fix_data {
-                tocs::cs1::tbl::fix(&std::fs::read(path).unwrap())
-            } else {
-                std::fs::read(path).unwrap()
-            };
-            match tocs::cs1::tbl::load(&original) {
-                Ok(tbl) => {
-                    match tocs::cs1::tbl::store(&tbl) {
-                        Ok(serialized) if serialized == original => {
-                            //println!("{}: ok!", path.display());
-                        }
-                        Ok(serialized) => {
-                            for i in 0..std::cmp::max(serialized.len(), original.len()) {
-                                if serialized.get(i) != original.get(i) {
-                                    println!(
-                                        "{}: roundtrip not identical to input, first difference at {}, expected {:?}, got {:?}",
-                                        path.display(),
-                                        i,
-                                        original.get(i),
-                                        serialized.get(i)
-                                    );
-                                    break;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            println!("{}: serialize failed: {:?}", path.display(), e)
-                        }
-                    }
-                }
-                Err(e) => {
-                    println!("{}: Error: {}", path.display(), e.to_msg(&original));
-                }
-            }
+            log::info!("trying file {}", path.display());
+            roundtrip_cs1(path, fix_data);
         }
     }
 
@@ -111,34 +85,8 @@ pub fn parse_all(fix_data: bool) {
         let entry = entry.unwrap();
         let path = entry.path();
         if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            let original = std::fs::read(path).unwrap();
-            match tocs::cs2::tbl::load(&original) {
-                Ok(tbl) => match tocs::cs2::tbl::store(&tbl) {
-                    Ok(serialized) if serialized == original => {
-                        //println!("{}: ok!", path.display());
-                    }
-                    Ok(serialized) => {
-                        for i in 0..std::cmp::max(serialized.len(), original.len()) {
-                            if serialized.get(i) != original.get(i) {
-                                println!(
-                                    "{}: roundtrip not identical to input, first difference at {}, expected {:?}, got {:?}",
-                                    path.display(),
-                                    i,
-                                    original.get(i),
-                                    serialized.get(i)
-                                );
-                                break;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!("{}: serialize failed: {:?}", path.display(), e)
-                    }
-                },
-                Err(e) => {
-                    println!("{}: Error: {}", path.display(), e.to_msg(&original));
-                }
-            }
+            log::info!("trying file {}", path.display());
+            roundtrip_cs2(path, fix_data);
         }
     }
 
@@ -148,64 +96,84 @@ pub fn parse_all(fix_data: bool) {
         let entry = entry.unwrap();
         let path = entry.path();
         if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            let original = if fix_data {
-                tocs::cs3::tbl::fix(&std::fs::read(path).unwrap())
-            } else {
-                std::fs::read(path).unwrap()
-            };
-            match tocs::cs3::tbl::load(&original) {
-                Ok(tbl) => match tocs::cs3::tbl::store(&tbl) {
-                    Ok(serialized) if serialized == original => {
-                        //println!("{}: ok!", path.display());
-                    }
-                    Ok(serialized) => {
-                        for i in 0..std::cmp::max(serialized.len(), original.len()) {
-                            if serialized.get(i) != original.get(i) {
-                                println!(
-                                    "{}: roundtrip not identical to input, first difference at {}, expected {:?}, got {:?}",
-                                    path.display(),
-                                    i,
-                                    original.get(i),
-                                    serialized.get(i)
-                                );
-                                break;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!("{}: serialize failed: {:?}", path.display(), e)
-                    }
-                },
-                Err(e) => {
-                    println!("{}: Error: {}", path.display(), e.to_msg(&original));
-                }
-            }
+            log::info!("trying file {}", path.display());
+            roundtrip_cs3(path, fix_data);
         }
     }
 }
 
-pub fn parse_file_cs1(path: &std::path::Path, fix_data: bool) {
-    let data = if fix_data {
+pub fn roundtrip_cs1(path: &std::path::Path, fix_data: bool) {
+    let original = if fix_data {
         tocs::cs1::tbl::fix(&std::fs::read(path).unwrap())
     } else {
         std::fs::read(path).unwrap()
     };
     let mut log = tocs::tbl::WarningLogger::new();
-    let _ = tocs::tbl::deserialize_tbl_v1(&mut std::io::Cursor::new(data), &mut log, true, &tocs::tbl::SCHEMAS_CS1_ATOMIC);
+    match tocs::tbl::deserialize_tbl_v1(&mut std::io::Cursor::new(&original), &mut log, true, &tocs::tbl::SCHEMAS_CS1_ATOMIC) {
+        Ok(entries) => {
+            let mut serialized: std::vec::Vec<u8> = vec![];
+            match tocs::tbl::serialize_tbl_v1(&mut std::io::Cursor::new(&mut serialized), &entries) {
+                Ok(_written) => compare(&original, &serialized, path),
+                Err(err) => log::error!("serialize failed: {err}"),
+            }
+        }
+        Err(err) => {
+            log::error!("deserialize failed: {err}");
+        }
+    }
 }
 
-pub fn parse_file_cs2(path: &std::path::Path, _fix_data: bool) {
-    let data = std::fs::read(path).unwrap();
+pub fn roundtrip_cs2(path: &std::path::Path, _fix_data: bool) {
+    let original = std::fs::read(path).unwrap();
     let mut log = tocs::tbl::WarningLogger::new();
-    let _ = tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(data), &mut log, true, &tocs::tbl::SCHEMAS_CS2_ATOMIC);
+    match tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&original), &mut log, true, &tocs::tbl::SCHEMAS_CS2_ATOMIC) {
+        Ok((header_counts, entries)) => {
+            let mut serialized: std::vec::Vec<u8> = vec![];
+            let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
+            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
+                Ok(_written) => compare(&original, &serialized, path),
+                Err(err) => log::error!("serialize failed: {err}"),
+            }
+        }
+        Err(err) => {
+            log::error!("deserialize failed: {err}");
+        }
+    }
 }
 
-pub fn parse_file_cs3(path: &std::path::Path, fix_data: bool) {
-    let data = if fix_data {
-        tocs::cs1::tbl::fix(&std::fs::read(path).unwrap())
+pub fn roundtrip_cs3(path: &std::path::Path, fix_data: bool) {
+    let original = if fix_data {
+        tocs::cs3::tbl::fix(&std::fs::read(path).unwrap())
     } else {
         std::fs::read(path).unwrap()
     };
     let mut log = tocs::tbl::WarningLogger::new();
-    let _ = tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(data), &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC);
+    match tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&original), &mut log, true, &tocs::tbl::SCHEMAS_CS3_ATOMIC) {
+        Ok((header_counts, entries)) => {
+            let mut serialized: std::vec::Vec<u8> = vec![];
+            let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
+            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
+                Ok(_written) => compare(&original, &serialized, path),
+                Err(err) => log::error!("serialize failed: {err}"),
+            }
+        }
+        Err(err) => {
+            log::error!("deserialize failed: {err}");
+        }
+    }
+}
+
+fn compare(original: &[u8], other: &[u8], path: &std::path::Path) {
+    for i in 0..std::cmp::max(original.len(), other.len()) {
+        if original.get(i) != other.get(i) {
+            log::error!(
+                "{}: roundtrip not identical to input, first difference at {}, expected {:?}, got {:?}",
+                path.display(),
+                i,
+                original.get(i),
+                other.get(i)
+            );
+            return;
+        }
+    }
 }
