@@ -26,27 +26,23 @@ Failing to do this could silently corrupt the data.
 Usage
 -----
 
-Before loading a file, make sure to select the right game version, or loading will likely fail.
-Then click "Select & load file" to load the file; `.tbl` files are located in the `data\text` folders relative to the installation path.
-If loading was successful, choose an entry type on the right.
+To load a file, select one of the options under "Load" and select a `.tbl` file.
+These files are located in the `data\text` folders relative to the installation path.
+Make sure to choose the correct game version, or loading the data will likely fail.
+If loading was successful, choose an entry type on the right to see all entries of that type in the loaded file.
 
 Editing works via the edit field.
-Clicking on a cell in the table selects that cell (and deselects other cells).
+Clicking on a cell in the table selects that cell and deselects all other cells.
 Double clicking a cell copies the content of that cell into the edit field.
-To edit the text in the edit field, make sure it is selected (e.g. by clicking on it).
+To edit the text in the edit field, make sure that it is active (e.g. by clicking on it).
 Once you're done editing, press Enter to copy the content of the edit field into the currently selected cell.
 
 If you want to save your changes, select "Save" to overwrite the current file or "Select & save file" to write to a different file.
 
 ![A screenshot of `tbled` in action. Some UI elements are labeled](screenshot.png)
 
-Download
+Releases
 --------
-
-[tbled v0.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.1/tbled.exe)
-
-Changelog
----------
 
 ### v0.2 (in development):
 
@@ -58,6 +54,6 @@ Changelog
 - CSV export
 - allow duplicating & removing entries
 
-### v0.1:
+### [v0.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.1/tbled.exe):
 
 - initial public version
