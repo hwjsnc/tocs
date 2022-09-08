@@ -224,7 +224,7 @@ pub fn get_nf1(schema_name: &SmolStr, schemas: &IndexMap<SmolStr, IndexMap<SmolS
             Type::Repeat(n, ty) => {
                 if let Some(t) = ty.try_to_atomic_type() {
                     for i in 1..=*n {
-                        nf1.insert(SmolStr::new(format!("{} {}", name, i)), t);
+                        nf1.insert(SmolStr::new(format!("{}[{}]", name, i)), t);
                     }
                 } else if let Type::Ref(s) = ty.as_ref() {
                     let sub_nf1 = get_nf1(s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
