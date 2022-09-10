@@ -147,7 +147,7 @@
         ("cast_delay", Type::U8),
         ("recovery_delay", Type::U8),
         ("cost", Type::U16),
-        ("unknown_byte_1", Type::U8),
+        ("unbalance_bonus", Type::I8),
         ("level_learn", Type::I8),
         ("sort_id", Type::U16),
         ("animation", Type::CUtf8),
