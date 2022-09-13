@@ -8,10 +8,11 @@ name = "tocs"
 path = "src/lib.rs"
 
 [features]
-default = ["roundtrip-cs1", "roundtrip-cs2", "roundtrip-cs3"]
+default = ["roundtrip-cs1", "roundtrip-cs2", "roundtrip-cs3", "roundtrip-cs4"]
 roundtrip-cs1 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs1.
 roundtrip-cs2 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs2.
 roundtrip-cs3 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs3.
+roundtrip-cs4 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs4.
 rusqlite = ["dep:rusqlite"]
 
 [dependencies]

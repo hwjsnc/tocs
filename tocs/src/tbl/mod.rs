@@ -1057,7 +1057,7 @@ mod test {
             simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
         });
         let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs1/data/text/"));
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs1/nisa-pc-1.6/data/text/"));
         for entry in walkdir::WalkDir::new(base_path) {
             let entry = entry.unwrap();
             let path = entry.path();
@@ -1090,7 +1090,7 @@ mod test {
             simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
         });
         let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs1/data/text/"));
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs1/nisa-pc-1.6/data/text/"));
         // TODO: test that each schema has at least one entry in any file
         for entry in walkdir::WalkDir::new(base_path) {
             let entry = entry.unwrap();
@@ -1120,7 +1120,7 @@ mod test {
             simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
         });
         let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs2/data/text/"));
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs2/nisa-pc-1.4.1/data/text/"));
         for entry in walkdir::WalkDir::new(base_path) {
             let entry = entry.unwrap();
             let path = entry.path();
@@ -1154,7 +1154,7 @@ mod test {
             simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
         });
         let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs2/data/text/"));
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs2/nisa-pc-1.4.1/data/text/"));
         // TODO: test that each schema has at least one entry in any file
         for entry in walkdir::WalkDir::new(base_path) {
             let entry = entry.unwrap();
@@ -1185,7 +1185,7 @@ mod test {
             simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
         });
         let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs3/data/text/"));
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs3/nisa-pc-1.0.5/data/text/"));
         for entry in walkdir::WalkDir::new(base_path) {
             let entry = entry.unwrap();
             let path = entry.path();
@@ -1214,7 +1214,7 @@ mod test {
             simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
         });
         let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs3/data/text/"));
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs3/nisa-pc-1.0.5/data/text/"));
         // TODO: test that each schema has at least one entry in any file
         for entry in walkdir::WalkDir::new(base_path) {
             let entry = entry.unwrap();
@@ -1224,6 +1224,61 @@ mod test {
                 let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
                 let mut logger = WarningLogger::<DeserializeError>::new();
                 let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &schemas::CS3_ATOMIC).unwrap();
+                let mut serialized = std::io::Cursor::new(vec![]);
+                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
+                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
+                let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
+                // no comparison here
+            }
+        }
+    }
+
+    #[cfg(feature = "roundtrip-cs4")]
+    #[test]
+    fn test_roundtrip_cs4_strict() {
+        INIT_LOG.call_once(|| {
+            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
+        });
+        let cwd = std::env::current_dir().unwrap();
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs4/nisa-switch-1.0.0/text/"));
+        for entry in walkdir::WalkDir::new(base_path) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
+                log::info!("{}", path.display());
+                let fixed = std::fs::read(path).unwrap();
+                let mut logger = WarningLogger::<DeserializeError>::new();
+                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut std::io::Cursor::new(&fixed), &mut logger, true, &schemas::CS4_ATOMIC).unwrap();
+                assert!(!logger.has_warnings());
+                let serialized = {
+                    let mut serialized = std::io::Cursor::new(vec![]);
+                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
+                    let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
+                    let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
+                    serialized.into_inner()
+                };
+                assert_eq!(serialized, fixed);
+            }
+        }
+    }
+
+    #[cfg(feature = "roundtrip-cs4")]
+    #[test]
+    fn test_parse_cs4_nonstrict() {
+        INIT_LOG.call_once(|| {
+            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
+        });
+        let cwd = std::env::current_dir().unwrap();
+        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs4/nisa-switch-1.0.0/text/"));
+        // TODO: test that each schema has at least one entry in any file
+        for entry in walkdir::WalkDir::new(base_path) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
+                log::info!("{}", path.display());
+                let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+                let mut logger = WarningLogger::<DeserializeError>::new();
+                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &schemas::CS4_ATOMIC).unwrap();
                 let mut serialized = std::io::Cursor::new(vec![]);
                 let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                 let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();

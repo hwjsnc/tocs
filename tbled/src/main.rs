@@ -38,6 +38,7 @@ pub enum TblVersion {
     CS1,
     CS2,
     CS3,
+    CS4,
 }
 
 impl std::str::FromStr for TblVersion {
@@ -50,6 +51,8 @@ impl std::str::FromStr for TblVersion {
             "CS2" => Ok(TblVersion::CS2),
             "cs3" => Ok(TblVersion::CS3),
             "CS3" => Ok(TblVersion::CS3),
+            "cs4" => Ok(TblVersion::CS4),
+            "CS4" => Ok(TblVersion::CS4),
             _ => Err("invalid/unknown game"),
         }
     }
@@ -149,6 +152,14 @@ impl App {
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
             Msg::SelectAndLoadFile(TblVersion::CS3),
+        );
+
+        menu.add_emit(
+            "&Load/Load CS4 tbl (NISA Switch version)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::SelectAndLoadFile(TblVersion::CS4),
         );
 
         menu.add_emit("&Save/Save\t", fltk::enums::Shortcut::Ctrl | 's', fltk::menu::MenuFlag::Normal, sender.clone(), Msg::SaveFile);
@@ -582,6 +593,7 @@ fn schemas_for_version(version: TblVersion) -> &'static IndexMap<SmolStr, Attrib
         TblVersion::CS1 => &tocs::tbl::schemas::CS1_ATOMIC,
         TblVersion::CS2 => &tocs::tbl::schemas::CS2_ATOMIC,
         TblVersion::CS3 => &tocs::tbl::schemas::CS3_ATOMIC,
+        TblVersion::CS4 => &tocs::tbl::schemas::CS4_ATOMIC,
     }
 }
 
@@ -595,6 +607,7 @@ fn load_tbl_file(
         TblVersion::CS1 => tocs::tbl::load_file_v1(path, warnings, strict, schemas_for_version(version)).map(|entries| (IndexMap::new(), entries)),
         TblVersion::CS2 => tocs::tbl::load_file_v2(path, warnings, strict, schemas_for_version(version)),
         TblVersion::CS3 => tocs::tbl::load_file_v2(path, warnings, strict, schemas_for_version(version)),
+        TblVersion::CS4 => tocs::tbl::load_file_v2(path, warnings, strict, schemas_for_version(version)),
     }
     .map(|(headers, entries)| partition_entries_with_headers(headers, entries))
 }
@@ -606,6 +619,7 @@ fn save_tbl_file(path: &std::path::Path, version: TblVersion, entries: &IndexMap
         TblVersion::CS1 => tocs::tbl::save_file_v1(path, &entries),
         TblVersion::CS2 => tocs::tbl::save_file_v2(path, &headers, &entries),
         TblVersion::CS3 => tocs::tbl::save_file_v2(path, &headers, &entries),
+        TblVersion::CS4 => tocs::tbl::save_file_v2(path, &headers, &entries),
     }
 }
 
