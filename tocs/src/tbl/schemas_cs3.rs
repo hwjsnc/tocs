@@ -198,7 +198,7 @@
         ("category", Type::U8),
         ("type", Type::U8),
         ("element", Type::U8),
-        ("juna_specific", Type::U8),
+        ("mode", Type::U8),
         ("target_type", Type::U8),
         ("target_range", Type::F32),
         ("target_size", Type::U8),
