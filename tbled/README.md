@@ -44,6 +44,10 @@ Failing to do this could silently corrupt the data.
 Releases (downloads & changelogs)
 ---------------------------------
 
+### v0.3 (in development):
+
+- schemas for CS4
+
 ### [v0.2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.2/tbled-v0.2.exe):
 
 - improved UI
