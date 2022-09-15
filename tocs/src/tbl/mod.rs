@@ -8,6 +8,8 @@ use indexmap::IndexMap;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 
+use itertools::Itertools as _;
+
 #[cfg(feature = "rusqlite")]
 use rusqlite::types::FromSql as _;
 
@@ -61,6 +63,10 @@ impl<W> WarningLogger<W> {
 
     pub fn warnings(&self) -> impl Iterator<Item = &W> {
         self.warnings.iter()
+    }
+
+    fn into_warnings(self) -> std::vec::Vec<W> {
+        self.warnings
     }
 }
 
@@ -1002,26 +1008,53 @@ pub fn load_file_v2<P: AsRef<std::path::Path>>(
 // generic load/fix/store
 
 #[derive(Clone, Copy, Debug)]
+enum VersionWithoutSchema {
+    V1, // no header counts: CS1
+    V2, // with header counts: CS2 onwards
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum Version<'a> {
     CS1En,
     CS2En,
     CS3,
+    CS4,
     V1(&'a IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>), // generic version with custom schema (no header counts / CS1 version)
     V2(&'a IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>), // generic version with custom schema (with header counts / CS2 onward)
 }
 
+impl<'a> Version<'a> {
+    fn without_schema(&self) -> VersionWithoutSchema {
+        match self {
+            Version::CS1En => VersionWithoutSchema::V1,
+            Version::CS2En => VersionWithoutSchema::V2,
+            Version::CS3 => VersionWithoutSchema::V2,
+            Version::CS4 => VersionWithoutSchema::V2,
+            Version::V1(_) => VersionWithoutSchema::V1,
+            Version::V2(_) => VersionWithoutSchema::V2,
+        }
+    }
+
+    fn schemas(&self) -> &'a IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> {
+        match self {
+            Version::CS1En => &schemas::CS1_ATOMIC,
+            Version::CS2En => &schemas::CS2_ATOMIC,
+            Version::CS3 => &schemas::CS3_ATOMIC,
+            Version::CS4 => &schemas::CS4_ATOMIC,
+            Version::V1(schema) => schema,
+            Version::V2(schema) => schema,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct Tbl<'a> {
-    version: Version<'a>,
+pub struct Tbl {
+    version: VersionWithoutSchema,
     headers: SmallVec<[SmolStr; 6]>,
     entries: std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>,
 }
 
-impl<'a> Tbl<'a> {
-    pub fn version(&self) -> Version<'a> {
-        self.version
-    }
-
+impl Tbl {
     pub fn headers(&self) -> impl AsRef<[&str]> {
         let hdr: SmallVec<[&str; 6]> = self.headers.iter().map(|s| s.as_ref()).collect();
         hdr
@@ -1039,18 +1072,150 @@ impl<'a> Tbl<'a> {
 // TODO: load/store Tbl from file/data, including fixes (for the correct versions)
 // TODO: update downstream programs to use the new generic interface
 
+pub enum ReadTblResult {
+    Ok(Tbl),
+    Warn { tbl: Tbl, warnings: std::vec::Vec<DeserializeError> },
+    Err(DeserializeError),
+}
+
+fn try_read<F: std::io::Read + std::io::Seek>(f: &mut F, logger: &mut WarningLogger<DeserializeError>, strict: bool, version: Version) -> Result<Tbl, DeserializeError> {
+    match version.without_schema() {
+        VersionWithoutSchema::V1 => deserialize_tbl_v1(f, logger, strict, version.schemas()).map(|entries| Tbl {
+            version: version.without_schema(),
+            headers: entries.iter().map(|(h, _)| h).unique().cloned().collect(),
+            entries: entries,
+        }),
+        VersionWithoutSchema::V2 => deserialize_tbl_v2(f, logger, strict, version.schemas()).map(|(headers_with_counts, entries)| Tbl {
+            version: version.without_schema(),
+            headers: headers_with_counts.into_iter().map(|(h, _)| h).collect(),
+            entries: entries,
+        }),
+    }
+}
+
+pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> ReadTblResult {
+    log::debug!("Generic tbl read");
+    let mut logger = WarningLogger::new();
+    let first_error = match try_read(f, &mut logger, true, version) {
+        // TODO: supress logs here?
+        Ok(tbl) => {
+            return ReadTblResult::Ok(tbl);
+        }
+        Err(e) => e,
+    };
+
+    log::debug!("Strict tbl read got error: {}. Trying to read again (non-strict).", first_error);
+    if let Err(e) = f.rewind() {
+        log::warn!("Tried to reread the table non-strict but rewinding failed");
+        return ReadTblResult::Err(DeserializeError {
+            detail: DeserializeErrorDetail::IO(e),
+            position: f.stream_position().ok(),
+            context: vec![], // TODO: new ErrorPosition just for this?
+        });
+    }
+    logger.clear();
+    if let Ok(tbl) = try_read(f, &mut logger, false, version) {
+        return ReadTblResult::Warn {
+            tbl,
+            warnings: logger.into_warnings(),
+        };
+    }
+
+    ReadTblResult::Err(first_error)
+}
+
+pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, SerializeError> {
+    let written = match tbl.version {
+        VersionWithoutSchema::V1 => serialize_tbl_v1(f, &tbl.entries.as_ref())?,
+        VersionWithoutSchema::V2 => serialize_tbl_v2(f, &tbl.headers, tbl.entries.as_ref())?,
+    };
+    f.flush().map_err(SerializeError::IOError)?;
+    Ok(written)
+}
+
 // tests
 
+#[cfg(feature = "private-tests")]
 #[cfg(test)]
 mod test {
-    use super::{deserialize_tbl_v1, deserialize_tbl_v2, schemas, serialize_tbl_v1, serialize_tbl_v2, DeserializeError, WarningLogger};
+    use super::{deserialize_tbl_v1, deserialize_tbl_v2, read, schemas, serialize_tbl_v1, serialize_tbl_v2, write, DeserializeError, ReadTblResult, Version, WarningLogger};
 
     use indexmap::IndexMap;
     use smol_str::SmolStr;
 
     static INIT_LOG: std::sync::Once = std::sync::Once::new();
 
-    #[cfg(feature = "roundtrip-cs1")]
+    const TBL_TEST_FOLDERS: [(
+        &str,
+        Version,
+        bool, // should we expect flawless loading & bit-identical round-trips for this?
+        bool, // is the dataset comprehensive, i.e. should all headers in the schema appear in the dataset?
+    ); 6] = [
+        ("private-test-data/cs1/nisa-pc-1.6/data/text/dat_us/", Version::CS1En, false, true),
+        ("private-test-data/cs2/nisa-pc-1.4.1/data/text/dat_us/", Version::CS2En, false, true),
+        ("private-test-data/cs3/nisa-pc-1.0.5/data/text/", Version::CS3, false, true),
+        ("private-test-data/cs3/softbrilliant-mod-1.0.6/data/text/", Version::CS3, false, false),
+        ("private-test-data/cs4/nisa-switch-1.0.0/text/", Version::CS4, true, true),
+        ("private-test-data/cs4/softbrilliant-mod-1.0.7/data/text/", Version::CS4, false, false),
+    ];
+
+    #[test]
+    fn test_read_all() {
+        INIT_LOG.call_once(|| {
+            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
+        });
+        let cwd = std::env::current_dir().unwrap();
+        for (s, version, strict, comprehensive) in TBL_TEST_FOLDERS.iter() {
+            let schema_headers: std::collections::BTreeSet<_> = version.schemas().keys().cloned().collect();
+            let mut seen_headers = std::collections::BTreeSet::new();
+            let base_path = cwd.to_path_buf().join(std::path::Path::new(s));
+            for direntry in walkdir::WalkDir::new(base_path) {
+                let direntry = direntry.unwrap();
+                let path = direntry.path();
+                if direntry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
+                    log::info!("READING FILE {}", path.display());
+                    let original = std::fs::read(path).unwrap();
+                    let tbl = match read(&mut std::io::Cursor::new(&original), *version) {
+                        ReadTblResult::Ok(tbl) => tbl,
+                        ReadTblResult::Warn { tbl, .. } => {
+                            if *strict {
+                                panic!("There shouldn't be any warnings, but there are!");
+                            } else {
+                                let mut serialized = std::io::Cursor::new(vec![]);
+                                let _ = write(&mut serialized, &tbl).unwrap();
+                            }
+                            tbl
+                        }
+                        ReadTblResult::Err(e) => {
+                            log::error!("Error!");
+                            panic!("{}", e);
+                        }
+                    };
+                    // serialize and compare
+                    let mut serialized = std::io::Cursor::new(vec![]);
+                    let _ = write(&mut serialized, &tbl).unwrap();
+                    let serialized = serialized.into_inner();
+                    if *strict {
+                        assert_eq!(serialized, original); // TODO: something with better error messages
+                    }
+                    // mark all entry headers as seen
+                    for (hdr, _) in tbl.get_entries() {
+                        seen_headers.insert(hdr.clone());
+                    }
+                }
+            }
+            if *comprehensive {
+                let difference: std::collections::BTreeSet<_> = schema_headers.difference(&seen_headers).collect();
+                if !difference.is_empty() {
+                    for hdr in difference {
+                        log::error!("header '{hdr}' appears in the schemas but not in the dataset");
+                    }
+                    panic!("found unused headers (typo?)");
+                }
+            }
+        }
+    }
+
     #[test]
     fn test_roundtrip_cs1_strict() {
         INIT_LOG.call_once(|| {
@@ -1083,37 +1248,6 @@ mod test {
         }
     }
 
-    #[cfg(feature = "roundtrip-cs1")]
-    #[test]
-    fn test_parse_cs1_nonstrict() {
-        INIT_LOG.call_once(|| {
-            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
-        });
-        let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs1/nisa-pc-1.6/data/text/"));
-        // TODO: test that each schema has at least one entry in any file
-        for entry in walkdir::WalkDir::new(base_path) {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if let Some(parent) = path.parent() {
-                if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) || path.file_name() == Some(&std::ffi::OsStr::new("t_main.tbl")) {
-                    continue; // TODO: schemas for the headers with broken lengths
-                }
-            }
-            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                log::info!("{}", path.display());
-                let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-                let mut logger = WarningLogger::<DeserializeError>::new();
-                let entries = deserialize_tbl_v1(&mut f, &mut logger, false, &schemas::CS1_ATOMIC).unwrap();
-                let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
-                let _ = serialize_tbl_v1(&mut serialized, &e).unwrap();
-                // no comparison here
-            }
-        }
-    }
-
-    #[cfg(feature = "roundtrip-cs2")]
     #[test]
     fn test_roundtrip_cs2_strict() {
         INIT_LOG.call_once(|| {
@@ -1147,38 +1281,6 @@ mod test {
         }
     }
 
-    #[cfg(feature = "roundtrip-cs2")]
-    #[test]
-    fn test_parse_cs2_nonstrict() {
-        INIT_LOG.call_once(|| {
-            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
-        });
-        let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs2/nisa-pc-1.4.1/data/text/"));
-        // TODO: test that each schema has at least one entry in any file
-        for entry in walkdir::WalkDir::new(base_path) {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if let Some(parent) = path.parent() {
-                if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) {
-                    continue; // TODO: schemas for the headers with broken lengths
-                }
-            }
-            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                log::info!("{}", path.display());
-                let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-                let mut logger = WarningLogger::<DeserializeError>::new();
-                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &schemas::CS2_ATOMIC).unwrap();
-                let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
-                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
-                // no comparison here
-            }
-        }
-    }
-
-    #[cfg(feature = "roundtrip-cs3")]
     #[test]
     fn test_roundtrip_cs3_strict() {
         INIT_LOG.call_once(|| {
@@ -1207,33 +1309,6 @@ mod test {
         }
     }
 
-    #[cfg(feature = "roundtrip-cs3")]
-    #[test]
-    fn test_parse_cs3_nonstrict() {
-        INIT_LOG.call_once(|| {
-            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
-        });
-        let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs3/nisa-pc-1.0.5/data/text/"));
-        // TODO: test that each schema has at least one entry in any file
-        for entry in walkdir::WalkDir::new(base_path) {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                log::info!("{}", path.display());
-                let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-                let mut logger = WarningLogger::<DeserializeError>::new();
-                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &schemas::CS3_ATOMIC).unwrap();
-                let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
-                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
-                // no comparison here
-            }
-        }
-    }
-
-    #[cfg(feature = "roundtrip-cs4")]
     #[test]
     fn test_roundtrip_cs4_strict() {
         INIT_LOG.call_once(|| {
@@ -1258,32 +1333,6 @@ mod test {
                     serialized.into_inner()
                 };
                 assert_eq!(serialized, fixed);
-            }
-        }
-    }
-
-    #[cfg(feature = "roundtrip-cs4")]
-    #[test]
-    fn test_parse_cs4_nonstrict() {
-        INIT_LOG.call_once(|| {
-            simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
-        });
-        let cwd = std::env::current_dir().unwrap();
-        let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs4/nisa-switch-1.0.0/text/"));
-        // TODO: test that each schema has at least one entry in any file
-        for entry in walkdir::WalkDir::new(base_path) {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-                log::info!("{}", path.display());
-                let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-                let mut logger = WarningLogger::<DeserializeError>::new();
-                let (headers_with_counts, entries) = deserialize_tbl_v2(&mut f, &mut logger, false, &schemas::CS4_ATOMIC).unwrap();
-                let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
-                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
-                // no comparison here
             }
         }
     }

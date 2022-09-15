@@ -396,6 +396,15 @@ name = "ioutil"
 version = "0.1.0"
 
 [[package]]
+name = "itertools"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8bf247779e67a9082a4790b45e71ac7cfd1321331a5c856a74a9faebdab78d0"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -708,6 +717,7 @@ dependencies = [
  "hex-literal",
  "indexmap",
  "ioutil",
+ "itertools",
  "lazy_static",
  "log",
  "simple_logger",

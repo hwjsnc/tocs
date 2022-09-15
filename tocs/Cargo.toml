@@ -8,11 +8,8 @@ name = "tocs"
 path = "src/lib.rs"
 
 [features]
-default = ["roundtrip-cs1", "roundtrip-cs2", "roundtrip-cs3", "roundtrip-cs4"]
-roundtrip-cs1 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs1.
-roundtrip-cs2 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs2.
-roundtrip-cs3 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs3.
-roundtrip-cs4 = ["simple_logger"] # test bit-identical roundtrip (read -> write) for cs4.
+default = ["private-tests"]
+private-tests = ["simple_logger"] # test bit-identical roundtrip of tbl data
 rusqlite = ["dep:rusqlite"]
 
 [dependencies]
@@ -23,6 +20,7 @@ hex = "0.4.3"
 hex-literal = "0.3.4"
 indexmap = "1.9.1"
 ioutil = { path = "../tocs_internal/ioutil" }
+itertools = "0.10.4"
 simple_logger = { version = "1", default-features = false, features = ["stderr"], optional = true }
 smallvec = "1.9.0"
 smol_str = { version = "0.1.23", default-features = false }
