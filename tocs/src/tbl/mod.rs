@@ -1023,6 +1023,25 @@ pub enum Version<'a> {
     V2(&'a IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>), // generic version with custom schema (with header counts / CS2 onward)
 }
 
+impl std::str::FromStr for Version<'static> {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        match s {
+            "cs1" => Ok(Version::CS1En),
+            "CS1" => Ok(Version::CS1En),
+            "cs2" => Ok(Version::CS2En),
+            "CS2" => Ok(Version::CS2En),
+            "cs3" => Ok(Version::CS3),
+            "CS3" => Ok(Version::CS3),
+            "cs4" => Ok(Version::CS4),
+            "CS4" => Ok(Version::CS4),
+            "v1" => Ok(Version::V1(&schemas::EMPTY)),
+            "v2" => Ok(Version::V2(&schemas::EMPTY)),
+            _ => Err("invalid/unknown tbl version"),
+        }
+    }
+}
+
 impl<'a> Version<'a> {
     fn without_schema(&self) -> VersionWithoutSchema {
         match self {
@@ -1035,7 +1054,7 @@ impl<'a> Version<'a> {
         }
     }
 
-    fn schemas(&self) -> &'a IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> {
+    pub fn schemas(&self) -> &'a IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> {
         match self {
             Version::CS1En => &schemas::CS1_ATOMIC,
             Version::CS2En => &schemas::CS2_ATOMIC,
@@ -1055,6 +1074,14 @@ pub struct Tbl {
 }
 
 impl Tbl {
+    pub fn new<I: IntoIterator<Item = SmolStr>, J: IntoIterator<Item = (SmolStr, IndexMap<SmolStr, AtomicValue>)>>(version: Version, headers: I, entries: J) -> Self {
+        Self {
+            version: version.without_schema(),
+            headers: headers.into_iter().collect(),
+            entries: entries.into_iter().collect(),
+        }
+    }
+
     pub fn headers(&self) -> impl AsRef<[&str]> {
         let hdr: SmallVec<[&str; 6]> = self.headers.iter().map(|s| s.as_ref()).collect();
         hdr
@@ -1066,6 +1093,10 @@ impl Tbl {
 
     pub fn get_mut_entries(&mut self) -> &mut std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)> {
         &mut self.entries
+    }
+
+    pub fn into_entries(self) -> std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)> {
+        self.entries
     }
 }
 
@@ -1093,6 +1124,73 @@ fn try_read<F: std::io::Read + std::io::Seek>(f: &mut F, logger: &mut WarningLog
     }
 }
 
+fn warnings_are_likely_fine(tbl: &Tbl, schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>, warnings: &[DeserializeError]) -> bool {
+    // TODO: warnings are currently added to the warning log deep in the call stack. no context is available because it is only added (for errors) as the stack unwinds. we need to invert that (callers hand callees the context) in order to properly analyze the errors here.
+    // this might make the good path (everything is fine) slower, but, oh well.
+    return true; // for now
+
+    let mut utf8errors = 0;
+    // For errors that appear while parsing an entry, check that the schema for the entry is known.
+    // For other errors, check that they are probably minor.
+    // While we're at it, also count the number of UTF8 errors.
+    for w in warnings.iter() {
+        if matches!(w.detail, DeserializeErrorDetail::UTF8(_, _)) {
+            utf8errors += 1;
+        }
+        let mut is_entry_error = false;
+        for pos in w.context.iter() {
+            match pos {
+                DeserializeErrorPosition::Start => {}
+                DeserializeErrorPosition::TblHeader => {}
+                DeserializeErrorPosition::TblHeaderEntry { .. } => {}
+                DeserializeErrorPosition::Entry { number } => {
+                    let entries = tbl.get_entries();
+                    let number: usize = (*number).try_into().unwrap();
+                    let header: SmolStr = entries[number].0.clone();
+                    if !schemas.contains_key(&header) {
+                        return false;
+                    } else {
+                        is_entry_error = true;
+                    }
+                }
+                DeserializeErrorPosition::EntryHeader => {}
+                DeserializeErrorPosition::EntryData => {}
+                DeserializeErrorPosition::Value(_) => {}
+                DeserializeErrorPosition::Attribute(_) => {}
+                DeserializeErrorPosition::End => {}
+            }
+        }
+        if !is_entry_error {
+            match &w.detail {
+                DeserializeErrorDetail::IO(_) => unreachable!(),
+                DeserializeErrorDetail::UTF8(_, _) => return false,
+                DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { .. } => {} // it's probably fine
+                DeserializeErrorDetail::DuplicateHeader(_) => {}
+                DeserializeErrorDetail::EntryHeaderNotInTblHeader { .. } => {}
+                DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, .. } => {
+                    if !schemas.contains_key(header) {
+                        return false; // otherwise it's probably fine
+                    }
+                }
+                DeserializeErrorDetail::EntryDataLengthMismatch { .. } => {
+                    return false;
+                }
+                DeserializeErrorDetail::TrailingData => {
+                    return false;
+                }
+            }
+        }
+    }
+
+    // if there are too many utf8 errors, there's probably an encoding mismatch or something
+    if utf8errors > std::cmp::min(std::cmp::max(1, tbl.get_entries().len() / 10), 10) {
+        return false;
+    }
+
+    // seems fine
+    return true;
+}
+
 pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> ReadTblResult {
     log::debug!("Generic tbl read");
     let mut logger = WarningLogger::new();
@@ -1114,11 +1212,15 @@ pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> Re
         });
     }
     logger.clear();
+    log::debug!("Rereading the tbl non-strictly");
     if let Ok(tbl) = try_read(f, &mut logger, false, version) {
-        return ReadTblResult::Warn {
-            tbl,
-            warnings: logger.into_warnings(),
-        };
+        let warnings = logger.into_warnings();
+        // do all entries in the file for which there are warnings have known schemas?
+        if warnings_are_likely_fine(&tbl, version.schemas(), &warnings) {
+            // TODO: check that there are not too many UTF-8 errors?
+            log::debug!("Reread the tbl non-strictly, seems fine.");
+            return ReadTblResult::Warn { tbl, warnings };
+        }
     }
 
     ReadTblResult::Err(first_error)
@@ -1131,6 +1233,23 @@ pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, Serialize
     };
     f.flush().map_err(SerializeError::IOError)?;
     Ok(written)
+}
+
+pub fn read_file<P: AsRef<std::path::Path>>(path: P, version: Version) -> ReadTblResult {
+    match std::fs::File::open(path.as_ref()) {
+        Ok(f) => read(&mut std::io::BufReader::new(f), version),
+        Err(e) => ReadTblResult::Err(DeserializeError {
+            detail: DeserializeErrorDetail::IO(e),
+            position: None,
+            context: vec![DeserializeErrorPosition::Start],
+        }),
+    }
+}
+
+pub fn write_file<P: AsRef<std::path::Path>>(path: P, tbl: &Tbl) -> Result<usize, SerializeError> {
+    std::fs::File::open(path.as_ref())
+        .map_err(SerializeError::IOError)
+        .and_then(|f| write(&mut std::io::BufWriter::new(f), tbl))
 }
 
 // tests

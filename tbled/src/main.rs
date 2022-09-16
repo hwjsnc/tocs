@@ -17,8 +17,8 @@ type Attributes = IndexMap<SmolStr, tocs::tbl::AtomicType>;
 type AttributeValues = IndexMap<SmolStr, tocs::tbl::AtomicValue>;
 
 // Given rows in any order, collect all rows with the same header together
-fn partition_entries_with_headers(headers: IndexMap<SmolStr, u32>, entries: std::vec::Vec<(SmolStr, AttributeValues)>) -> IndexMap<SmolStr, std::vec::Vec<AttributeValues>> {
-    let mut entries_for_header: IndexMap<SmolStr, std::vec::Vec<AttributeValues>> = headers.into_iter().map(|(hdr, _)| (hdr, vec![])).collect();
+fn partition_entries_with_headers(headers: std::vec::Vec<SmolStr>, entries: std::vec::Vec<(SmolStr, AttributeValues)>) -> IndexMap<SmolStr, std::vec::Vec<AttributeValues>> {
+    let mut entries_for_header: IndexMap<SmolStr, std::vec::Vec<AttributeValues>> = headers.into_iter().map(|hdr| (hdr, vec![])).collect();
     for (hdr, data) in entries.into_iter() {
         match entries_for_header.entry(hdr) {
             indexmap::map::Entry::Occupied(mut e) => {
@@ -32,55 +32,27 @@ fn partition_entries_with_headers(headers: IndexMap<SmolStr, u32>, entries: std:
     entries_for_header
 }
 
-// TODO: move this to tocs?
-#[derive(Debug, Clone, Copy)]
-pub enum TblVersion {
-    CS1,
-    CS2,
-    CS3,
-    CS4,
-}
-
-impl std::str::FromStr for TblVersion {
-    type Err = &'static str;
-    fn from_str(s: &str) -> Result<Self, &'static str> {
-        match s {
-            "cs1" => Ok(TblVersion::CS1),
-            "CS1" => Ok(TblVersion::CS1),
-            "cs2" => Ok(TblVersion::CS2),
-            "CS2" => Ok(TblVersion::CS2),
-            "cs3" => Ok(TblVersion::CS3),
-            "CS3" => Ok(TblVersion::CS3),
-            "cs4" => Ok(TblVersion::CS4),
-            "CS4" => Ok(TblVersion::CS4),
-            _ => Err("invalid/unknown game"),
-        }
-    }
-}
-
 #[derive(Debug, Parser)]
 struct CliArgs {
     #[clap(short, long)]
-    nonstrict: bool,
-    #[clap(short, long)]
-    game_version: Option<TblVersion>,
+    game_version: Option<tocs::tbl::Version<'static>>,
     #[clap(short, long)]
     file: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, Debug)]
 enum Msg {
-    SelectAndLoadFile(TblVersion), // user wants to load a file
-    SaveFile,                      // user wants to save to the same file
-    SelectAndSaveFile,             // user wants to save a file
-    ExportCSV,                     // user wants to export file to csv
-    ShowWarnings,                  // user wants to see warnings
-    FileReloaded,                  // user loaded a different tbl file and we have to update all widgets accordingly
-    UpdateTable,                   // user selected a different header; update the table widget
-    DuplicateEntry,                // user wants to duplicate the current row
-    DeleteEntry,                   // user wants to delete the current row
-    TableEvent,                    // an arbitrary event on the table
-    DoneEditing,                   // user is done editing, now the value should be updated
+    SelectAndLoadFile(tocs::tbl::Version<'static>), // user wants to load a file
+    SaveFile,                                       // user wants to save to the same file
+    SelectAndSaveFile,                              // user wants to save a file
+    ExportCSV,                                      // user wants to export file to csv
+    ShowWarnings,                                   // user wants to see warnings
+    FileReloaded,                                   // user loaded a different tbl file and we have to update all widgets accordingly
+    UpdateTable,                                    // user selected a different header; update the table widget
+    DuplicateEntry,                                 // user wants to duplicate the current row
+    DeleteEntry,                                    // user wants to delete the current row
+    TableEvent,                                     // an arbitrary event on the table
+    DoneEditing,                                    // user is done editing, now the value should be updated
 }
 
 struct Widgets {
@@ -92,11 +64,10 @@ struct Widgets {
 
 pub struct AppData {
     entries: IndexMap<SmolStr, std::vec::Vec<AttributeValues>>,
-    tbl_version: TblVersion,
+    tbl_version: tocs::tbl::Version<'static>,
     path: std::path::PathBuf,
     active_entry_type: Option<SmolStr>,
-    strict: bool,
-    warnlog: tocs::tbl::WarningLogger<tocs::tbl::DeserializeError>,
+    warnings: std::vec::Vec<tocs::tbl::DeserializeError>,
     //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
 }
 
@@ -135,7 +106,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SelectAndLoadFile(TblVersion::CS1),
+            Msg::SelectAndLoadFile(tocs::tbl::Version::CS1En),
         );
 
         menu.add_emit(
@@ -143,7 +114,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SelectAndLoadFile(TblVersion::CS2),
+            Msg::SelectAndLoadFile(tocs::tbl::Version::CS2En),
         );
 
         menu.add_emit(
@@ -151,7 +122,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SelectAndLoadFile(TblVersion::CS3),
+            Msg::SelectAndLoadFile(tocs::tbl::Version::CS3),
         );
 
         menu.add_emit(
@@ -159,7 +130,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SelectAndLoadFile(TblVersion::CS4),
+            Msg::SelectAndLoadFile(tocs::tbl::Version::CS4),
         );
 
         menu.add_emit("&Save/Save\t", fltk::enums::Shortcut::Ctrl | 's', fltk::menu::MenuFlag::Normal, sender.clone(), Msg::SaveFile);
@@ -329,22 +300,31 @@ impl App {
                         tbl_version,
                         path: _,
                         entries,
-                        strict,
-                        warnlog,
+                        warnings,
                     } = &mut *state;
                     *active_entry_type = None;
                     *tbl_version = *version;
                     entries.clear();
-                    warnlog.clear();
+                    warnings.clear();
                     // try loading data from file
-                    let result = load_tbl_file(&path, *version, warnlog, *strict);
-                    match result {
-                        Ok(entries) => {
-                            state.entries = entries;
-                            state.path = path
+                    match tocs::tbl::read_file(&path, *version) {
+                        tocs::tbl::ReadTblResult::Ok(tbl) => {
+                            let headers = tbl.headers().as_ref().iter().map(SmolStr::from).collect();
+                            state.entries = partition_entries_with_headers(headers, tbl.into_entries());
+                            state.path = path;
                         }
-                        Err(e) => {
-                            fltk::dialog::alert(400, 200, &format!("error loading file: {}", e));
+                        tocs::tbl::ReadTblResult::Warn { tbl, warnings } => {
+                            let headers = tbl.headers().as_ref().iter().map(SmolStr::from).collect();
+                            state.warnings = warnings;
+                            state.entries = partition_entries_with_headers(headers, tbl.into_entries());
+                            state.path = path;
+                            // TODO: if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
+                            fltk::dialog::alert_default(
+                                "Warning: Some errors/inconsistencies in the file were detected. Please look at them under the Warnings menu option and ensure that they are harmless",
+                            );
+                        }
+                        tocs::tbl::ReadTblResult::Err(e) => {
+                            fltk::dialog::alert_default(&format!("error loading file: {}", e));
                             state.path = std::path::PathBuf::new();
                         }
                     }
@@ -416,14 +396,13 @@ impl App {
                         tbl_version: _,
                         path: _,
                         entries,
-                        strict: _,
-                        warnlog,
+                        warnings,
                     } = &mut *state;
                     // if there are warnings, show button to display them
-                    if warnlog.has_warnings() {
-                        self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap().activate();
-                    } else {
+                    if warnings.is_empty() {
                         self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap().deactivate();
+                    } else {
+                        self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap().activate();
                     }
                     // reset header selector
                     *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
@@ -447,7 +426,7 @@ impl App {
                     log::trace!("beep");
                     // width of each column = max(header width, width of each entry in that column)
                     // width of each row = max(width of all entries in all rows)
-                    let attrs = schema_for_header(hdr, schemas_for_version(state.tbl_version));
+                    let attrs = schema_for_header(hdr, state.tbl_version.schemas());
                     let mut column_widths: std::vec::Vec<i32> = attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect();
                     let entries = state.entries.get(hdr).unwrap();
                     let nrows = entries.len().try_into().unwrap();
@@ -538,8 +517,8 @@ impl App {
             Some(Msg::ShowWarnings) => {
                 let warnstring = {
                     let mut state = self.state.lock().unwrap();
-                    let AppData { warnlog, .. } = &mut *state;
-                    Some(warnlog.warnings().fold(
+                    let AppData { warnings, .. } = &mut *state;
+                    Some(warnings.iter().fold(
                         "the following non-fatal error(s) occured loading the file.\nplease study them carefully and, if necessary, fix them before continuing!\n\n".to_string(),
                         |mut s, warn| {
                             writeln!(s, "{}", warn).unwrap();
@@ -588,41 +567,6 @@ fn schema_for_header<'a>(header: &str, schemas: &'a IndexMap<SmolStr, Attributes
     schemas.get(header).unwrap_or(&GENERIC)
 }
 
-fn schemas_for_version(version: TblVersion) -> &'static IndexMap<SmolStr, Attributes> {
-    match version {
-        TblVersion::CS1 => &tocs::tbl::schemas::CS1_ATOMIC,
-        TblVersion::CS2 => &tocs::tbl::schemas::CS2_ATOMIC,
-        TblVersion::CS3 => &tocs::tbl::schemas::CS3_ATOMIC,
-        TblVersion::CS4 => &tocs::tbl::schemas::CS4_ATOMIC,
-    }
-}
-
-fn load_tbl_file(
-    path: &std::path::Path,
-    version: TblVersion,
-    warnings: &mut tocs::tbl::WarningLogger<tocs::tbl::DeserializeError>,
-    strict: bool,
-) -> Result<IndexMap<SmolStr, std::vec::Vec<AttributeValues>>, tocs::tbl::DeserializeError> {
-    match version {
-        TblVersion::CS1 => tocs::tbl::load_file_v1(path, warnings, strict, schemas_for_version(version)).map(|entries| (IndexMap::new(), entries)),
-        TblVersion::CS2 => tocs::tbl::load_file_v2(path, warnings, strict, schemas_for_version(version)),
-        TblVersion::CS3 => tocs::tbl::load_file_v2(path, warnings, strict, schemas_for_version(version)),
-        TblVersion::CS4 => tocs::tbl::load_file_v2(path, warnings, strict, schemas_for_version(version)),
-    }
-    .map(|(headers, entries)| partition_entries_with_headers(headers, entries))
-}
-
-fn save_tbl_file(path: &std::path::Path, version: TblVersion, entries: &IndexMap<SmolStr, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
-    let headers: std::vec::Vec<SmolStr> = entries.keys().cloned().collect();
-    let entries: std::vec::Vec<(SmolStr, AttributeValues)> = entries.iter().flat_map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).collect();
-    match version {
-        TblVersion::CS1 => tocs::tbl::save_file_v1(path, &entries),
-        TblVersion::CS2 => tocs::tbl::save_file_v2(path, &headers, &entries),
-        TblVersion::CS3 => tocs::tbl::save_file_v2(path, &headers, &entries),
-        TblVersion::CS4 => tocs::tbl::save_file_v2(path, &headers, &entries),
-    }
-}
-
 fn export_csv(path: &std::path::Path, data: &[AttributeValues]) -> std::io::Result<()> {
     log::debug!("export data as CSV to '{}'", path.display());
     let mut csv = csv::WriterBuilder::new().quote_style(csv::QuoteStyle::Always).from_path(path)?;
@@ -648,37 +592,60 @@ fn export_csv(path: &std::path::Path, data: &[AttributeValues]) -> std::io::Resu
     Ok(())
 }
 
+fn save_tbl_file(path: &std::path::Path, version: tocs::tbl::Version, entries: &IndexMap<SmolStr, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
+    let headers: std::vec::Vec<SmolStr> = entries.keys().cloned().collect();
+    let entries: std::vec::Vec<(SmolStr, AttributeValues)> = entries.iter().flat_map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).collect();
+    let tbl = tocs::tbl::Tbl::new(version, headers, entries);
+    tocs::tbl::write_file(path, &tbl)
+}
+
 fn main() {
     simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
 
-    let CliArgs { nonstrict, game_version, file } = CliArgs::parse();
+    let CliArgs { game_version, file } = CliArgs::parse();
 
-    let mut warnlog = tocs::tbl::WarningLogger::new();
     let appstate = match (game_version, file) {
-        (Some(tbl_version), Some(path)) => {
-            log::debug!("parsing {} as a {:?} file", path.display(), tbl_version);
-            let active_entry_type = None;
-            let entries = load_tbl_file(&path, tbl_version, &mut warnlog, !nonstrict).unwrap();
-            AppData {
-                active_entry_type,
-                tbl_version,
-                path,
-                entries,
-                strict: !nonstrict,
-                warnlog,
+        (Some(version), Some(path)) => {
+            log::debug!("parsing {} as a {:?} file", path.display(), version);
+            // try loading data from file
+            match tocs::tbl::read_file(&path, version) {
+                tocs::tbl::ReadTblResult::Ok(tbl) => {
+                    let headers = tbl.headers().as_ref().iter().map(SmolStr::from).collect();
+                    AppData {
+                        active_entry_type: None,
+                        tbl_version: version,
+                        path,
+                        entries: partition_entries_with_headers(headers, tbl.into_entries()),
+                        warnings: vec![],
+                    }
+                }
+                tocs::tbl::ReadTblResult::Warn { tbl, warnings } => {
+                    let headers = tbl.headers().as_ref().iter().map(SmolStr::from).collect();
+                    AppData {
+                        active_entry_type: None,
+                        tbl_version: version,
+                        path,
+                        entries: partition_entries_with_headers(headers, tbl.into_entries()),
+                        warnings,
+                    }
+                    // TODO: if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
+                }
+                tocs::tbl::ReadTblResult::Err(e) => {
+                    log::error!("Unable to read file: {e}");
+                    return;
+                }
             }
         }
         (Some(_), None) | (None, Some(_)) => {
             log::error!("game version and file must be given both (or neither)");
             return;
         }
-        _ => AppData {
+        (None, None) => AppData {
             active_entry_type: None,
-            tbl_version: TblVersion::CS1,
+            tbl_version: tocs::tbl::Version::CS1En,
             path: std::path::PathBuf::new(),
             entries: IndexMap::new(),
-            strict: true,
-            warnlog,
+            warnings: vec![],
         },
     };
 

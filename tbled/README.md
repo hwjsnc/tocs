@@ -34,12 +34,17 @@ If you want to save your changes, select "Save" to overwrite the current file or
 
 ![A screenshot of `tbled` in action. Some UI elements are labeled](screenshot.png)
 
+Warnings
+--------
+
 The tool does certain checks to detect discrepancies in the data it loads.
 In some cases, these checks can be too aggressive and reject data which would work perfectly well when loaded by the game.
-This can happen with a few of the original game files, or with files that have been manually hex edited.
-If this happens, you can override a lot of the optional checks by running tbled from the terminal with the option `--nonstrict` (this option is intentionally hidden in the GUI).
-If you do this, it is your responsibility to check every warning and decide whether or not to fix the detected problem, as well as how to fix it.
+Files with known schemas can be read under certain circumstances even when these checks fail.
+For those cases, a list of warnings will be available under the "Warnings" menu option.
+If there are warnings, it is your responsibility to check every warning and decide whether or not to fix the detected problem, as well as how to fix it.
 Failing to do this could silently corrupt the data.
+
+If there are warnings for files that have previously been written with this tool, that's a bug.
 
 Releases (downloads & changelogs)
 ---------------------------------
@@ -47,6 +52,7 @@ Releases (downloads & changelogs)
 ### v0.3 (in development):
 
 - schemas for CS4
+- improved handling of files with incorrect length bytes
 
 ### [v0.2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.2/tbled-v0.2.exe):
 

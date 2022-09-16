@@ -20,6 +20,8 @@ lazy_static::lazy_static! {
     pub static ref CS3_ATOMIC : IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> = get_nf1_for_all(&CS3, &CS3_COMMON).expect("");
     pub static ref CS4_ATOMIC : IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> = get_nf1_for_all(&CS4, &CS4_COMMON).expect("");
     pub static ref CS5_ATOMIC : IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> = get_nf1_for_all(&CS5, &CS5_COMMON).expect("");
+
+    pub static ref EMPTY : IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> = [].into_iter().collect();
 }
 
 fn gen_schemas_cs1() -> IndexMap<SmolStr, IndexMap<SmolStr, Type>> {
