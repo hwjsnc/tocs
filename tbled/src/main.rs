@@ -87,7 +87,9 @@ impl App {
         let (w, h) = (1280, 720);
         let app = fltk::app::App::default();
         let (sender, receiver) = fltk::app::channel();
-        let mut win = fltk::window::Window::default().with_size(w, h).with_label("tbled");
+        let mut win = fltk::window::Window::default()
+            .with_size(w, h)
+            .with_label(&format!("{} version {}", env! {"CARGO_PKG_NAME"}, env! {"CARGO_PKG_VERSION"}));
         win.set_callback(|_| {
             // override close window on pressing escape
             if fltk::app::event() == fltk::enums::Event::Close {
