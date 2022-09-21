@@ -122,29 +122,30 @@ fn to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: Game
             let data = std::fs::read(path).map_err(|e| format!("couldn't read tbl file: {e}")).unwrap();
             let mut logger = tocs::tbl::WarningLogger::new();
             let entries = match tbl_version {
-                Game::CS1 => tocs::tbl::deserialize_tbl_v1(&mut std::io::Cursor::new(&tocs::cs1::tbl::fix(&data)), &mut logger, true, schemas)
+                // TODO: use generic parser code
+                Game::CS1 => tocs::tbl::deserialize_tbl_v1::<_, /*STRICT=*/ true>(&mut std::io::Cursor::new(&tocs::cs1::tbl::fix(&data)), &mut logger, schemas)
                     .map_err(|e| format!("couldn't parse tbl file: {e}"))
                     .unwrap(),
                 Game::CS2 => {
-                    tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&data), &mut logger, true, schemas)
+                    tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true>(&mut std::io::Cursor::new(&data), &mut logger, schemas)
                         .map_err(|e| format!("couldn't parse tbl file: {e}"))
                         .unwrap()
                         .1
                 }
                 Game::CS3 => {
-                    tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&tocs::cs3::tbl::fix(&data)), &mut logger, true, schemas)
+                    tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true>(&mut std::io::Cursor::new(&tocs::cs3::tbl::fix(&data)), &mut logger, schemas)
                         .map_err(|e| format!("couldn't parse tbl file: {e}"))
                         .unwrap()
                         .1
                 }
                 Game::CS4 => {
-                    tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&data), &mut logger, true, schemas)
+                    tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true>(&mut std::io::Cursor::new(&data), &mut logger, schemas)
                         .map_err(|e| format!("couldn't parse tbl file: {e}"))
                         .unwrap()
                         .1
                 }
                 Game::CS5 => {
-                    tocs::tbl::deserialize_tbl_v2(&mut std::io::Cursor::new(&data), &mut logger, true, schemas)
+                    tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true>(&mut std::io::Cursor::new(&data), &mut logger, schemas)
                         .map_err(|e| format!("couldn't parse tbl file: {e}"))
                         .unwrap()
                         .1
