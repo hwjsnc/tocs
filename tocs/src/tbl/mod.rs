@@ -75,8 +75,6 @@ impl<W> WarningLogger<W> {
 }
 
 mod detail {
-    use super::WarningLogger;
-
     pub trait ErrorWithContext {
         type Position;
         fn add_context(&mut self, position: Self::Position);
@@ -1218,10 +1216,6 @@ fn try_read<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: boo
 }
 
 fn warnings_are_likely_fine(tbl: &Tbl, schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>, warnings: &[DeserializeError]) -> bool {
-    // TODO: warnings are currently added to the warning log deep in the call stack. no context is available because it is only added (for errors) as the stack unwinds. we need to invert that (callers hand callees the context) in order to properly analyze the errors here.
-    // this might make the good path (everything is fine) slower, but, oh well.
-    return true; // for now
-
     let mut utf8errors = 0;
     // For errors that appear while parsing an entry, check that the schema for the entry is known.
     // For other errors, check that they are probably minor.
