@@ -35,7 +35,7 @@ impl WarningDialog {
             for pos in w.context.iter() {
                 writeln!(s, "    - {pos}").unwrap();
             }
-            writeln!(s, "").unwrap();
+            writeln!(s).unwrap();
         }
         let mut buf = fltk::text::TextBuffer::default();
         buf.set_text(&s);

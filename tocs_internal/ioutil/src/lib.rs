@@ -26,7 +26,7 @@ impl<'a> ParseContext<'a> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PrimitiveParseError {
     UnexpectedEOF { position: usize }, // expected more data, but reached the end
     MissingEOF { position: usize },    // expected EOF, but there is more data

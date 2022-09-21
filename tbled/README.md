@@ -15,6 +15,18 @@ Therefore it is highly recommended to BACK UP ALL DATA FREQUENTLY.
 - Trails of Cold Steel (XSeed PC version, english language only)
 - Trails of Cold Steel II (XSeed PC version, english language only)
 - Trails of Cold Steel III (NISA PC version)
+- Trails of Cold Steel IV (NISA Switch version)
+
+The following versions are untested but likely work:
+
+- Trails of Cold Steel III (NISA Switch version)
+- Trails of Cold Steel III (NISA PC version)
+
+The following versions are explicitely not supported at this time:
+- Trails of Cold Steel (XSeed PC version, Japanese language)
+- Trails of Cold Steel II (XSeed PC version, Japanese language)
+
+Other versions you'll have to test yourself.
 
 Usage
 -----
@@ -42,17 +54,17 @@ In some cases, these checks can be too aggressive and reject data which would wo
 Files with known schemas can be read under certain circumstances even when these checks fail.
 For those cases, a list of warnings will be available under the "Warnings" menu option.
 If there are warnings, it is your responsibility to check every warning and decide whether or not to fix the detected problem, as well as how to fix it.
-Failing to do this could silently corrupt the data.
 
 If there are warnings for files that have previously been written with this tool, that's a bug.
 
 Releases (downloads & changelogs)
 ---------------------------------
 
-### v0.3 (in development):
+### [v0.3](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.3/tbled-v0.3.exe):
 
 - schemas for CS4
-- improved handling of files with incorrect length bytes
+- improved handling of slightly-inconsistent files
+- improved warning reporting
 
 ### [v0.2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.2/tbled-v0.2.exe):
 

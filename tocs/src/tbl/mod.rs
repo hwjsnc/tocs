@@ -49,6 +49,7 @@ impl<W> WarningLogger<W> {
         }
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.warnings.len()
     }
@@ -802,11 +803,9 @@ fn deserialize_header_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, c
                 log::error!("{}", err.detail);
             }
             return Err(err);
-        } else {
-            if LOG {
-                log::warn!("{}", err.detail);
-                log.log(err);
-            }
+        } else if LOG {
+            log::warn!("{}", err.detail);
+            log.log(err);
         }
     }
     if LOG {
@@ -858,11 +857,9 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
                         log::error!("duplicate in tbl header: '{}'", hdr);
                     }
                     return Err(err);
-                } else {
-                    if LOG {
-                        log::warn!("duplicate in tbl header: '{}'", hdr);
-                        log.log(err);
-                    }
+                } else if LOG {
+                    log::warn!("duplicate in tbl header: '{}'", hdr);
+                    log.log(err);
                 }
                 e.insert(count);
             }
@@ -1205,12 +1202,12 @@ fn try_read<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: boo
         VersionWithoutSchema::V1 => deserialize_tbl_v1::<_, STRICT, LOG>(f, logger, version.schemas()).map(|entries| Tbl {
             version: version.without_schema(),
             headers: entries.iter().map(|(h, _)| h).unique().cloned().collect(),
-            entries: entries,
+            entries,
         }),
         VersionWithoutSchema::V2 => deserialize_tbl_v2::<_, STRICT, LOG>(f, logger, version.schemas()).map(|(headers_with_counts, entries)| Tbl {
             version: version.without_schema(),
             headers: headers_with_counts.into_iter().map(|(h, _)| h).collect(),
-            entries: entries,
+            entries,
         }),
     }
 }
@@ -1275,7 +1272,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &IndexMap<SmolStr, IndexMap<Smol
     }
 
     // seems fine
-    return true;
+    true
 }
 
 pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> ReadTblResult {
@@ -1315,7 +1312,7 @@ pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> Re
 
 pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, SerializeError> {
     let written = match tbl.version {
-        VersionWithoutSchema::V1 => serialize_tbl_v1(f, &tbl.entries.as_ref())?,
+        VersionWithoutSchema::V1 => serialize_tbl_v1(f, tbl.entries.as_ref())?,
         VersionWithoutSchema::V2 => serialize_tbl_v2(f, &tbl.headers, tbl.entries.as_ref())?,
     };
     f.flush().map_err(SerializeError::IOError)?;
