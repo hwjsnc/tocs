@@ -1,12 +1,12 @@
 #![windows_subsystem = "windows"] // don't open terminal on windows
 
+mod warn_diag;
+
 use fltk::prelude::GroupExt as _;
 use fltk::prelude::InputExt as _;
 use fltk::prelude::MenuExt as _;
 use fltk::prelude::TableExt as _;
 use fltk::prelude::WidgetExt as _;
-
-use std::fmt::Write;
 
 use clap::Parser;
 
@@ -517,20 +517,9 @@ impl App {
                 }
             }
             Some(Msg::ShowWarnings) => {
-                let warnstring = {
-                    let mut state = self.state.lock().unwrap();
-                    let AppData { warnings, .. } = &mut *state;
-                    Some(warnings.iter().fold(
-                        "the following non-fatal error(s) occured loading the file.\nplease study them carefully and, if necessary, fix them before continuing!\n\n".to_string(),
-                        |mut s, warn| {
-                            writeln!(s, "{}", warn).unwrap();
-                            s
-                        },
-                    ))
-                };
-                if let Some(s) = warnstring {
-                    fltk::dialog::message_default(&s);
-                }
+                let mut state = self.state.lock().unwrap();
+                let AppData { warnings, .. } = &mut *state;
+                warn_diag::WarningDialog::new(warnings.iter());
             }
             None => {}
         }

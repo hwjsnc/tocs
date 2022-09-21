@@ -593,9 +593,9 @@ pub enum DeserializeErrorPosition {
 
 #[derive(Debug)]
 pub struct DeserializeError {
-    detail: DeserializeErrorDetail,
-    position: Option<u64>,                            // seek position in the file
-    context: std::vec::Vec<DeserializeErrorPosition>, // first element is the position of the original cause, the rest is how we got there; may be empty
+    pub detail: DeserializeErrorDetail,
+    pub position: Option<u64>,                            // seek position in the file
+    pub context: std::vec::Vec<DeserializeErrorPosition>, // first element is the position of the original cause, the rest is how we got there; may be empty
 }
 
 impl detail::ErrorWithContext for DeserializeError {
