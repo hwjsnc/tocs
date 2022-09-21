@@ -49,6 +49,10 @@ impl<W> WarningLogger<W> {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.warnings.len()
+    }
+
     pub fn ignores_warnings(&self) -> bool {
         self.ignore
     }
@@ -67,6 +71,32 @@ impl<W> WarningLogger<W> {
 
     fn into_warnings(self) -> std::vec::Vec<W> {
         self.warnings
+    }
+}
+
+mod detail {
+    use super::WarningLogger;
+
+    pub trait ErrorWithContext {
+        type Position;
+        fn add_context(&mut self, position: Self::Position);
+        fn with_context(mut self, position: Self::Position) -> Self
+        where
+            Self: Sized,
+        {
+            self.add_context(position);
+            self
+        }
+    }
+}
+
+use detail::ErrorWithContext;
+
+impl<P: Clone, W: ErrorWithContext<Position = P>> WarningLogger<W> {
+    fn add_context_for_all_since(&mut self, number: usize, context: P) {
+        for w in self.warnings[number..].iter_mut() {
+            w.add_context(context.clone());
+        }
     }
 }
 
@@ -570,6 +600,14 @@ pub struct DeserializeError {
     context: std::vec::Vec<DeserializeErrorPosition>, // first element is the position of the original cause, the rest is how we got there; may be empty
 }
 
+impl detail::ErrorWithContext for DeserializeError {
+    type Position = DeserializeErrorPosition;
+
+    fn add_context(&mut self, position: Self::Position) {
+        self.context.push(position);
+    }
+}
+
 impl std::fmt::Display for DeserializeErrorDetail {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match self {
@@ -741,6 +779,7 @@ fn deserialize_header_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, c
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
 ) -> Result<(u16, IndexMap<SmolStr, u32>), DeserializeError> {
+    let warnings_before = log.len();
     let number_of_entries = read_bytes(f).map(u16::from_le_bytes).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: f.stream_position().ok(),
@@ -772,6 +811,9 @@ fn deserialize_header_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, c
             }
         }
     }
+    if LOG {
+        log.add_context_for_all_since(warnings_before, DeserializeErrorPosition::TblHeader);
+    }
     Ok((number_of_entries, header_counts))
 }
 
@@ -779,6 +821,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
 ) -> Result<IndexMap<SmolStr, u32>, DeserializeError> {
+    let warnings_before = log.len();
     let number_of_headers = u32::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: f.stream_position().ok(),
@@ -830,6 +873,9 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
             }
         }
     }
+    if LOG {
+        log.add_context_for_all_since(warnings_before, DeserializeErrorPosition::TblHeader);
+    }
     Ok(header_counts)
 }
 
@@ -838,15 +884,13 @@ pub fn deserialize_entry_data<F: std::io::Read + std::io::Seek, const STRICT: bo
     log: &mut WarningLogger<DeserializeError>,
     schema: &IndexMap<SmolStr, AtomicType>,
 ) -> Result<IndexMap<SmolStr, AtomicValue>, DeserializeError> {
-    // TODO: use smol_str for index?
     let mut values = IndexMap::new();
     for (attr, ty) in schema.iter() {
-        let val = deserialize_atomic_value::<_, STRICT, LOG>(f, log, ty).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::Attribute(attr.clone()));
-            e
-        })?;
+        let warnings_before = log.len();
+        let val = deserialize_atomic_value::<_, STRICT, LOG>(f, log, ty).map_err(|e| e.with_context(DeserializeErrorPosition::Attribute(attr.clone())))?;
         if LOG {
             log::trace!("attribute '{}' = {:?}", attr, val);
+            log.add_context_for_all_since(warnings_before, DeserializeErrorPosition::Attribute(attr.clone()));
         }
         values.insert(attr.clone(), val);
     }
@@ -860,10 +904,8 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
     schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
 ) -> Result<(SmolStr, IndexMap<SmolStr, AtomicValue>), DeserializeError> {
     // read header name and check that it's ok (if necessary)
-    let hdr = deserialize_c_utf8::<_, STRICT, LOG>(f, log).map_err(|mut e| {
-        e.context.push(DeserializeErrorPosition::EntryHeader);
-        e
-    })?;
+    let warnings_before_header = log.len();
+    let hdr = deserialize_c_utf8::<_, STRICT, LOG>(f, log).map_err(|e| e.with_context(DeserializeErrorPosition::EntryHeader))?;
     if let Some(allowed) = header_counts {
         if !allowed.contains_key(&hdr as &str) {
             let e = DeserializeError {
@@ -884,12 +926,15 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
     }
     if LOG {
         log::trace!("entry header name: {}", hdr);
+        log.add_context_for_all_since(warnings_before_header, DeserializeErrorPosition::EntryHeader);
     }
+
+    let warnings_before_data = log.len();
     // read data length
     let len = u16::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: f.stream_position().ok(),
-        context: vec![],
+        context: vec![DeserializeErrorPosition::EntryHeader],
     })?);
     if LOG {
         log::trace!("entry data length: {}", len);
@@ -898,19 +943,15 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
         if LOG {
             log::debug!("parsing data according to schema");
         }
-        let data = deserialize_entry_data::<_, STRICT, LOG>(f, log, schema).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::EntryData);
-            e
-        })?;
+        let data = deserialize_entry_data::<_, STRICT, LOG>(f, log, schema).map_err(|e| e.with_context(DeserializeErrorPosition::EntryData))?;
         (hdr.clone(), data)
     } else {
         if LOG {
             log::debug!("parsing data with general parser");
         }
-        let x = deserialize_atomic_value::<_, STRICT, LOG>(f, log, &AtomicType::X(len.into())).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::Attribute(SmolStr::new("data")));
-            e.context.push(DeserializeErrorPosition::EntryData);
-            e
+        let x = deserialize_atomic_value::<_, STRICT, LOG>(f, log, &AtomicType::X(len.into())).map_err(|e| {
+            e.with_context(DeserializeErrorPosition::Attribute(SmolStr::new("data")))
+                .with_context(DeserializeErrorPosition::EntryData)
         })?;
         (hdr, [(SmolStr::new("data"), x)].into_iter().collect())
     };
@@ -919,7 +960,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
         let e = DeserializeError {
             detail: DeserializeErrorDetail::EntryDataLengthMismatch { expected: len, actual: actual_len },
             position: f.stream_position().ok(),
-            context: vec![DeserializeErrorPosition::EntryData],
+            context: vec![],
         };
         if STRICT {
             if LOG {
@@ -930,6 +971,10 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
             log::warn!("{}", e.detail);
             log.log(e);
         }
+    }
+
+    if LOG {
+        log.add_context_for_all_since(warnings_before_data, DeserializeErrorPosition::EntryData);
     }
     Ok((hdr, data))
 }
@@ -945,13 +990,12 @@ fn deserialize_all_entries<F: std::io::Read + std::io::Seek, const STRICT: bool,
 
     // parse number of entries equal to tbl header
     for i in 0..number_of_entries {
+        let warnings_before = log.len();
         if LOG {
             log::debug!("entry number {}", i);
         }
-        entries.push(deserialize_entry::<_, STRICT, LOG>(f, log, header_counts, schemas).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::Entry { number: i });
-            e
-        })?);
+        entries.push(deserialize_entry::<_, STRICT, LOG>(f, log, header_counts, schemas).map_err(|e| e.with_context(DeserializeErrorPosition::Entry { number: i }))?);
+        log.add_context_for_all_since(warnings_before, DeserializeErrorPosition::Entry { number: i });
     }
 
     // parse the rest of the files
@@ -988,11 +1032,15 @@ fn deserialize_all_entries<F: std::io::Read + std::io::Seek, const STRICT: bool,
             });
         }
     } else {
+        let mut i = number_of_entries;
         while getpos(f)? != file_len {
             if LOG {
                 log::debug!("parsing another entry");
             }
+            let warnings_before = log.len();
             entries.push(deserialize_entry::<_, STRICT, LOG>(f, log, None, schemas)?);
+            log.add_context_for_all_since(warnings_before, DeserializeErrorPosition::Entry { number: i });
+            i = i.saturating_add(1);
         }
     }
 
