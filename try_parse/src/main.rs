@@ -146,7 +146,7 @@ pub fn roundtrip_cs1(path: &std::path::Path, fix_data: bool) {
         std::fs::read(path).unwrap()
     };
     let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v1::<_, /*Strict=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS1_ATOMIC) {
+    match tocs::tbl::deserialize_tbl_v1::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS1_ATOMIC) {
         Ok(entries) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             match tocs::tbl::serialize_tbl_v1(&mut std::io::Cursor::new(&mut serialized), &entries) {
@@ -163,7 +163,7 @@ pub fn roundtrip_cs1(path: &std::path::Path, fix_data: bool) {
 pub fn roundtrip_cs2(path: &std::path::Path, _fix_data: bool) {
     let original = std::fs::read(path).unwrap();
     let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v2::<_, /*Strict=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS2_ATOMIC) {
+    match tocs::tbl::deserialize_tbl_v2::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS2_ATOMIC) {
         Ok((header_counts, entries)) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
@@ -185,7 +185,7 @@ pub fn roundtrip_cs3(path: &std::path::Path, fix_data: bool) {
         std::fs::read(path).unwrap()
     };
     let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v2::<_, /*Strict=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS3_ATOMIC) {
+    match tocs::tbl::deserialize_tbl_v2::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS3_ATOMIC) {
         Ok((header_counts, entries)) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
@@ -203,7 +203,7 @@ pub fn roundtrip_cs3(path: &std::path::Path, fix_data: bool) {
 pub fn roundtrip_cs4(path: &std::path::Path, _fix_data: bool) {
     let original = std::fs::read(path).unwrap();
     let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS4_ATOMIC) {
+    match tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS4_ATOMIC) {
         Ok((header_counts, entries)) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
@@ -221,7 +221,7 @@ pub fn roundtrip_cs4(path: &std::path::Path, _fix_data: bool) {
 pub fn roundtrip_cs5(path: &std::path::Path, _fix_data: bool) {
     let original = std::fs::read(path).unwrap();
     let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS5_ATOMIC) {
+    match tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS5_ATOMIC) {
         Ok((header_counts, entries)) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
