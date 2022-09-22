@@ -9,7 +9,8 @@
         ("text", Type::CUtf8),
         ("unknown_float_1", Type::F32),
         ("unknown_float_2", Type::F32),
-        ("unknown_data", Type::X(16)),
+        ("unknown_data", Type::X(14)),
+        ("event_id", Type::U16),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("AssetCache"), [
         ("unknown_data", Type::X(2)),
