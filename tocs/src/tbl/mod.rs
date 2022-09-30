@@ -1331,7 +1331,9 @@ pub fn read_file<P: AsRef<std::path::Path>>(path: P, version: Version) -> ReadTb
 }
 
 pub fn write_file<P: AsRef<std::path::Path>>(path: P, tbl: &Tbl) -> Result<usize, SerializeError> {
-    std::fs::File::open(path.as_ref())
+    std::fs::File::options()
+        .write(true)
+        .open(path.as_ref())
         .map_err(SerializeError::IOError)
         .and_then(|f| write(&mut std::io::BufWriter::new(f), tbl))
 }

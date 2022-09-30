@@ -60,6 +60,10 @@ If there are warnings for files that have previously been written with this tool
 Releases (downloads & changelogs)
 ---------------------------------
 
+### [v0.3.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.3.1/tbled-v0.3.1.exe)
+
+- Fixed a bug that prevented saving files
+
 ### [v0.3](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.3/tbled-v0.3.exe):
 
 - schemas for CS4
