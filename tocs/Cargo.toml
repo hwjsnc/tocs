@@ -19,7 +19,6 @@ blake2 = "0.10.4"
 hex = "0.4.3"
 hex-literal = "0.3.4"
 indexmap = "1.9.1"
-ioutil = { path = "../tocs_internal/ioutil" }
 itertools = "0.10.4"
 simple_logger = { version = "1", default-features = false, features = ["stderr"], optional = true }
 smallvec = "1.9.0"

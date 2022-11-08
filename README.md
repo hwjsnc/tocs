@@ -8,16 +8,13 @@ it's a work in progress.
 overview
 --------
 
-This project is split up into several crates (some libraries, some binaries) due to technical limitations in rust.
+This project is split up into several crates (some libraries, some binaries) due to a past design mistake and to preserve links into the repository.
 Here's a short overview:
 
 - `tocs` is the core library.
   It currently supports serialization and deserialization of tbl files for Cold Steel 1/2/3.
   Support for "structured parsing" (instead of having tbl entry data be an opaque blob) is very limited atm, but it will hopefully get better as I learn more about what everything does, which will hopefully happen as I build tools that allow me to learn it more quickly.
   If you want to programmatically modify tbl files in Rust, this is what you want.
-
-- `tocs_internal` contains support libraries used internally by `tocs`.
-  You should not use them directly.
 
 - `sqlite_conv` is a CLI program to convert from tbls to a sqlite database.
   This sqlite database can be edited, e.g. with [sqlitebrowser](https://sqlitebrowser.org/) and converted back to tbl files.

@@ -1,5 +1,4 @@
 extern crate clap;
-extern crate ioutil;
 extern crate tocs;
 
 use clap::Parser;

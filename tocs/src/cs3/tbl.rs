@@ -1,6 +1,5 @@
 extern crate blake2;
 extern crate hex_literal;
-extern crate ioutil;
 extern crate lazy_static;
 
 use blake2::Digest as _;

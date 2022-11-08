@@ -169,10 +169,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ioutil"
-version = "0.1.0"
-
-[[package]]
 name = "itertools"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -334,7 +330,6 @@ dependencies = [
  "hex",
  "hex-literal",
  "indexmap",
- "ioutil",
  "itertools",
  "lazy_static",
  "log",
@@ -348,7 +343,6 @@ name = "try_parse"
 version = "0.1.0"
 dependencies = [
  "clap",
- "ioutil",
  "log",
  "simple_logger",
  "tocs",
