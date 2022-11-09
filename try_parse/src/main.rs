@@ -13,16 +13,20 @@ enum Subcommand {
         #[clap(short, long)]
         raw: bool,
     },
-    /// Try to parse a specific file. Also print
+    /// Try to parse a specific tbl file.
     ///
     /// Print information about all the files
-    File {
+    Tbl {
         game: GameVersion,
         path: std::path::PathBuf,
         /// Don't attempt to fix game data with hardcoded values
         #[clap(short, long)]
         raw: bool,
     },
+    /// Try to parse a specific pkg file
+    ///
+    /// For now, only prints the file list
+    Pkg { path: std::path::PathBuf },
 }
 
 // TODO: use generic parser in tocs?
@@ -61,7 +65,7 @@ pub fn main() {
 
     match Subcommand::parse() {
         Subcommand::All { raw } => parse_all(!raw),
-        Subcommand::File { game, path, raw } => match game {
+        Subcommand::Tbl { game, path, raw } => match game {
             GameVersion::CS1 => {
                 roundtrip_cs1(&path, !raw);
             }
@@ -78,6 +82,7 @@ pub fn main() {
                 roundtrip_cs5(&path, !raw);
             }
         },
+        Subcommand::Pkg { path } => parse_pkg(&path),
     }
 }
 
@@ -91,6 +96,7 @@ pub fn parse_all(fix_data: bool) {
             log::info!("trying file {}", path.display());
             roundtrip_cs1(path, fix_data);
         }
+        // TODO: parse .pkgs
     }
 
     let cwd = std::env::current_dir().unwrap();
@@ -246,6 +252,30 @@ fn compare(original: &[u8], other: &[u8], path: &std::path::Path) {
                 other.get(i)
             );
             return;
+        }
+    }
+}
+
+pub fn parse_pkg(base_path: &std::path::Path) {
+    for direntry in walkdir::WalkDir::new(base_path) {
+        let direntry = direntry.unwrap();
+        let path = direntry.path();
+        if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("pkg")) {
+            log::info!("trying file {}", path.display());
+            let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+            let filelist = tocs::pkg::load_filelist(&mut f).unwrap();
+            for entry in filelist {
+                let tocs::pkg::FileListEntry {
+                    filename,
+                    decompressed_size,
+                    compressed_size,
+                    data_offset,
+                    compression,
+                } = &entry;
+
+                log::info!("{filename}: decompressed size = {decompressed_size}, compressed size = {compressed_size} (0x{compressed_size:x}), data offset = {data_offset} (0x{data_offset:x}), compression = {compression:?}");
+                _ = tocs::pkg::get_data(&mut f, &entry);
+            }
         }
     }
 }
