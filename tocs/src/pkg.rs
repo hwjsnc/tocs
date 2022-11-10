@@ -8,6 +8,8 @@ const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 
+pub use crate::compression::Compression;
+
 fn read_byte<F: std::io::Read>(f: &mut F) -> Result<u8, std::io::Error> {
     let a: [u8; 1] = read_bytes(f)?;
     Ok(a[0])
@@ -16,7 +18,6 @@ fn read_byte<F: std::io::Read>(f: &mut F) -> Result<u8, std::io::Error> {
 fn read_bytes<const N: usize, F: std::io::Read>(f: &mut F) -> Result<[u8; N], std::io::Error> {
     let mut buf: [u8; N] = [0; N];
     f.read_exact(&mut buf)?;
-    //Ok(buf.try_into().expect("length should match"))
     Ok(buf)
 }
 
@@ -37,15 +38,6 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<std::vec::Vec<FileLi
     Ok(filelist)
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Compression {
-    None,
-    LZSS,
-    LZ4,
-    Zstd,
-    Unknown(u32),
-}
-
 #[derive(Debug)]
 pub enum PkgError {
     IOError(std::io::Error),
@@ -53,31 +45,6 @@ pub enum PkgError {
     FilelistError(String),
     DecompressionError(String),
     CompressionError(String),
-}
-
-impl std::fmt::Display for Compression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            Compression::None => write!(f, "uncompressed"),
-            Compression::LZSS => write!(f, "LZSS"),
-            Compression::LZ4 => write!(f, "LZ4"),
-            Compression::Zstd => write!(f, "zstd"),
-            Compression::Unknown(x) => write!(f, "unknown compression type (value x (0x{x:x}"),
-        }
-    }
-}
-
-impl std::convert::From<u32> for Compression {
-    fn from(x: u32) -> Compression {
-        match x {
-            0 => Compression::None,
-            1 => Compression::LZSS, // probably
-            4 => Compression::LZ4,
-            // 9: used in the Hajimari CLE switch port, probably encrypted
-            16 => Compression::Zstd,
-            _ => Compression::Unknown(x),
-        }
-    }
 }
 
 impl std::fmt::Display for PkgError {
@@ -152,131 +119,12 @@ fn parse_filelist_entry<F: std::io::Read>(f: &mut F) -> Result<FileListEntry, Pk
     })
 }
 
-fn get_data_lzss<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    // TODO: use read_compressed_data
-    file.seek(std::io::SeekFrom::Start(entry.data_offset.into())).map_err(PkgError::IOError)?;
-
-    const LZSS_HEADER_LEN: usize = 12;
-
-    if entry.decompressed_size > MAX_DATA_SIZE {
-        let x = entry.decompressed_size;
-        return Err(PkgError::DecompressionError(format!("decompression error: decompressed size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})")));
-    }
-    if entry.compressed_size > MAX_DATA_SIZE {
-        let x = entry.compressed_size;
-        return Err(PkgError::DecompressionError(format!("error reading compressed data: size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})")));
-    }
-    if <u32 as TryInto<usize>>::try_into(entry.decompressed_size).expect("32 bits please") < LZSS_HEADER_LEN {
-        return Err(PkgError::DecompressionError(format!(
-            "lzss error: compressed size ({}) is too small for lzss header",
-            entry.decompressed_size
-        )));
-    }
-
-    let decompressed_size = u32::from_le_bytes(read_bytes::<4, F>(file).map_err(PkgError::IOError)?);
-    let compressed_size = u32::from_le_bytes(read_bytes::<4, F>(file).map_err(PkgError::IOError)?);
-    let key = u32::from_le_bytes(read_bytes::<4, F>(file).map_err(PkgError::IOError)?)
-        .try_into()
-        .map_err(|_| PkgError::DecompressionError(String::from("lzss error: invalid compression key > 255")))?;
-
-    if decompressed_size != entry.decompressed_size {
-        return Err(PkgError::DecompressionError(format!("lzss error: decompressed size mismatch ({} = 0x{:x} versus {} = 0x{:x})", decompressed_size, decompressed_size, entry.decompressed_size, entry.decompressed_size)));
-    }
-    if compressed_size != entry.compressed_size {
-        return Err(PkgError::DecompressionError(format!("lzss error: compressed size mismatch ({} = 0x{:x} versus {} = 0x{:x})", compressed_size, compressed_size, entry.compressed_size, entry.compressed_size)));
-    }
-
-    let decompressed_size: usize = decompressed_size.try_into().expect("32 bits");
-    let compressed_size: usize = compressed_size.try_into().expect("32 bits");
-
-    // TODO: check that sizes make sense? i.e. not too large
-
-    let mut data = std::vec::Vec::<u8>::with_capacity(decompressed_size);
-
-    let mut read = LZSS_HEADER_LEN;
-    while read < compressed_size && data.len() <= decompressed_size {
-        let byte = read_byte(file).map_err(PkgError::IOError)?;
-        read += 1;
-
-        if byte == key {
-            log::trace!("chunk");
-            // TODO: check that we don't read past compressed_size -> FileSlice struct to ensure this
-            let off = read_byte(file).map_err(PkgError::IOError)?;
-            read += 1;
-            if off == key {
-                data.push(key);
-            } else {
-                let off: usize = if off > key { off - 1 } else { off }.into();
-                let len = read_byte(file).map_err(PkgError::IOError)?;
-                read += 1;
-                for _ in 0..len {
-                    let i = data
-                        .len()
-                        .checked_sub(off)
-                        .ok_or_else(|| PkgError::DecompressionError(String::from("lzss error: decompression offset must be <= length of decompressed data")))?;
-                    data.push(data[i]);
-                }
-            }
-        } else {
-            data.push(byte);
-        }
-    }
-
-    assert_eq!(read, compressed_size);
-    assert_eq!(data.len(), decompressed_size);
-    if data.len() != decompressed_size {
-        return Err(PkgError::DecompressionError(format!(
-            "lzss error: decompressed size ({}) does not match expected value ({})",
-            data.len(),
-            decompressed_size
-        )));
-    }
-
-    Ok(data)
-}
-
-fn get_data_uncompressed<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    if entry.compressed_size != entry.decompressed_size {
-        return Err(PkgError::DecompressionError(format!(
-            "uncompressed data error: uncompressed size ({}) does not match compressed size ({})",
-            entry.decompressed_size, entry.compressed_size
-        )));
-    }
-    let data = get_data_raw(file, entry)?;
-    Ok(data)
-}
-
-fn get_data_lz4<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    let compressed_data = get_data_raw(file, entry)?;
-    let mut data = vec![0; entry.decompressed_size.try_into().expect("32 bits please")];
-    let written =
-        lz4::block::decompress_to_buffer(&compressed_data, entry.decompressed_size.try_into().ok(), &mut data).map_err(|e| PkgError::DecompressionError(format!("lz4 decompression error: {e}")))?;
-    if written != entry.decompressed_size.try_into().expect("32 bits please") {
-        return Err(PkgError::DecompressionError(format!(
-            "lz4 error: decompressed size ({}) does not match expected size ({})",
-            written, entry.decompressed_size
-        )));
-    }
-    Ok(data)
-}
-
-fn get_data_zstd<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    let compressed_data = get_data_raw(file, entry)?;
-    let mut data = vec![0; entry.decompressed_size.try_into().expect("32 bits please")];
-    let written = zstd::bulk::decompress_to_buffer(&compressed_data, &mut data).map_err(|e| PkgError::DecompressionError(format!("zstd decompression error: {e}")))?;
-    if written != entry.decompressed_size.try_into().expect("32 bits please") {
-        return Err(PkgError::DecompressionError(format!(
-            "zstd error: decompressed size ({}) does not match expected size ({})",
-            written, entry.decompressed_size
-        )));
-    }
-    Ok(data)
-}
-
 pub fn get_data_raw<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
     if entry.compressed_size > MAX_DATA_SIZE {
         let x = entry.compressed_size;
-        return Err(PkgError::DecompressionError(format!("error reading compressed data: size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})")));
+        return Err(PkgError::DecompressionError(format!(
+            "error reading compressed data: size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})"
+        )));
     }
     file.seek(std::io::SeekFrom::Start(entry.data_offset.into())).map_err(PkgError::IOError)?;
     let mut compressed_data = vec![0; entry.compressed_size.try_into().expect("32 bits please")];
@@ -285,15 +133,23 @@ pub fn get_data_raw<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &File
 }
 
 pub fn get_data<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+    if entry.compressed_size > MAX_DATA_SIZE {
+        let x = entry.compressed_size;
+        return Err(PkgError::DecompressionError(format!(
+            "decompression error: compressed size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})"
+        )));
+    }
     if entry.decompressed_size > MAX_DATA_SIZE {
         let x = entry.decompressed_size;
-        return Err(PkgError::DecompressionError(format!("decompression error: decompressed size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})")));
+        return Err(PkgError::DecompressionError(format!(
+            "decompression error: decompressed size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})"
+        )));
     }
-    match entry.compression {
-        Compression::None => get_data_uncompressed(file, entry),
-        Compression::LZSS => get_data_lzss(file, entry),
-        Compression::LZ4 => get_data_lz4(file, entry),
-        Compression::Zstd => get_data_zstd(file, entry),
-        Compression::Unknown(x) => Err(PkgError::DecompressionError(format!("unsupported/unknown compression type {x}"))),
-    }
+
+    let compressed_data = get_data_raw(file, entry)?;
+
+    entry
+        .compression
+        .decompress_with_exact_output_size(&compressed_data, entry.decompressed_size.try_into().expect("32 bits please"))
+        .map_err(PkgError::DecompressionError)
 }
