@@ -265,7 +265,6 @@ pub fn parse_pkg(base_path: &std::path::Path) {
                 // files that seem broken
                 // CS2:
                 "C_NPC290_C00.pkg",
-                "O_E6302.pkg",
                 "O_E6303.pkg",
             ];
             if skip.iter().map(std::ffi::OsStr::new).map(Some).any(|x| x == path.file_name()) {
