@@ -261,6 +261,17 @@ pub fn parse_pkg(base_path: &std::path::Path) {
         let direntry = direntry.unwrap();
         let path = direntry.path();
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("pkg")) {
+            let skip = [
+                // files that seem broken
+                // CS2:
+                "C_NPC290_C00.pkg",
+                "O_E6302.pkg",
+                "O_E6303.pkg",
+            ];
+            if skip.iter().map(std::ffi::OsStr::new).map(Some).any(|x| x == path.file_name()) {
+                log::warn!("skipping file {}", path.display());
+                continue;
+            }
             log::info!("trying file {}", path.display());
             let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
             let filelist = tocs::pkg::load_filelist(&mut f).unwrap();
@@ -274,7 +285,7 @@ pub fn parse_pkg(base_path: &std::path::Path) {
                 } = &entry;
 
                 log::info!("{filename}: decompressed size = {decompressed_size}, compressed size = {compressed_size} (0x{compressed_size:x}), data offset = {data_offset} (0x{data_offset:x}), compression = {compression:?}");
-                _ = tocs::pkg::get_data(&mut f, &entry);
+                _ = tocs::pkg::get_data(&mut f, &entry).unwrap();
             }
         }
     }

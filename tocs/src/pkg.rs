@@ -42,7 +42,7 @@ pub enum Compression {
     None,
     LZSS,
     LZ4,
-    //Zstd?,
+    Zstd,
     Unknown(u32),
 }
 
@@ -61,6 +61,7 @@ impl std::fmt::Display for Compression {
             Compression::None => write!(f, "uncompressed"),
             Compression::LZSS => write!(f, "LZSS"),
             Compression::LZ4 => write!(f, "LZ4"),
+            Compression::Zstd => write!(f, "zstd"),
             Compression::Unknown(x) => write!(f, "unknown compression type (value x (0x{x:x}"),
         }
     }
@@ -71,7 +72,9 @@ impl std::convert::From<u32> for Compression {
         match x {
             0 => Compression::None,
             1 => Compression::LZSS, // probably
-            4 => Compression::LZ4,  // probably
+            4 => Compression::LZ4,
+            // 9: used in the Hajimari CLE switch port, probably encrypted
+            16 => Compression::Zstd,
             _ => Compression::Unknown(x),
         }
     }
@@ -150,6 +153,7 @@ fn parse_filelist_entry<F: std::io::Read>(f: &mut F) -> Result<FileListEntry, Pk
 }
 
 fn get_data_lzss<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+    // TODO: use read_compressed_data
     file.seek(std::io::SeekFrom::Start(entry.data_offset.into())).map_err(PkgError::IOError)?;
 
     const LZSS_HEADER_LEN: usize = 12;
@@ -167,7 +171,6 @@ fn get_data_lzss<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileLis
         .try_into()
         .map_err(|_| PkgError::DecompressionError(String::from("lzss error: invalid compression key > 255")))?;
 
-    println!("{decompressed_size} {compressed_size}");
     if decompressed_size != entry.decompressed_size {
         panic!();
     }
@@ -224,27 +227,23 @@ fn get_data_lzss<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileLis
     Ok(data)
 }
 
-fn get_data_raw<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    file.seek(std::io::SeekFrom::Start(entry.data_offset.into())).map_err(PkgError::IOError)?;
+fn get_data_uncompressed<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
     if entry.compressed_size != entry.decompressed_size {
         return Err(PkgError::DecompressionError(format!(
             "uncompressed data error: uncompressed size ({}) does not match compressed size ({})",
             entry.decompressed_size, entry.compressed_size
         )));
     }
-    let mut data = vec![0; entry.decompressed_size.try_into().expect("32 bits please")];
-    file.read_exact(&mut data).map_err(PkgError::IOError)?;
+    let data = get_data_raw(file, entry).map_err(PkgError::IOError)?;
     Ok(data)
 }
 
 fn get_data_lz4<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    file.seek(std::io::SeekFrom::Start(entry.data_offset.into())).map_err(PkgError::IOError)?;
-    let mut compressed_data = vec![0; entry.compressed_size.try_into().expect("32 bits please")];
-    file.read_exact(&mut compressed_data).map_err(PkgError::IOError)?;
-    let mut decoder = lz4::Decoder::new(std::io::Cursor::new(&compressed_data)).map_err(PkgError::IOError)?;
+    let compressed_data = get_data_raw(file, entry).map_err(PkgError::IOError)?;
     let mut data = vec![0; entry.decompressed_size.try_into().expect("32 bits please")];
-    let written = std::io::copy(&mut decoder, &mut std::io::Cursor::new(&mut data)).map_err(PkgError::IOError)?;
-    if written != entry.decompressed_size.into() {
+    let written =
+        lz4::block::decompress_to_buffer(&compressed_data, entry.decompressed_size.try_into().ok(), &mut data).map_err(|e| PkgError::DecompressionError(format!("lz4 decompression error: {e}")))?;
+    if written != entry.decompressed_size.try_into().expect("32 bits please") {
         return Err(PkgError::DecompressionError(format!(
             "lz4 error: decompressed size ({}) does not match expected size ({})",
             written, entry.decompressed_size
@@ -253,11 +252,32 @@ fn get_data_lz4<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileList
     Ok(data)
 }
 
+fn get_data_zstd<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+    let compressed_data = get_data_raw(file, entry).map_err(PkgError::IOError)?;
+    let mut data = vec![0; entry.decompressed_size.try_into().expect("32 bits please")];
+    let written = zstd::bulk::decompress_to_buffer(&compressed_data, &mut data).map_err(|e| PkgError::DecompressionError(format!("zstd decompression error: {e}")))?;
+    if written != entry.decompressed_size.try_into().expect("32 bits please") {
+        return Err(PkgError::DecompressionError(format!(
+            "zstd error: decompressed size ({}) does not match expected size ({})",
+            written, entry.decompressed_size
+        )));
+    }
+    Ok(data)
+}
+
+pub fn get_data_raw<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, std::io::Error> {
+    file.seek(std::io::SeekFrom::Start(entry.data_offset.into()))?;
+    let mut compressed_data = vec![0; entry.compressed_size.try_into().expect("32 bits please")];
+    file.read_exact(&mut compressed_data)?;
+    Ok(compressed_data)
+}
+
 pub fn get_data<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
     match entry.compression {
-        Compression::None => get_data_raw(file, entry),
+        Compression::None => get_data_uncompressed(file, entry),
         Compression::LZSS => get_data_lzss(file, entry),
         Compression::LZ4 => get_data_lz4(file, entry),
+        Compression::Zstd => get_data_zstd(file, entry),
         Compression::Unknown(x) => Err(PkgError::DecompressionError(format!("unsupported/unknown compression type {x}"))),
     }
 }
