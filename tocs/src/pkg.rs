@@ -2,6 +2,9 @@
 For a description of the pkg file structure, see https://github.com/Sewer56/Sen-no-Kiseki-PKG-Sharp/blob/master/docs/PKG-File-Structure.md
 */
 
+// TODO: actually use this, haha
+const MAX_DATA_SIZE: usize = 1 << 30; // a single asset > 1GB is pretty unlikely
+
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 
@@ -234,11 +237,27 @@ fn get_data_raw<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileList
     Ok(data)
 }
 
+fn get_data_lz4<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+    file.seek(std::io::SeekFrom::Start(entry.data_offset.into())).map_err(PkgError::IOError)?;
+    let mut compressed_data = vec![0; entry.compressed_size.try_into().expect("32 bits please")];
+    file.read_exact(&mut compressed_data).map_err(PkgError::IOError)?;
+    let mut decoder = lz4::Decoder::new(std::io::Cursor::new(&compressed_data)).map_err(PkgError::IOError)?;
+    let mut data = vec![0; entry.decompressed_size.try_into().expect("32 bits please")];
+    let written = std::io::copy(&mut decoder, &mut std::io::Cursor::new(&mut data)).map_err(PkgError::IOError)?;
+    if written != entry.decompressed_size.into() {
+        return Err(PkgError::DecompressionError(format!(
+            "lz4 error: decompressed size ({}) does not match expected size ({})",
+            written, entry.decompressed_size
+        )));
+    }
+    Ok(data)
+}
+
 pub fn get_data<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
     match entry.compression {
         Compression::None => get_data_raw(file, entry),
         Compression::LZSS => get_data_lzss(file, entry),
-        Compression::LZ4 => unimplemented!(),
+        Compression::LZ4 => get_data_lz4(file, entry),
         Compression::Unknown(x) => Err(PkgError::DecompressionError(format!("unsupported/unknown compression type {x}"))),
     }
 }
