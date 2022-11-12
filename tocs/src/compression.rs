@@ -36,7 +36,10 @@ impl Compression {
         let written = match self {
             Compression::None => copy_buffer(r#in, out),
             Compression::LZSS => lzss_decompress_to_buffer(r#in, out),
-            Compression::LZ4 => lz4::block::decompress_to_buffer(r#in, None, out).map_err(|e| format!("lz4 decompression error: {e}")),
+            Compression::LZ4 => {
+                let len: i32 = out.len().try_into().map_err(|_| format!("lz4 decompression error: output size too big"))?;
+                lz4::block::decompress_to_buffer(r#in, Some(len), out).map_err(|e| format!("lz4 decompression error: {e}"))
+            }
             Compression::Zstd => zstd::bulk::decompress_to_buffer(r#in, out).map_err(|e| format!("zstd decompression error: {e}")),
             Compression::Unknown(x) => Err(format!("unsupported/unknown compression type {x}")),
         }?;
