@@ -166,7 +166,6 @@ fn lzss_compress(data: &[u8]) -> Result<std::vec::Vec<u8>, String> {
 }
 
 fn lzss_compress_with_key(data: &[u8], key: u8) -> Result<std::vec::Vec<u8>, String> {
-    // TODO XXX FIXME this produces incorrect results sometimes AAAAAAAAAAHHHHH
     let mut output = vec![];
     output.extend_from_slice(
         &<usize as TryInto<u32>>::try_into(data.len())
@@ -176,10 +175,6 @@ fn lzss_compress_with_key(data: &[u8], key: u8) -> Result<std::vec::Vec<u8>, Str
     output.extend_from_slice(&[0, 0, 0, 0]); // compressed size, we fix this later
     output.extend_from_slice(&<u8 as Into<u32>>::into(key).to_le_bytes()); // compression key
 
-    // go through input:
-    //   if length > 3: insert reference, advance by length
-    //   else if current byte == key: insert two key bytes, advance by 1
-    //   else: insert byte, advance by 1
     let mut i = 0;
     while i < data.len() {
         // find longest prefix of the remaining input in the buffer of previous bytes
@@ -190,7 +185,7 @@ fn lzss_compress_with_key(data: &[u8], key: u8) -> Result<std::vec::Vec<u8>, Str
             // inserting a reference takes 3 bytes, so the reference has to be longer than that if we want to compress
             let off = ref_buf.len().checked_sub(ref_off).expect("ref_off should be < ref_buf.len()"); // offset should be from the end, but we got it from the beginning of the buffer
             assert!(off >= ref_len);
-            let off = if ref_off >= key.into() { off + 1 } else { off };
+            let off = if off >= key.into() { off + 1 } else { off };
             let off: u8 = off.try_into().expect("offset should be <= 255");
             let len: u8 = ref_len.try_into().expect("ref_len should be <= off <= 255");
             output.extend_from_slice(&[key, off, len]);
@@ -308,11 +303,6 @@ mod test {
     }
 
     #[test]
-    fn randomized_lzss_test() {
-        todo!("randomized test that uncompress(compress(x)) == x");
-    }
-
-    #[test]
     fn lzss_test_decompress_simple_1() {
         // uncompressed
         let compressed = [5, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5];
@@ -421,6 +411,67 @@ mod test {
         let mut decompressed = [0; 17];
         lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
         assert_eq!(&decompressed, &raw);
+    }
+
+    #[test]
+    fn lzss_test_random_1() {
+        // found through randomized property testing
+        let raw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 178, 103, 59, 3, 178, 103, 59, 3, 1, 2];
+        let compressed = lzss_compress(&raw).unwrap();
+        let expected = vec![27, 0, 0, 0, 32, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 4, 4, 5, 9, 8, 4, 178, 103, 59, 3, 5, 4, 4, 1, 2];
+        assert_eq!(&compressed, &expected);
+        let mut decompressed = [0; 27];
+        lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+        assert_eq!(&decompressed, &raw);
+    }
+
+    #[cfg(feature = "proptest")]
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig{cases: 10_000_000, .. proptest::prelude::ProptestConfig::default() })]
+        #[test]
+        fn lzss_proptest_tiny(key in proptest::num::u8::ANY, data in proptest::collection::vec(proptest::num::u8::ANY, 0..100)) {
+            let compressed = lzss_compress_with_key(&data, key).unwrap();
+            let mut decompressed = vec![0; data.len()];
+            lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+            assert_eq!(&decompressed, &data);
+        }
+
+        #[test]
+        fn lzss_proptest_small(data in proptest::collection::vec(proptest::num::u8::ANY, 0..1_000)) {
+            let compressed = lzss_compress(&data).unwrap();
+            let mut decompressed = vec![0; data.len()];
+            lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+            assert_eq!(&decompressed, &data);
+        }
+    }
+
+    #[cfg(feature = "proptest")]
+    proptest::proptest! {
+        // if running these tests crashes your machine (on linux), use ulimit -v 10000000 to limit memory to 10GB
+
+        #[test]
+        fn lzss_proptest_medium(data in proptest::collection::vec(proptest::num::u8::ANY, 1_000..10_000)) {
+            let compressed = lzss_compress(&data).unwrap();
+            let mut decompressed = vec![0; data.len()];
+            lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+            assert_eq!(&decompressed, &data);
+        }
+
+        #[test]
+        fn lzss_proptest_big(data in proptest::collection::vec(proptest::num::u8::ANY, 10_000..100_000)) {
+            let compressed = lzss_compress(&data).unwrap();
+            let mut decompressed = vec![0; data.len()];
+            lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+            assert_eq!(&decompressed, &data);
+        }
+
+        #[test]
+        fn lzss_proptest_huge(data in proptest::collection::vec(proptest::num::u8::ANY, 10_000_000..100_000_000)) {
+            let compressed = lzss_compress(&data).unwrap();
+            let mut decompressed = vec![0; data.len()];
+            lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+            assert_eq!(&decompressed, &data);
+        }
     }
 
     #[test]
