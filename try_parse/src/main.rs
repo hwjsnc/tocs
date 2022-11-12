@@ -1,3 +1,5 @@
+use std::io::Write as _;
+
 extern crate clap;
 extern crate tocs;
 
@@ -271,7 +273,7 @@ pub fn parse_pkg(base_path: &std::path::Path) {
                 log::warn!("skipping file {}", path.display());
                 continue;
             }
-            log::info!("trying file {}", path.display());
+            //log::info!("trying file {}", path.display());
             let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
             let filelist = tocs::pkg::load_filelist(&mut f).unwrap();
             for entry in filelist {
@@ -283,8 +285,41 @@ pub fn parse_pkg(base_path: &std::path::Path) {
                     compression,
                 } = &entry;
 
+/*
+                if !filename.ends_with(".xml") {
+                    log::info!("{filename}: skipping because it's not an xml");
+                    continue;
+                }
+*/
+
                 log::info!("{filename}: decompressed size = {decompressed_size}, compressed size = {compressed_size} (0x{compressed_size:x}), data offset = {data_offset} (0x{data_offset:x}), compression = {compression:?}");
-                _ = tocs::pkg::get_data(&mut f, &entry).unwrap();
+                let raw_data = tocs::pkg::get_data_raw(&mut f, &entry).unwrap();
+                let data = tocs::pkg::get_data(&mut f, &entry).unwrap();
+                //std::io::stdout().write(&data);
+                    let mut k = 0;
+                let compressed = entry.compression.compress(&data).unwrap();
+/*
+                if compressed != raw_data {
+                    log::warn!("{filename}: compressed and uncompressed data does not match (recompressed data is {})", if compressed.len() > raw_data.len() { "bigger" } else if compressed.len() < raw_data.len() { "smaller" } else { "equally big" });
+                    for i in 0..std::cmp::max(compressed.len(), raw_data.len()) {
+                        let x = compressed.get(i);
+                        let y = raw_data.get(i);
+                        if x == y { println!("{i}: {x:?} == {y:?} ✓"); }
+                        else { println!("{i}: {x:?} != {y:?} !!!"); k+=1; }
+                        if k > 0 { k += 1 }
+                        //if k > 10 { panic!(""); }
+                    }
+                } else {
+                    log::info!("{filename}: ✓");
+                }
+*/
+                let data2 = entry.compression.compress(&data).and_then(|compressed| entry.compression.decompress_with_exact_output_size(&compressed, entry.decompressed_size.try_into().unwrap())).map_err(|_| String::new());
+                if data2.as_ref() != Ok(&data) {
+                    log::error!("{filename}: decompress->compress->decompress is not the same as decompress!");
+                }
+                //let data2 = entry.compression.decompress_with_exact_output_size(&compressed, entry.decompressed_size.try_into().unwrap()).unwrap();
+                //assert_eq!(data, data2);
+                //if k > 0 { panic!() }
             }
         }
     }

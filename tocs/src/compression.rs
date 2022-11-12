@@ -54,6 +54,26 @@ impl Compression {
         self.decompress_to_buffer(r#in, &mut out)?;
         Ok(out)
     }
+
+    pub fn compress(&self, r#in: &[u8]) -> Result<std::vec::Vec<u8>, String> {
+        match self {
+            Compression::None => Ok(r#in.to_vec()),
+            Compression::LZSS => lzss_compress(r#in).map_err(|e| format!("lzss compression error: {e}")),
+            Compression::LZ4 => {
+                // high compression mode 12 is the maximum.
+                // For most of the .pkgs in the CS3 PC port if you decompress and recompress the data with this setting, you will get a bit-exact replica of the original compressed data.
+                // (There is one file for which this isn't true, I guess this might be down to a different compressor version.)
+                let mode = Some(lz4::block::CompressionMode::HIGHCOMPRESSION(12));
+                lz4::block::compress(r#in, mode, false).map_err(|e| format!("lz4 compression error: {e}"))
+            }
+            Compression::Zstd => {
+                let level = 15; // This compression level approximately matches the one used in the switch port of CS4.
+                                // I wasn't able to get bit-exact compatibility of the compressed data for any setting (probably a different compressor used?).
+                zstd::bulk::compress(r#in, level).map_err(|e| format!("zstd compression error: {e}"))
+            }
+            Compression::Unknown(x) => Err(format!("unsupported/unknown compression type {x}")),
+        }
+    }
 }
 
 fn copy_buffer(r#in: &[u8], out: &mut [u8]) -> Result<usize, String> {
@@ -85,8 +105,8 @@ fn lzss_decompress_to_buffer(r#in: &[u8], out: &mut [u8]) -> Result<usize, Strin
             "lzss error: decompressed size mismatch ({} = 0x{:x} versus {} = 0x{:x})",
             decompressed_size,
             decompressed_size,
-            r#in.len(),
-            r#in.len()
+            r#out.len(),
+            r#out.len()
         ));
     }
     if <u32 as TryInto<usize>>::try_into(compressed_size).expect("32 bits please") != r#in.len() {
@@ -94,8 +114,8 @@ fn lzss_decompress_to_buffer(r#in: &[u8], out: &mut [u8]) -> Result<usize, Strin
             "lzss error: compressed size mismatch ({} = 0x{:x} versus {} = 0x{:x})",
             compressed_size,
             compressed_size,
-            r#out.len(),
-            r#out.len()
+            r#in.len(),
+            r#in.len()
         ));
     }
 
@@ -131,7 +151,290 @@ fn lzss_decompress_to_buffer(r#in: &[u8], out: &mut [u8]) -> Result<usize, Strin
     }
 
     assert_eq!(in_idx, r#in.len());
-    assert_eq!(out_idx, out.len());
+
+    if out_idx != out.len() {
+        return Err(format!("size of decompressed data ({}) does not match expected size ({})", out_idx, out.len()));
+    }
 
     Ok(out_idx)
+}
+
+fn lzss_compress(data: &[u8]) -> Result<std::vec::Vec<u8>, String> {
+    // find the most rare byte, choose it as key value
+    let key = most_rare_byte(data);
+    lzss_compress_with_key(data, key)
+}
+
+fn lzss_compress_with_key(data: &[u8], key: u8) -> Result<std::vec::Vec<u8>, String> {
+    // TODO XXX FIXME this produces incorrect results sometimes AAAAAAAAAAHHHHH
+    let mut output = vec![];
+    output.extend_from_slice(
+        &<usize as TryInto<u32>>::try_into(data.len())
+            .map_err(|_| String::from("input size exceeds 32 bit maximum"))?
+            .to_le_bytes(),
+    ); // uncompressed size
+    output.extend_from_slice(&[0, 0, 0, 0]); // compressed size, we fix this later
+    output.extend_from_slice(&<u8 as Into<u32>>::into(key).to_le_bytes()); // compression key
+
+    // go through input:
+    //   if length > 3: insert reference, advance by length
+    //   else if current byte == key: insert two key bytes, advance by 1
+    //   else: insert byte, advance by 1
+    let mut i = 0;
+    while i < data.len() {
+        // find longest prefix of the remaining input in the buffer of previous bytes
+        let ref_buf = &data[i.saturating_sub(254)..i];
+        let (ref_off, ref_len) = longest_prefix_in(&data[i..], ref_buf);
+        assert!(ref_off + ref_len <= ref_buf.len());
+        if ref_len > 3 {
+            // inserting a reference takes 3 bytes, so the reference has to be longer than that if we want to compress
+            let off = ref_buf.len().checked_sub(ref_off).expect("ref_off should be < ref_buf.len()"); // offset should be from the end, but we got it from the beginning of the buffer
+            assert!(off >= ref_len);
+            let off = if ref_off >= key.into() { off + 1 } else { off };
+            let off: u8 = off.try_into().expect("offset should be <= 255");
+            let len: u8 = ref_len.try_into().expect("ref_len should be <= off <= 255");
+            output.extend_from_slice(&[key, off, len]);
+            i += ref_len;
+        } else if data[i] == key {
+            output.extend_from_slice(&[key, key]);
+            i += 1;
+        } else {
+            output.push(data[i]);
+            i += 1;
+        }
+    }
+
+    let compressed_size: u32 = output.len().try_into().map_err(|_| String::from("output size exceeds 32 bit maximum"))?;
+    output[4..8].copy_from_slice(&compressed_size.to_le_bytes());
+
+    Ok(output)
+}
+
+fn most_rare_byte(s: &[u8]) -> u8 {
+    // how often does each byte occur in s?
+    let mut counts = [0; 256];
+    for x in s {
+        let x: usize = (*x).into();
+        counts[x] += 1;
+    }
+    // which one has the fewest counts?
+    let mut argmin = 0;
+    for i in 0..counts.len() {
+        if counts[i] < counts[argmin] {
+            argmin = i;
+        }
+    }
+    argmin.try_into().expect("array indices are <= 255")
+}
+
+fn length_of_common_prefix(s1: &[u8], s2: &[u8]) -> usize {
+    for i in 0..std::cmp::min(s1.len(), s2.len()) {
+        if s1[i] != s2[i] {
+            return i;
+        }
+    }
+    return std::cmp::min(s1.len(), s2.len());
+}
+
+/// Given two strings s1, s2, find the longest prefix of s1 that occurs in s2.
+///
+/// Returns the offset of the prefix in s2 and its length (may be 0).
+fn longest_prefix_in(s1: &[u8], s2: &[u8]) -> (usize, usize) {
+    let mut off = 0; // offset of the substring in s1
+    let mut len = 0; // length of the substring
+    let mut i = 0; // current position in s1
+    while i + len < s2.len() {
+        let x = length_of_common_prefix(s1, &s2[i..]);
+        if x >= len {
+            // we want the longest prefix that's closest to the end (probably? I think)
+            len = x;
+            off = i;
+        }
+        i += 1;
+    }
+
+    return (off, len);
+}
+
+#[cfg(test)]
+mod test {
+    use super::{length_of_common_prefix, longest_prefix_in, lzss_compress, lzss_compress_with_key, lzss_decompress_to_buffer};
+
+    #[test]
+    fn test_length_of_common_prefix() {
+        // s1 is shorter
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3, 4], &[2, 3, 4, 5]), 0);
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3, 4], &[0, 3, 4, 5]), 1);
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3, 4], &[0, 1, 4, 5]), 2);
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3, 4], &[0, 1, 2, 5]), 3);
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3, 4], &[0, 1, 2, 3]), 4);
+
+        // same length
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3], &[5, 1, 2, 3]), 0);
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3], &[0, 5, 2, 3]), 1);
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3], &[0, 1, 5, 3]), 2);
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3], &[0, 1, 2, 5]), 3);
+        assert_eq!(length_of_common_prefix(&[0, 1, 2, 3], &[0, 1, 2, 3]), 4);
+
+        // s2 is shorter
+        assert_eq!(length_of_common_prefix(&[255, 254, 253, 252, 251], &[6, 6, 6]), 0);
+        assert_eq!(length_of_common_prefix(&[255, 254, 253, 252, 251], &[255, 6, 9]), 1);
+        assert_eq!(length_of_common_prefix(&[255, 254, 253, 252, 251], &[255, 254, 2]), 2);
+        assert_eq!(length_of_common_prefix(&[255, 254, 253, 252, 251], &[255, 254, 253]), 3);
+    }
+
+    #[test]
+    fn test_longest_prefix() {
+        // trivial: no prefix
+        assert_eq!(longest_prefix_in(&[], &[]).1, 0);
+        assert_eq!(longest_prefix_in(&[], &[1, 2, 3, 4]).1, 0);
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[]).1, 0);
+        assert_eq!(longest_prefix_in(&[0, 1, 2, 3, 4], &[5, 6, 7, 8]).1, 0);
+        assert_eq!(longest_prefix_in(&[0, 1, 2, 3, 4], &[1, 1, 1]).1, 0);
+
+        assert_eq!(longest_prefix_in(&[0, 0, 0, 0, 0], &[1, 2, 3, 0, 0, 0, 4, 5, 6]), (3, 3));
+
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 7, 8, 9]), (4, 1));
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 7, 8, 9]), (4, 2));
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 7, 8, 9]), (4, 3));
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 4, 7, 8, 9]), (4, 4));
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 4, 5, 7, 8, 9]), (4, 5));
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 4, 5, 6, 7, 8, 9]), (4, 5));
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 4, 5, 6, 7, 8, 9]), (4, 5));
+
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5], &[2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5]), (7, 3));
+
+        assert_eq!(longest_prefix_in(&[1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5], &[0, 9, 1, 2, 3, 4, 5, 6, 7, 8]), (2, 3));
+    }
+
+    #[test]
+    fn randomized_lzss_test() {
+        todo!("randomized test that uncompress(compress(x)) == x");
+    }
+
+    #[test]
+    fn lzss_test_decompress_simple_1() {
+        // uncompressed
+        let compressed = [5, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5];
+        let mut decompressed = [0; 5];
+        let expected = [1, 2, 3, 4, 5];
+        lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+        assert_eq!(decompressed, expected);
+    }
+
+    #[test]
+    fn lzss_test_decompress_simple_2() {
+        // four uncompressed bytes, then repeat these four bytes
+        let compressed = [8, 0, 0, 0, 19, 0, 0, 0, 255, 0, 0, 0, 1, 2, 3, 4, 255, 4, 4];
+        let mut decompressed = [0; 8];
+        let expected = [1, 2, 3, 4, 1, 2, 3, 4];
+        lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+        assert_eq!(decompressed, expected);
+    }
+
+    #[test]
+    fn lzss_test_decompress_simple_3() {
+        // four uncompressed bytes, then repeat them, then repeat all eight again
+        let compressed = [16, 0, 0, 0, 22, 0, 0, 0, 255, 0, 0, 0, 1, 2, 3, 4, 255, 4, 4, 255, 8, 8];
+        let mut decompressed = [0; 16];
+        let expected = [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4];
+        lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+        assert_eq!(decompressed, expected);
+    }
+
+    #[test]
+    fn lzss_test_decompress_simple_4() {
+        // compression key inserted twice into the stream
+        let compressed = [2, 0, 0, 0, 16, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255];
+        let mut decompressed = [0; 2];
+        let expected = [255, 255];
+        lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+        assert_eq!(decompressed, expected);
+    }
+
+    #[test]
+    fn lzss_test_decompress_simple_5() {
+        // compression key inserted twice, then both repeated once
+        let compressed = [4, 0, 0, 0, 19, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 2, 2];
+        let mut decompressed = [0; 4];
+        let expected = [255, 255, 255, 255];
+        lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+        assert_eq!(decompressed, expected);
+    }
+
+    #[test]
+    fn lzss_test_compress_simple_1() {
+        // bytes without any repeating pattern
+        let raw = [1, 2, 3, 4, 5, 6, 7, 8];
+        let compressed = lzss_compress(&raw).unwrap();
+        let expected = [8, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+        assert_eq!(&compressed, &expected);
+    }
+
+    #[test]
+    fn lzss_test_compress_simple_2() {
+        // compression key is in the keystream
+        let raw: std::vec::Vec<u8> = (0..256).map(|b| b.try_into().unwrap()).collect();
+        let compressed = lzss_compress(&raw).unwrap();
+        let mut expected = vec![0, 1, 0, 0, 13, 1, 0, 0, 0, 0, 0, 0];
+        expected.push(0);
+        expected.push(0);
+        for i in 1..256 {
+            expected.push(i.try_into().unwrap());
+        }
+        assert_eq!(&compressed, &expected);
+    }
+
+    #[test]
+    fn lzss_test_compress_simple_3() {
+        // compression key is in the keystream
+        let raw: std::vec::Vec<u8> = (0..256).map(|b| b.try_into().unwrap()).collect();
+        let compressed = lzss_compress(&raw).unwrap();
+        let mut expected = vec![0, 1, 0, 0, 13, 1, 0, 0, 0, 0, 0, 0];
+        expected.push(0);
+        expected.push(0);
+        for i in 1..256 {
+            expected.push(i.try_into().unwrap());
+        }
+        assert_eq!(&compressed, &expected);
+    }
+
+    #[test]
+    fn lzss_test_compress_simple_4() {
+        // single repetition of the first 4 bytes; here the decompression key is > offset
+        let raw = [1, 1, 1, 1, 2, 2, 2, 3, 4, 5, 6, 1, 1, 1, 1, 3, 3];
+        let compressed = lzss_compress_with_key(&raw, 255).unwrap();
+        let expected = vec![17, 0, 0, 0, 28, 0, 0, 0, 255, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 4, 5, 6, 255, 11, 4, 3, 3];
+        assert_eq!(&compressed, &expected);
+        let mut decompressed = [0; 17];
+        lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+        assert_eq!(&decompressed, &raw);
+    }
+
+    #[test]
+    fn lzss_test_compress_simple_5() {
+        // like lzss_test_compress_simple_4, but the compression key is < offset
+        let raw = [1, 1, 1, 1, 2, 2, 2, 3, 4, 5, 6, 1, 1, 1, 1, 3, 3];
+        let compressed = lzss_compress_with_key(&raw, 0).unwrap();
+        let expected = vec![17, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 4, 5, 6, 0, 12, 4, 3, 3];
+        assert_eq!(&compressed, &expected);
+        let mut decompressed = [0; 17];
+        lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+        assert_eq!(&decompressed, &raw);
+    }
+
+    #[test]
+    fn lzss_test() {
+        todo!("test with actual game data?")
+    }
+
+    #[test]
+    fn lz4_test() {
+        todo!("test with actual game data?")
+    }
+
+    #[test]
+    fn zstd_test() {
+        todo!("test with actual game data?")
+    }
 }
