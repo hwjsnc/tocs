@@ -179,7 +179,7 @@ fn lzss_compress_with_key(data: &[u8], key: u8) -> Result<std::vec::Vec<u8>, Str
     output.extend_from_slice(&[0, 0, 0, 0]); // compressed size, we fix this later
     output.extend_from_slice(&<u8 as Into<u32>>::into(key).to_le_bytes()); // compression key
 
-    const PREFIX_LEN: usize = 3; // needs to be <= 4 for correctness
+    const PREFIX_LEN: usize = 2; // needs to be <= 4 for correctness
     const REMOVE_EMPTY: bool = false;
     assert!(PREFIX_LEN < 4 || REMOVE_EMPTY); // otherwise the hashmap may take up >4GB space
 
