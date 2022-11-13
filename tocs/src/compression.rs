@@ -100,7 +100,7 @@ fn lzss_decompress_to_buffer(r#in: &[u8], out: &mut [u8]) -> Result<usize, Strin
     let key = u32::from_le_bytes(r#in[8..12].try_into().expect("length should be >= 12"));
     let key: u8 = key.try_into().map_err(|_| String::from("lzss error: invalid compression key > 255"))?;
 
-    if <u32 as TryInto<usize>>::try_into(decompressed_size).expect("32 bits please") != r#out.len() {
+    if usize::try_from(decompressed_size).expect("32 bits please") != r#out.len() {
         return Err(format!(
             "lzss error: decompressed size mismatch ({} = 0x{:x} versus {} = 0x{:x})",
             decompressed_size,
@@ -109,7 +109,7 @@ fn lzss_decompress_to_buffer(r#in: &[u8], out: &mut [u8]) -> Result<usize, Strin
             r#out.len()
         ));
     }
-    if <u32 as TryInto<usize>>::try_into(compressed_size).expect("32 bits please") != r#in.len() {
+    if usize::try_from(compressed_size).expect("32 bits please") != r#in.len() {
         return Err(format!(
             "lzss error: compressed size mismatch ({} = 0x{:x} versus {} = 0x{:x})",
             compressed_size,
@@ -141,7 +141,7 @@ fn lzss_decompress_to_buffer(r#in: &[u8], out: &mut [u8]) -> Result<usize, Strin
                     .ok_or_else(|| String::from("lzss error: decompression offset must be <= length of decompressed data"))?;
                 if len < off {
                     let (previous, next) = out.split_at_mut(out_idx);
-                    next[0..len].copy_from_slice(&previous[copy_start..copy_start+len]);
+                    next[0..len].copy_from_slice(&previous[copy_start..copy_start + len]);
                 } else {
                     for i in 0..len {
                         out[out_idx + i] = out[copy_start + i];
@@ -172,11 +172,7 @@ fn lzss_compress(data: &[u8]) -> Result<std::vec::Vec<u8>, String> {
 
 fn lzss_compress_with_key(data: &[u8], key: u8) -> Result<std::vec::Vec<u8>, String> {
     let mut output = vec![];
-    output.extend_from_slice(
-        &<usize as TryInto<u32>>::try_into(data.len())
-            .map_err(|_| String::from("input size exceeds 32 bit maximum"))?
-            .to_le_bytes(),
-    ); // uncompressed size
+    output.extend_from_slice(&u32::try_from(data.len()).map_err(|_| String::from("input size exceeds 32 bit maximum"))?.to_le_bytes()); // uncompressed size
     output.extend_from_slice(&[0, 0, 0, 0]); // compressed size, we fix this later
     output.extend_from_slice(&<u8 as Into<u32>>::into(key).to_le_bytes()); // compression key
 
