@@ -12,7 +12,7 @@ default = ["private-tests", "pkg"]
 private-tests = ["simple_logger"] # test bit-identical roundtrip of tbl data
 rusqlite = ["dep:rusqlite"]
 pkg = ["compression"]
-compression = ["dep:lz4", "dep:zstd"]
+compression = ["dep:lz4", "dep:zstd", "dep:hashbrown"]
 proptest = ["dep:proptest"]
 
 [dependencies]
@@ -20,6 +20,7 @@ lazy_static = "1.4"
 log = "0.4.17"
 lz4 = { version = "1.24.0", optional = true }
 blake2 = "0.10.4"
+hashbrown = { version = "0.12", optional = true }
 hex = "0.4.3"
 hex-literal = "0.3.4"
 indexmap = "1.9.1"

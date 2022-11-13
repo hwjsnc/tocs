@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 74a5e3efc117a8a0bcd071321cb20fc8acfdeede971bd0c328246ff4e6fb6fa4 # shrinks to data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 178, 103, 59, 3, 178, 103, 59, 3, 1, 2]
+cc 7ccc16cce72fdf7f31c15627b70955c81889a08e58e7e71ca215410b0baa3b29 # shrinks to key = 0, data = [0, 118, 146, 96, 222, 118, 146, 96, 222]

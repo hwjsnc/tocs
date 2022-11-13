@@ -1,3 +1,6 @@
+use hashbrown::HashMap;
+use std::collections::VecDeque;
+
 #[derive(Clone, Copy, Debug)]
 pub enum Compression {
     None,
@@ -176,22 +179,78 @@ fn lzss_compress_with_key(data: &[u8], key: u8) -> Result<std::vec::Vec<u8>, Str
     output.extend_from_slice(&[0, 0, 0, 0]); // compressed size, we fix this later
     output.extend_from_slice(&<u8 as Into<u32>>::into(key).to_le_bytes()); // compression key
 
+    const PREFIX_LEN: usize = 3; // needs to be <= 4 for correctness
+    const REMOVE_EMPTY: bool = false;
+    assert!(PREFIX_LEN < 4 || REMOVE_EMPTY); // otherwise the hashmap may take up >4GB space
+
+    let mut offsets_to_try: HashMap<[u8; PREFIX_LEN], VecDeque<usize>> = HashMap::new();
+
+    // must be called with the same offset and sequentially bigger i
+    let update_offsets = |offsets: &mut HashMap<[u8; PREFIX_LEN], VecDeque<usize>>, i| {
+        if i >= PREFIX_LEN {
+            let new_off = i - PREFIX_LEN;
+            let prefix: [u8; PREFIX_LEN] = data[new_off..new_off + PREFIX_LEN].try_into().unwrap();
+            offsets
+                .entry(prefix)
+                .and_modify(|offsets| offsets.push_back(new_off))
+                .or_insert_with(|| [new_off].into_iter().collect());
+        }
+        if i > 254 {
+            let old_off = i - 255;
+            let prefix: [u8; PREFIX_LEN] = data[old_off..old_off + PREFIX_LEN].try_into().unwrap();
+            match offsets.entry(prefix) {
+                hashbrown::hash_map::Entry::Occupied(mut entry) => {
+                    let offsets = entry.get_mut();
+                    assert_eq!(offsets.pop_front(), Some(old_off));
+                    if offsets.is_empty() && REMOVE_EMPTY {
+                        entry.remove();
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    };
+
     let mut i = 0;
     while i < data.len() {
         // find longest prefix of the remaining input in the buffer of previous bytes
-        let ref_buf = &data[i.saturating_sub(254)..i];
-        let (ref_off, ref_len) = longest_prefix_in(&data[i..], ref_buf);
-        assert!(ref_off + ref_len <= ref_buf.len());
-        if ref_len > 3 {
-            // inserting a reference takes 3 bytes, so the reference has to be longer than that if we want to compress
-            let off = ref_buf.len().checked_sub(ref_off).expect("ref_off should be < ref_buf.len()"); // offset should be from the end, but we got it from the beginning of the buffer
-            assert!(off >= ref_len);
-            let off = if off >= key.into() { off + 1 } else { off };
-            let off: u8 = off.try_into().expect("offset should be <= 255");
-            let len: u8 = ref_len.try_into().expect("ref_len should be <= off <= 255");
-            output.extend_from_slice(&[key, off, len]);
-            i += ref_len;
-        } else if data[i] == key {
+        let (previous, next) = data.split_at(i);
+        update_offsets(&mut offsets_to_try, i);
+
+        if i + PREFIX_LEN < data.len() {
+            let prefix: [u8; PREFIX_LEN] = next[..PREFIX_LEN].try_into().unwrap();
+            if let Some(offsets) = offsets_to_try.get(&prefix) {
+                let mut len = 0;
+                let mut off = 0;
+                for o in offsets.iter().copied() {
+                    if o + len >= i || len >= next.len() {
+                        // taking the first longest occurence of the prefix is faster
+                        break;
+                    }
+                    let x = length_of_common_prefix(&previous[o + PREFIX_LEN..], &data[i + PREFIX_LEN..]);
+                    if x + PREFIX_LEN > len {
+                        len = x + PREFIX_LEN;
+                        off = o;
+                    }
+                }
+                if len > 3 {
+                    // inserting a reference takes 3 bytes in the compressed stream, so the length needs to be more than that if we want to save space.
+                    off = previous.len() - off;
+                    if off >= key.into() {
+                        off = off + 1;
+                    }
+                    output.push(key);
+                    output.push(off.try_into().unwrap());
+                    output.push(len.try_into().unwrap());
+                    for j in 1..len {
+                        update_offsets(&mut offsets_to_try, i + j);
+                    }
+                    i += len;
+                    continue;
+                }
+            }
+        }
+        if data[i] == key {
             output.extend_from_slice(&[key, key]);
             i += 1;
         } else {
@@ -232,29 +291,9 @@ fn length_of_common_prefix(s1: &[u8], s2: &[u8]) -> usize {
     return std::cmp::min(s1.len(), s2.len());
 }
 
-/// Given two strings s1, s2, find the longest prefix of s1 that occurs in s2.
-///
-/// Returns the offset of the prefix in s2 and its length (may be 0).
-fn longest_prefix_in(s1: &[u8], s2: &[u8]) -> (usize, usize) {
-    let mut off = 0; // offset of the substring in s1
-    let mut len = 0; // length of the substring
-    let mut i = 0; // current position in s1
-    while i + len < s2.len() {
-        let x = length_of_common_prefix(s1, &s2[i..]);
-        if x >= len {
-            // we want the longest prefix that's closest to the end (probably? I think)
-            len = x;
-            off = i;
-        }
-        i += 1;
-    }
-
-    return (off, len);
-}
-
 #[cfg(test)]
 mod test {
-    use super::{length_of_common_prefix, longest_prefix_in, lzss_compress, lzss_compress_with_key, lzss_decompress_to_buffer};
+    use super::{length_of_common_prefix, lzss_compress, lzss_compress_with_key, lzss_decompress_to_buffer};
 
     #[test]
     fn test_length_of_common_prefix() {
@@ -277,30 +316,6 @@ mod test {
         assert_eq!(length_of_common_prefix(&[255, 254, 253, 252, 251], &[255, 6, 9]), 1);
         assert_eq!(length_of_common_prefix(&[255, 254, 253, 252, 251], &[255, 254, 2]), 2);
         assert_eq!(length_of_common_prefix(&[255, 254, 253, 252, 251], &[255, 254, 253]), 3);
-    }
-
-    #[test]
-    fn test_longest_prefix() {
-        // trivial: no prefix
-        assert_eq!(longest_prefix_in(&[], &[]).1, 0);
-        assert_eq!(longest_prefix_in(&[], &[1, 2, 3, 4]).1, 0);
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[]).1, 0);
-        assert_eq!(longest_prefix_in(&[0, 1, 2, 3, 4], &[5, 6, 7, 8]).1, 0);
-        assert_eq!(longest_prefix_in(&[0, 1, 2, 3, 4], &[1, 1, 1]).1, 0);
-
-        assert_eq!(longest_prefix_in(&[0, 0, 0, 0, 0], &[1, 2, 3, 0, 0, 0, 4, 5, 6]), (3, 3));
-
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 7, 8, 9]), (4, 1));
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 7, 8, 9]), (4, 2));
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 7, 8, 9]), (4, 3));
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 4, 7, 8, 9]), (4, 4));
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 4, 5, 7, 8, 9]), (4, 5));
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 4, 5, 6, 7, 8, 9]), (4, 5));
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 4, 5], &[42, 255, 255, 255, 1, 2, 3, 4, 5, 6, 7, 8, 9]), (4, 5));
-
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5], &[2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5]), (7, 3));
-
-        assert_eq!(longest_prefix_in(&[1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5], &[0, 9, 1, 2, 3, 4, 5, 6, 7, 8]), (2, 3));
     }
 
     #[test]
@@ -422,6 +437,18 @@ mod test {
         let expected = vec![27, 0, 0, 0, 32, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 4, 4, 5, 9, 8, 4, 178, 103, 59, 3, 5, 4, 4, 1, 2];
         assert_eq!(&compressed, &expected);
         let mut decompressed = [0; 27];
+        lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
+        assert_eq!(&decompressed, &raw);
+    }
+
+    #[test]
+    fn lzss_test_random_2() {
+        // found through randomized property testing
+        let raw = [0, 118, 146, 96, 222, 118, 146, 96, 222];
+        let compressed = lzss_compress_with_key(&raw, 0).unwrap();
+        let expected = vec![9, 0, 0, 0, 21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 118, 146, 96, 222, 0, 5, 4];
+        assert_eq!(&compressed, &expected);
+        let mut decompressed = [0; 9];
         lzss_decompress_to_buffer(&compressed, &mut decompressed).unwrap();
         assert_eq!(&decompressed, &raw);
     }
