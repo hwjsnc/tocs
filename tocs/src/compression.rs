@@ -139,8 +139,13 @@ fn lzss_decompress_to_buffer(r#in: &[u8], out: &mut [u8]) -> Result<usize, Strin
                 let copy_start = out_idx
                     .checked_sub(off)
                     .ok_or_else(|| String::from("lzss error: decompression offset must be <= length of decompressed data"))?;
-                for i in 0..len {
-                    out[out_idx + i] = out[copy_start + i];
+                if len < off {
+                    let (previous, next) = out.split_at_mut(out_idx);
+                    next[0..len].copy_from_slice(&previous[copy_start..copy_start+len]);
+                } else {
+                    for i in 0..len {
+                        out[out_idx + i] = out[copy_start + i];
+                    }
                 }
                 out_idx += len;
             }
