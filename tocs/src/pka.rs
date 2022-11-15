@@ -35,10 +35,9 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgLi
     // header
     let data = read_bytes::<4, _>(f).map_err(PkgError::IOError)?; // TODO: do we expect a certain value?
     let number_of_pkgs = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IOError)?);
-    log::trace!("number of pkgs in pka: {number_of_pkgs}");
+    log::debug!("number of pkgs in pka: {number_of_pkgs}");
 
     // list of pkg filenames and hashes
-    let mut total_number_of_files = 0;
     let mut pkgs = std::vec::Vec::with_capacity(number_of_pkgs.try_into().expect("32 bits please"));
     for i in 0..number_of_pkgs {
         log::trace!("reading pkg {} of {}", i + 1, number_of_pkgs);
@@ -57,7 +56,6 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgLi
             filenames.push(filename);
             hashes.push(hash);
         }
-        total_number_of_files += filenames.len();
         pkgs.push(PkgListEntry {
             name: pkg_filename,
             filenames,
@@ -65,18 +63,22 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgLi
         });
     }
 
+    let number_of_hashes = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IOError)?);
+    log::debug!("number of hashes: {}", number_of_hashes);
+
+    // TODO: use a hashmap or indexmap instead?
     // content hashes, locations, sizes, compression
-    let mut filedata = std::vec::Vec::with_capacity(total_number_of_files);
-    for i in 0..total_number_of_files {
+    let mut filedata = std::vec::Vec::with_capacity(number_of_hashes.try_into().expect("32 bits please"));
+    for i in 0..number_of_hashes {
         let hash = read_bytes::<32, _>(f).map_err(PkgError::IOError)?;
         let offset = u64::from_le_bytes(read_bytes::<8, _>(f).map_err(PkgError::IOError)?);
         let compressed_size = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IOError)?);
         let decompressed_size = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IOError)?);
         let compression = Compression::from(u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IOError)?));
         log::trace!(
-            "file {} of {}: hash = {}, offset = {} (0x{:x}), compressed size = {} (0x{}), decompressed size = {}, compression = {}",
+            "hash {} of {}: hash = {}, offset = {} (0x{:x}), compressed size = {} (0x{:x}), decompressed size = {}, compression = {}",
             i + 1,
-            total_number_of_files,
+            number_of_hashes,
             hex::encode(hash),
             offset,
             offset,

@@ -17,7 +17,7 @@ impl std::fmt::Display for Compression {
             Compression::LZSS => write!(f, "LZSS"),
             Compression::LZ4 => write!(f, "LZ4"),
             Compression::Zstd => write!(f, "zstd"),
-            Compression::Unknown(x) => write!(f, "unknown compression type (value x (0x{x:x}"),
+            Compression::Unknown(x) => write!(f, "unknown compression type (value {x} (0x{x:x}))"),
         }
     }
 }

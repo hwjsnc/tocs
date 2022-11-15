@@ -29,6 +29,10 @@ enum Subcommand {
     ///
     /// For now, only prints the file list
     Pkg { path: std::path::PathBuf },
+    /// Try to parse a specific pka file
+    ///
+    /// For now, only prints the file list
+    Pka { path: std::path::PathBuf },
 }
 
 // TODO: use generic parser in tocs?
@@ -85,6 +89,7 @@ pub fn main() {
             }
         },
         Subcommand::Pkg { path } => parse_pkg(&path),
+        Subcommand::Pka { path } => parse_pka(&path),
     }
 }
 
@@ -312,5 +317,29 @@ pub fn parse_pkg(base_path: &std::path::Path) {
                 //}
             }
         }
+    }
+}
+
+pub fn parse_pka(path: &std::path::Path) {
+    let mut total_size: usize = 0;
+    let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+    let (pkgs, hashes) = tocs::pka::load_filelist(&mut f).unwrap();
+    for pkg in pkgs {
+        log::info!("pkg: {}", pkg.name);
+        for (name, hash) in pkg.filenames.iter().zip(pkg.hashes) {
+            log::info!("file: name = {}, hash = {}", name, hex::encode(hash));
+        }
+    }
+    for hash in hashes {
+        log::info!(
+            "hash {}: offset = {} (0x{:x}), compressed size = {} (0x{}), decompressed size = {}, compression = {}",
+            hex::encode(hash.hash),
+            hash.offset,
+            hash.offset,
+            hash.compressed_size,
+            hash.compressed_size,
+            hash.decompressed_size,
+            hash.compression
+        );
     }
 }

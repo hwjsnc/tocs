@@ -409,6 +409,7 @@ name = "try_parse"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "hex",
  "log",
  "simple_logger",
  "tocs",
