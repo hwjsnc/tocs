@@ -11,7 +11,7 @@ use smol_str::SmolStr;
 #[derive(Debug, Parser)]
 enum Args {
     /// Convert a folder of tbl files to a sqlite database
-    To_Sql {
+    Tbl_to_Sql {
         /// path of the folder containing the tbls
         #[clap(long)]
         tbl_path: std::path::PathBuf,
@@ -36,6 +36,17 @@ enum Args {
         /// overwrite any existing tbl files
         #[clap(short, long)]
         force: bool,
+    },
+    /// Read .pka file list and convert to sqlite for analysis
+    ///
+    /// Content is not included in the database, only metadata
+    Pka_to_Sql {
+        /// path to the pka file
+        #[clap(long)]
+        pka_path: std::path::PathBuf,
+        /// path of the new database file
+        #[clap(long)]
+        db_path: std::path::PathBuf,
     },
 }
 
@@ -73,16 +84,19 @@ pub fn main() {
     simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
 
     match Args::parse() {
-        Args::To_Sql { tbl_path, db_path, game } => {
-            to_new_db(&tbl_path, &db_path, game);
+        Args::Tbl_to_Sql { tbl_path, db_path, game } => {
+            tbl_to_new_db(&tbl_path, &db_path, game);
         }
         Args::To_Tbl { .. } => {
             todo!()
         }
+        Args::Pka_to_Sql { pka_path, db_path } => {
+            pka_metadata_to_new_db(&pka_path, &db_path);
+        }
     }
 }
 
-fn to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: Game) {
+fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: Game) {
     if dbpath.as_ref().exists() {
         panic!("database output path {} exists, refusing to overwrite.", dbpath.as_ref().display());
     }
@@ -306,3 +320,46 @@ fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bo
     // it remains to be seen if this leads to problems or not (i very much hope it doesn't).
 }
 */
+
+fn pka_metadata_to_new_db<P: AsRef<std::path::Path>>(pkapath: P, dbpath: P) {
+    if dbpath.as_ref().exists() {
+        panic!("database output path {} exists, refusing to overwrite.", dbpath.as_ref().display());
+    }
+
+    let mut db = rusqlite::Connection::open(dbpath).expect("opening new database file");
+    //db.execute("pragma foreign_keys = on", []).unwrap();
+
+    let tx = db.transaction().unwrap();
+
+    tx.execute("drop table if exists files", []).unwrap();
+    tx.execute("drop table if exists hashes", []).unwrap();
+    tx.execute("create table files (pkg text, file text, hash blob) strict;", []).unwrap();
+    tx.execute(
+        "create table data (hash blob, offset integer, 'compressed size' integer, 'decompressed size' integer, compression text) strict;",
+        [],
+    )
+    .unwrap();
+
+    tx.execute("create index files_pkg on files (pkg);", []).unwrap();
+    tx.execute("create index files_name on files (file);", []).unwrap();
+    tx.execute("create index data_hash on data (hash);", []).unwrap();
+
+    let mut f = std::io::BufReader::new(std::fs::File::open(pkapath).unwrap());
+    let (pkgs, hashes) = tocs::pka::load_filelist(&mut f).unwrap();
+    for pkg in pkgs {
+        for (name, hash) in pkg.filenames.iter().zip(pkg.hashes) {
+            let p: &str = pkg.name.as_ref();
+            let f: &str = name.as_ref();
+            tx.execute("insert into files (pkg, file, hash) values (?1, ?2, ?3)", rusqlite::params![p, f, hash]).unwrap();
+        }
+    }
+    for hash in hashes {
+        tx.execute(
+            "insert into data (hash, offset, 'compressed size', 'decompressed size', compression) values (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![hash.hash, hash.offset, hash.compressed_size, hash.decompressed_size, hash.compression.to_string()],
+        )
+        .unwrap();
+    }
+
+    tx.commit().map_err(|e| format!("couldn't commit database transaction: {e}")).unwrap();
+}
