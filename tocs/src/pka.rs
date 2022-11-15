@@ -1,5 +1,10 @@
 /*
 For a description of the pka file format, see https://github.com/Sewer56/Sen-no-Kiseki-PKG-Sharp/pull/4/files
+
+note:
+- files are sorted alphabetically (by pkg name, then by file name)
+- hashes are sorted lexicographically
+- file offset sorting is unknown
 */
 
 use smol_str::SmolStr;
