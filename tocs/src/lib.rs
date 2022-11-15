@@ -8,6 +8,8 @@ mod io;
 mod compression;
 
 #[cfg(feature = "pkg")]
+pub mod pka;
+#[cfg(feature = "pkg")]
 pub mod pkg;
 
 pub mod tbl;

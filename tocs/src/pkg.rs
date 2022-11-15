@@ -5,11 +5,10 @@ For a description of the pkg file structure, see https://github.com/Sewer56/Sen-
 // TODO: actually use this, haha
 const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 
-use smallvec::SmallVec;
 use smol_str::SmolStr;
 
 pub use crate::compression::Compression;
-use crate::io::{read_byte, read_bytes};
+use crate::io::read_bytes;
 
 pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<std::vec::Vec<FileListEntry>, PkgError> {
     let data = read_bytes::<4, _>(f).map_err(PkgError::IOError)?; // magic header or a hash or something???
@@ -58,39 +57,16 @@ pub struct FileListEntry {
     pub compression: Compression,
 }
 
-pub fn parse_cutf8_padded<F: std::io::Read>(f: &mut F, chunk_size: usize) -> Result<SmolStr, PkgError> {
-    let mut data: SmallVec<[u8; 64]> = SmallVec::new();
-    let mut i = 0;
-    loop {
-        let x = read_byte(f).map_err(PkgError::IOError)?;
-        i += 1;
-        if x == 0 {
-            break;
-        } else {
-            data.push(x);
-        }
-    }
-
-    // read padding until we hit the chunk size
-    while (i % chunk_size) != 0 {
-        match read_byte(f) {
-            Ok(0) => {}
-            Ok(x) => {
-                return Err(PkgError::FilelistError(format!("Unexpected padding byte {x}")));
-            }
-            Err(e) => {
-                return Err(PkgError::IOError(e));
-            }
-        }
-        i += 1;
-    }
-
-    // check utf-8
-    std::str::from_utf8(&data).map(SmolStr::from).map_err(PkgError::Utf8Error)
+fn parse_filename<F: std::io::Read>(f: &mut F) -> Result<SmolStr, PkgError> {
+    crate::io::read_cutf8_padded(f, 64).map_err(|e| match e {
+        crate::io::ReadUtf8Error::IOError(e) => PkgError::IOError(e),
+        crate::io::ReadUtf8Error::Utf8Error(e) => PkgError::Utf8Error(e),
+        crate::io::ReadUtf8Error::UnexpectedPaddingError(x) => PkgError::FilelistError(format!("unexpected padding byte {x} (0x{x:x})")),
+    })
 }
 
 fn parse_filelist_entry<F: std::io::Read>(f: &mut F) -> Result<FileListEntry, PkgError> {
-    let filename = parse_cutf8_padded(f, 64)?;
+    let filename = parse_filename(f)?;
     log::trace!("filename: {filename}");
     let decompressed_size = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IOError)?);
     log::trace!("raw size: {decompressed_size} (0x{decompressed_size:x})");
