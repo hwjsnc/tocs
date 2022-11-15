@@ -9,17 +9,7 @@ use smallvec::SmallVec;
 use smol_str::SmolStr;
 
 pub use crate::compression::Compression;
-
-fn read_byte<F: std::io::Read>(f: &mut F) -> Result<u8, std::io::Error> {
-    let a: [u8; 1] = read_bytes(f)?;
-    Ok(a[0])
-}
-
-fn read_bytes<const N: usize, F: std::io::Read>(f: &mut F) -> Result<[u8; N], std::io::Error> {
-    let mut buf: [u8; N] = [0; N];
-    f.read_exact(&mut buf)?;
-    Ok(buf)
-}
+use crate::io::{read_byte, read_bytes};
 
 pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<std::vec::Vec<FileListEntry>, PkgError> {
     let data = read_bytes::<4, _>(f).map_err(PkgError::IOError)?; // magic header or a hash or something???

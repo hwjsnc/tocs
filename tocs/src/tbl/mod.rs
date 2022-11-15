@@ -13,6 +13,8 @@ use itertools::Itertools as _;
 #[cfg(feature = "rusqlite")]
 use rusqlite::types::FromSql as _;
 
+use crate::io::{read_byte, read_bytes};
+
 // Generic helpers
 
 pub struct WarningLogger<W> {
@@ -675,18 +677,6 @@ impl std::fmt::Display for DeserializeError {
         }
         Ok(())
     }
-}
-
-fn read_byte<F: std::io::Read>(f: &mut F) -> Result<u8, std::io::Error> {
-    let a: [u8; 1] = read_bytes(f)?;
-    Ok(a[0])
-}
-
-fn read_bytes<const N: usize, F: std::io::Read>(f: &mut F) -> Result<[u8; N], std::io::Error> {
-    let mut buf: [u8; N] = [0; N];
-    f.read_exact(&mut buf)?;
-    //Ok(buf.try_into().expect("length should match"))
-    Ok(buf)
 }
 
 fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>) -> Result<SmolStr, DeserializeError> {
