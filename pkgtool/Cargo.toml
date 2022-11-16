@@ -1,0 +1,15 @@
+[package]
+name = "pkgtool"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "3.2.6", features = ["derive"] }
+csv = { version = "1.1.6" }
+hex = "0.4.3"
+log = "0.4.14"
+tocs = { path = "../tocs", features = ["default", "pkg"] }
+walkdir = "2.3"

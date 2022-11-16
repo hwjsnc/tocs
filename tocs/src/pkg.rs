@@ -48,6 +48,8 @@ impl std::fmt::Display for PkgError {
     }
 }
 
+impl std::error::Error for PkgError {}
+
 #[derive(Clone, Debug)]
 pub struct FileListEntry {
     pub filename: SmolStr,

@@ -27,6 +27,9 @@ Here's a short overview:
 - `tbled` is a GUI tbl editor.
   For more information, see [its own README](tbled/README.md).
 
+- `pkgtool` is a CLI program for packing/unpacking .pkg and .pka package files.
+  For more information, see [its own README](pkgtool/README.md).
+
 - `try_parse` is a CLI program that attempts to parse all game data and prints any errors.
   It's there for finding instances where the game data doesn't follow the rules we've reverse engineered.
   This can happen if the files are broken (it's more likely than you think), our understanding is incomplete, and/or because there's a bug in the code.

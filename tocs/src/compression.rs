@@ -1,13 +1,15 @@
 use hashbrown::HashMap;
 use std::collections::VecDeque;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Compression {
     None,
     LZSS,
     LZ4,
     Zstd,
     Unknown(u32),
+    // note: technically, Unknown(0) should equal None, Unknown(1) should equal LZSS, and so on
+    // however, these unknown ones should never be constructed so having them be unequal is probably (hopefully) not a problem
 }
 
 impl std::fmt::Display for Compression {
