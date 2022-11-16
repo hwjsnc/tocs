@@ -1,5 +1,6 @@
 use anyhow::Context as _;
 use clap::Parser as _;
+use std::io::Seek as _;
 
 #[derive(clap::Parser)]
 enum CliArgs {
@@ -27,6 +28,11 @@ enum PkgArgs {
     Stats {
         /// Path to directory containing (only) .pkg files
         dir: std::path::PathBuf,
+    },
+    /// Check .pkg consistency (for testing)
+    Check {
+        /// Path to .pkg
+        path: std::path::PathBuf,
     },
     /// Unpack contents of a .pkg
     Unpack {
@@ -56,6 +62,11 @@ enum PkaArgs {
         /// Overwrite existing stat files
         #[clap(long, short)]
         force: bool,
+        /// Path to .pka
+        path: std::path::PathBuf,
+    },
+    /// Check .pka consistency (for testing)
+    Check {
         /// Path to .pka
         path: std::path::PathBuf,
     },
@@ -96,10 +107,13 @@ enum PkaArgs {
 }
 
 fn main() -> anyhow::Result<()> {
+    simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
+
     match CliArgs::parse() {
         CliArgs::Pkg(PkgArgs::Info { path }) => pkg_info(path),
         CliArgs::Pkg(PkgArgs::Ls { path }) => pkg_ls(path),
         CliArgs::Pkg(PkgArgs::Stats { dir }) => pkg_stats(dir),
+        CliArgs::Pkg(PkgArgs::Check { path }) => pkg_check(path),
         CliArgs::Pkg(PkgArgs::Unpack {
             force,
             raw_i_know_what_i_am_doing,
@@ -119,6 +133,7 @@ fn main() -> anyhow::Result<()> {
         CliArgs::Pka(PkaArgs::Info { path }) => pka_info(path),
         CliArgs::Pka(PkaArgs::Ls { path }) => pka_ls(path),
         CliArgs::Pka(PkaArgs::Stats { path, force }) => pka_stats(path, force),
+        CliArgs::Pka(PkaArgs::Check { path }) => pka_check(path),
         CliArgs::Pka(PkaArgs::UnpackPkgs { force, pka, out, files }) => {
             todo!("pka unpackpkgs force={} pka={} out={} files={:?}", force, pka.display(), out.display(), files)
         }
@@ -139,6 +154,10 @@ fn main() -> anyhow::Result<()> {
             )
         }
     }
+}
+
+fn name_is_ok(name: &str) -> bool {
+    name.is_ascii() && !name.chars().any(|c| c.is_ascii_control() || c.is_ascii_whitespace()) && !name.contains('/') && !name.contains('\\')
 }
 
 fn pkg_info<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
@@ -181,6 +200,70 @@ fn pkg_ls<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
             e.compression
         );
     }
+    Ok(())
+}
+
+fn pkg_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
+    if path.as_ref().is_dir() {
+        for direntry in walkdir::WalkDir::new(path.as_ref()) {
+            let direntry = direntry.unwrap();
+            let path = direntry.path();
+            if direntry.file_type().is_file() {
+                pkg_check(&path)?;
+            }
+        }
+        return Ok(());
+    }
+
+    log::info!("Checking file {}", path.as_ref().display());
+
+    let data = std::fs::read(&path).with_context(|| format!("couldn't read pkg file '{}'", path.as_ref().display()))?;
+    let mut cursor = std::io::Cursor::new(&data);
+    let filelist = tocs::pkg::load_filelist(&mut cursor).with_context(|| format!("couldn't parse pkg file '{}'", path.as_ref().display()))?;
+
+    let offset_after_metadata = cursor.stream_position().expect("cursor stream_position should not fail");
+
+    /* check that data does not overlap and leaves no space empty */
+    let mut filelist = filelist;
+    filelist.sort_by_key(|e| e.data_offset);
+    let filelist = filelist;
+    let mut expected_start: u32 = offset_after_metadata.try_into().expect("data should be < 4GiB");
+    for e in filelist.iter() {
+        log::debug!("checking offset of entry {}", e.filename);
+        if e.data_offset != expected_start {
+            panic!("{}: unexpected start ({} rather than {})", e.filename, e.data_offset, expected_start);
+        }
+        expected_start += e.compressed_size;
+    }
+    if <u32 as TryInto<usize>>::try_into(expected_start).expect("32 bits please") != data.len() {
+        panic!("trailing data starting at offset {} (0x{:x})", expected_start, expected_start);
+    }
+
+    /* check read->decompress->recompress->decompress loop */
+    for e in filelist.iter() {
+        log::debug!("Testing {}", e.filename);
+        assert!(name_is_ok(&e.filename));
+        let compressed_data = tocs::pkg::get_data_raw(&mut cursor, &e)?;
+        let decompressed_data = tocs::pkg::get_data(&mut cursor, &e)?;
+        let recompressed_data = e.compression.compress(&decompressed_data).map_err(anyhow::Error::msg)?;
+        let redecompressed_data = e
+            .compression
+            .decompress_with_exact_output_size(&recompressed_data, e.decompressed_size.try_into().expect("32 bits please"))
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(decompressed_data, redecompressed_data);
+        if recompressed_data.len() != compressed_data.len() {
+            // exact equality is unrealistic
+            log::warn!(
+                "{}: recompressing data changes size ({} instead of {} bytes)",
+                e.filename,
+                recompressed_data.len(),
+                compressed_data.len()
+            );
+        }
+    }
+
+    println!("ok.");
+
     Ok(())
 }
 
@@ -318,4 +401,8 @@ fn pka_stats<P: AsRef<std::path::Path>>(path: P, force: bool) -> anyhow::Result<
     }
 
     Ok(())
+}
+
+fn pka_check<P: AsRef<std::path::Path>>(_path: P) -> anyhow::Result<()> {
+    todo!()
 }

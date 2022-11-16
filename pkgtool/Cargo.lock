@@ -334,6 +334,7 @@ dependencies = [
  "csv",
  "hex",
  "log",
+ "simple_logger",
  "tocs",
  "walkdir",
 ]
