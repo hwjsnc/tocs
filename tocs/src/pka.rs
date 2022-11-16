@@ -14,12 +14,14 @@ use crate::compression::Compression;
 use crate::io::read_bytes;
 pub use crate::pkg::PkgError;
 
+#[derive(Clone, Debug)]
 pub struct PkgListEntry {
     pub name: SmolStr,
     pub filenames: std::vec::Vec<SmolStr>,
     pub hashes: std::vec::Vec<[u8; 32]>,
 }
 
+#[derive(Clone, Debug)]
 pub struct FileDataEntry {
     pub hash: [u8; 32],
     pub offset: u64,

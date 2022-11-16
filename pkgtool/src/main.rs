@@ -53,6 +53,9 @@ enum PkaArgs {
     Ls { path: std::path::PathBuf },
     /// Print .pka file content statistics in CSV format (You probably don't need this)
     Stats {
+        /// Overwrite existing stat files
+        #[clap(long, short)]
+        force: bool,
         /// Path to .pka
         path: std::path::PathBuf,
     },
@@ -115,7 +118,7 @@ fn main() -> anyhow::Result<()> {
         }
         CliArgs::Pka(PkaArgs::Info { path }) => pka_info(path),
         CliArgs::Pka(PkaArgs::Ls { path }) => pka_ls(path),
-        CliArgs::Pka(PkaArgs::Stats { path }) => pka_stats(path),
+        CliArgs::Pka(PkaArgs::Stats { path, force }) => pka_stats(path, force),
         CliArgs::Pka(PkaArgs::UnpackPkgs { force, pka, out, files }) => {
             todo!("pka unpackpkgs force={} pka={} out={} files={:?}", force, pka.display(), out.display(), files)
         }
@@ -208,14 +211,111 @@ fn pkg_stats<P: AsRef<std::path::Path>>(dir: P) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn pka_info<P: AsRef<std::path::Path>>(_path: P) -> anyhow::Result<()> {
-    todo!("");
+fn pka_info<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
+    let mut f = std::io::BufReader::new(std::fs::File::open(&path).with_context(|| format!("couldn't open pka file '{}' for reading", path.as_ref().display()))?);
+    let (pkgs, blobs) = tocs::pka::load_filelist(&mut f).with_context(|| format!("couldn't parse pkg file '{}'", path.as_ref().display()))?;
+
+    let number_of_files: usize = pkgs.iter().map(|pkg| pkg.filenames.len()).sum();
+    println!("number of files: {}", number_of_files);
+
+    println!("number of blobs: {}", blobs.len());
+    let mut counts = std::collections::HashMap::new();
+    for e in blobs.iter() {
+        counts.entry(e.compression).and_modify(|c| *c += 1).or_insert(1);
+    }
+    let mut counts: std::vec::Vec<_> = counts.into_iter().collect();
+    counts.sort_by_key(|(_, c)| -c);
+    println!("of these:");
+    for (compression, count) in counts.iter() {
+        println!(" - {} blobs are compressed with {}", count, compression);
+    }
+
+    let blob_hashes: std::collections::HashSet<[u8; 32]> = blobs.iter().map(|blob| blob.hash).collect();
+    let file_hashes: std::collections::HashSet<[u8; 32]> = pkgs.iter().flat_map(|pkg| pkg.hashes.iter().copied()).collect();
+    println!("number of blobs with duplicate hash: {} (should be 0)", blobs.len() - blob_hashes.len());
+    println!("number of files with duplicate hash: {} (should be ≥ 0)", number_of_files - file_hashes.len());
+    println!("number of files with no corresponding blob: {} (should be 0)", file_hashes.difference(&blob_hashes).count());
+    println!("number of blobs with no corresponding file: {} (should be 0)", blob_hashes.difference(&file_hashes).count());
+
+    let compressed_size: u64 = blobs.iter().map(|blob| blob.compressed_size as u64).sum();
+    let blobs: std::collections::HashMap<_, _> = blobs.into_iter().map(|blob| (blob.hash, blob.clone())).collect();
+    let decompressed_size: u64 = pkgs
+        .iter()
+        .flat_map(|pkg| pkg.hashes.iter().filter_map(|hash| blobs.get(hash)).map(|blob| blob.decompressed_size as u64))
+        .sum();
+
+    println!("total size of compressed data: {} bytes ({:.3} GB)", compressed_size, compressed_size as f64 / 1_000_000_000.0);
+    println!("estimated size after decompression: {} bytes ({:.3} GB)", decompressed_size, decompressed_size as f64 / 1_000_000_000.0);
+    println!("compression factor: {:.3}", compressed_size as f64 / std::cmp::max(1, decompressed_size) as f64);
+
+    Ok(())
 }
 
-fn pka_ls<P: AsRef<std::path::Path>>(_path: P) -> anyhow::Result<()> {
-    todo!("");
+fn pka_ls<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
+    let mut f = std::io::BufReader::new(std::fs::File::open(&path).with_context(|| format!("couldn't open pka file '{}' for reading", path.as_ref().display()))?);
+    let (pkgs, blobs) = tocs::pka::load_filelist(&mut f).with_context(|| format!("couldn't parse pkg file '{}'", path.as_ref().display()))?;
+
+    let blobs: std::collections::HashMap<_, _> = blobs.into_iter().map(|blob| (blob.hash, blob.clone())).collect();
+
+    for pkg in pkgs {
+        println!("{}:", pkg.name);
+        for (file, hash) in pkg.filenames.iter().zip(pkg.hashes.iter()) {
+            if let Some(blob) = blobs.get(hash) {
+                println!(
+                    "{:64} (compressed size {}, decompressed size {}, (compression factor {:.3}), compression = {})",
+                    file,
+                    blob.compressed_size,
+                    blob.decompressed_size,
+                    blob.compressed_size as f64 / std::cmp::max(1, blob.decompressed_size) as f64,
+                    blob.compression
+                );
+            } else {
+                println!("  {}: no corresponding blob (hash = {})!", file, hex::encode(hash));
+            }
+        }
+    }
+    Ok(())
 }
 
-fn pka_stats<P: AsRef<std::path::Path>>(_path: P) -> anyhow::Result<()> {
-    todo!("");
+fn pka_stats<P: AsRef<std::path::Path>>(path: P, force: bool) -> anyhow::Result<()> {
+    let mut f = std::io::BufReader::new(std::fs::File::open(&path).with_context(|| format!("couldn't open pka file '{}' for reading", path.as_ref().display()))?);
+    let (pkgs, blobs) = tocs::pka::load_filelist(&mut f).with_context(|| format!("couldn't parse pkg file '{}'", path.as_ref().display()))?;
+
+    let mut open_options = std::fs::File::options();
+    open_options.write(true);
+    if force {
+        open_options.create(true);
+    } else {
+        open_options.create_new(true);
+    }
+
+    let files_csv = std::path::Path::new("files.csv");
+    let blobs_csv = std::path::Path::new("blobs.csv");
+
+    let f = std::io::BufWriter::new(open_options.open(files_csv).with_context(|| format!("couldn't open output file '{}'", files_csv.display()))?);
+    let mut csv = csv::Writer::from_writer(f);
+    csv.write_record(&["pkg", "file", "hash"]).with_context(|| String::from("couldn't write csv header to stdout"))?;
+    for pkg in pkgs {
+        for (file, hash) in pkg.filenames.iter().zip(pkg.hashes.iter()) {
+            csv.write_record(&[pkg.name.to_string(), file.to_string(), hex::encode(hash)])
+                .with_context(|| String::from("couldn't write record"))?;
+        }
+    }
+
+    let f = std::io::BufWriter::new(open_options.open(blobs_csv).with_context(|| format!("couldn't open output file '{}'", blobs_csv.display()))?);
+    let mut csv = csv::Writer::from_writer(f);
+    csv.write_record(&["hash", "offset", "compressed size", "decompressed size", "compression"])
+        .with_context(|| String::from("couldn't write csv header to stdout"))?;
+    for blob in blobs {
+        csv.write_record(&[
+            hex::encode(blob.hash),
+            blob.offset.to_string(),
+            blob.compressed_size.to_string(),
+            blob.decompressed_size.to_string(),
+            blob.compression.to_string(),
+        ])
+        .with_context(|| String::from("couldn't write record"))?;
+    }
+
+    Ok(())
 }
