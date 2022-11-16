@@ -2,7 +2,6 @@
 For a description of the pkg file structure, see https://github.com/Sewer56/Sen-no-Kiseki-PKG-Sharp/blob/master/docs/PKG-File-Structure.md
 */
 
-// TODO: actually use this, haha
 const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 
 use smol_str::SmolStr;

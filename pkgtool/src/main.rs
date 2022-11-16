@@ -157,7 +157,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn name_is_ok(name: &str) -> bool {
-    name.is_ascii() && !name.chars().any(|c| c.is_ascii_control() || c.is_ascii_whitespace()) && !name.contains('/') && !name.contains('\\')
+    name.is_ascii() && !name.chars().any(|c| c.is_ascii_control() || (c.is_ascii_whitespace() && c != ' ')) && !name.contains('/') && !name.contains('\\')
 }
 
 fn pkg_info<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
@@ -403,6 +403,109 @@ fn pka_stats<P: AsRef<std::path::Path>>(path: P, force: bool) -> anyhow::Result<
     Ok(())
 }
 
-fn pka_check<P: AsRef<std::path::Path>>(_path: P) -> anyhow::Result<()> {
-    todo!()
+fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
+    let mut f = std::io::BufReader::new(std::fs::File::open(&path).with_context(|| format!("couldn't open pka file '{}' for reading", path.as_ref().display()))?);
+    let (pkgs, blobs) = tocs::pka::load_filelist(&mut f).with_context(|| format!("couldn't parse pkg file '{}'", path.as_ref().display()))?;
+
+    // wheck file names
+    for pkg in pkgs.iter() {
+        log::debug!("checking pkg {} name", pkg.name);
+        assert!(name_is_ok(&pkg.name));
+        for (name, hash) in pkg.filenames.iter().zip(pkg.hashes.iter()) {
+            log::debug!("checking file {} name", name);
+            assert!(name_is_ok(&name));
+        }
+    }
+
+    let offset_after_metadata = f.stream_position()?;
+
+    let blob_hashes: std::collections::HashSet<_> = blobs.iter().map(|blob| blob.hash).collect();
+    let file_hashes: std::collections::HashSet<_> = pkgs.iter().flat_map(|pkg| pkg.hashes.iter().copied()).collect();
+    for hash in blob_hashes.difference(&file_hashes) {
+        panic!("blob hash with no associated file: {}", hex::encode(hash));
+    }
+    for hash in file_hashes.difference(&blob_hashes) {
+        panic!("file hash with no associated data: {}", hex::encode(hash));
+    }
+
+    // check that file names are sorted
+    /*
+    let mut prev_pkg_name = None;
+    for pkg in pkgs.iter() {
+        match prev_pkg_name {
+            Some(prev) if prev >= pkg.name => {
+                panic!("pkg name {} is not greater than previous ({})", pkg.name, prev);
+            }
+            _ => {}
+        }
+        prev_pkg_name = Some(pkg.name.clone());
+
+        let mut prev_file_name = None;
+        for name in pkg.filenames.iter() {
+            match prev_file_name {
+                Some(prev) if prev >= pkg.name => {
+                    panic!("file name {} / {} is not greater than previous ({} / {})", pkg.name, name, pkg.name, prev);
+                }
+                _ => {}
+            }
+            prev_file_name = Some(name.clone());
+        }
+    }
+    */
+
+    // check that blob metadata is sorted by hash
+    let mut prev_hash = None;
+    for blob in blobs.iter() {
+        match prev_hash {
+            Some(prev) if prev >= blob.hash => {
+                panic!("blob hash {} is not greater than previous ({})", hex::encode(blob.hash), hex::encode(prev));
+            }
+            _ => {}
+        }
+        prev_hash = Some(blob.hash);
+    }
+
+    // check that data is overlap free and leaves no unused space
+    let mut blobs = blobs;
+    blobs.sort_by_key(|blob| blob.offset);
+    let blobs = blobs;
+    let mut expected_start: u64 = offset_after_metadata;
+    for blob in blobs.iter() {
+        log::debug!("checking offset of blob {}", hex::encode(blob.hash));
+        if blob.offset != expected_start {
+            panic!("{}: unexpected start ({} rather than {})", hex::encode(blob.hash), blob.offset, expected_start);
+        }
+        expected_start += <u32 as Into<u64>>::into(blob.compressed_size);
+    }
+    if expected_start != f.get_ref().metadata()?.len() {
+        panic!("trailing data starting at offset {} (0x{:x})", expected_start, expected_start);
+    }
+
+    log::info!("metadata checks complete, starting checking contents");
+
+    // check read->decompress->recompress->decompress loop
+    for blob in blobs.iter() {
+        log::debug!("Testing {}", hex::encode(blob.hash));
+        let compressed_data = tocs::pka::get_blob_data_raw(&mut f, blob)?;
+        let decompressed_data = tocs::pka::get_blob_data(&mut f, blob)?;
+        let recompressed_data = blob.compression.compress(&decompressed_data).map_err(anyhow::Error::msg)?;
+        let redecompressed_data = blob
+            .compression
+            .decompress_with_exact_output_size(&recompressed_data, blob.decompressed_size.try_into().expect("32 bits please"))
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(decompressed_data, redecompressed_data);
+        let delta = (recompressed_data.len() as f64 - compressed_data.len() as f64).abs() / std::cmp::max(recompressed_data.len(), compressed_data.len()) as f64;
+        if !(delta < 0.05) {
+            // exact equality is unrealistic
+            log::warn!(
+                "{}: recompressing data changes size significantly ({} instead of {} bytes)",
+                hex::encode(blob.hash),
+                recompressed_data.len(),
+                compressed_data.len()
+            );
+        }
+    }
+
+    log::info!("ok");
+    Ok(())
 }

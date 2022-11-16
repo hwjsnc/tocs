@@ -72,7 +72,7 @@ impl Compression {
                 lz4::block::compress(r#in, mode, false).map_err(|e| format!("lz4 compression error: {e}"))
             }
             Compression::Zstd => {
-                let level = 15; // This compression level approximately matches the one used in the switch port of CS4.
+                let level = 19; // This compression level approximately matches the one used in the switch port of CS4.
                                 // I wasn't able to get bit-exact compatibility of the compressed data for any setting (probably a different compressor used?).
                 zstd::bulk::compress(r#in, level).map_err(|e| format!("zstd compression error: {e}"))
             }

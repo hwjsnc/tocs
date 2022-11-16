@@ -2,10 +2,12 @@
 For a description of the pka file format, see https://github.com/Sewer56/Sen-no-Kiseki-PKG-Sharp/pull/4/files
 
 note:
-- files are sorted alphabetically (by pkg name, then by file name)
+- files are mostly (but not fully) sorted alphabetically
 - hashes are sorted lexicographically
 - file offset sorting is unknown
 */
+
+const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 
 use smol_str::SmolStr;
 
@@ -105,3 +107,39 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgLi
 
     Ok((pkgs, filedata))
 }
+
+pub fn get_blob_data_raw<F: std::io::Read + std::io::Seek>(file: &mut F, blob: &FileDataEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+    if blob.compressed_size > MAX_DATA_SIZE {
+        let x = blob.compressed_size;
+        return Err(PkgError::DecompressionError(format!(
+            "error reading compressed data: size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})"
+        )));
+    }
+    file.seek(std::io::SeekFrom::Start(blob.offset.into())).map_err(PkgError::IOError)?;
+    let mut compressed_data = vec![0; blob.compressed_size.try_into().expect("32 bits please")];
+    file.read_exact(&mut compressed_data).map_err(PkgError::IOError)?;
+    Ok(compressed_data)
+}
+
+pub fn get_blob_data<F: std::io::Read + std::io::Seek>(file: &mut F, blob: &FileDataEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+    if blob.compressed_size > MAX_DATA_SIZE {
+        let x = blob.compressed_size;
+        return Err(PkgError::DecompressionError(format!(
+            "decompression error: compressed size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})"
+        )));
+    }
+    if blob.decompressed_size > MAX_DATA_SIZE {
+        let x = blob.decompressed_size;
+        return Err(PkgError::DecompressionError(format!(
+            "decompression error: decompressed size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})"
+        )));
+    }
+
+    let compressed_data = get_blob_data_raw(file, blob)?;
+
+    blob.compression
+        .decompress_with_exact_output_size(&compressed_data, blob.decompressed_size.try_into().expect("32 bits please"))
+        .map_err(PkgError::DecompressionError)
+}
+
+// TODO: get data by hash, get data by file name
