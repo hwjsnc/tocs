@@ -1,6 +1,10 @@
 use anyhow::Context as _;
 use clap::Parser as _;
+use rayon::iter::IntoParallelRefIterator as _;
+use rayon::iter::ParallelIterator as _;
+use sha2::Digest as _;
 use std::io::Seek as _;
+use std::ops::DerefMut as _;
 
 #[derive(clap::Parser)]
 enum CliArgs {
@@ -483,29 +487,67 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
 
     log::info!("metadata checks complete, starting checking contents");
 
-    // check read->decompress->recompress->decompress loop
-    for blob in blobs.iter() {
-        log::debug!("Testing {}", hex::encode(blob.hash));
-        let compressed_data = tocs::pka::get_blob_data_raw(&mut f, blob)?;
-        let decompressed_data = tocs::pka::get_blob_data(&mut f, blob)?;
-        let recompressed_data = blob.compression.compress(&decompressed_data).map_err(anyhow::Error::msg)?;
-        let redecompressed_data = blob
-            .compression
-            .decompress_with_exact_output_size(&recompressed_data, blob.decompressed_size.try_into().expect("32 bits please"))
-            .map_err(anyhow::Error::msg)?;
-        assert_eq!(decompressed_data, redecompressed_data);
-        let delta = (recompressed_data.len() as f64 - compressed_data.len() as f64).abs() / std::cmp::max(recompressed_data.len(), compressed_data.len()) as f64;
-        if !(delta < 0.05) {
-            // exact equality is unrealistic
-            log::warn!(
-                "{}: recompressing data changes size significantly ({} instead of {} bytes)",
-                hex::encode(blob.hash),
-                recompressed_data.len(),
-                compressed_data.len()
-            );
-        }
-    }
+    // check read->decompress->recompress->decompress loop and content hash
+    let io_mutex = std::sync::Mutex::new(f); // holding this mutex allows using the file or printing to stdout, or using log macros
+
+    blobs.par_iter().map(|blob| pka_test_blob(&io_mutex, blob)).find_any(|result| result.is_err()).unwrap_or(Ok(()))?;
 
     log::info!("ok");
+    Ok(())
+}
+
+fn pka_test_blob<F: std::io::Read + std::io::Seek>(io_mutex: &std::sync::Mutex<F>, blob: &tocs::pka::FileDataEntry) -> anyhow::Result<()> {
+    // reading and decompressing should be fast, so locking the file should not be too much of a problem
+    let mut guard = io_mutex
+        .lock()
+        .map_err(|e| e.to_string())
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("blob {}: failed to read data", hex::encode(blob.hash)))?;
+    log::debug!("Testing {}", hex::encode(blob.hash));
+    let compressed_data = tocs::pka::get_blob_data_raw(guard.deref_mut(), blob).with_context(|| format!("blob {}: failed to read data", hex::encode(blob.hash)))?;
+    let decompressed_data = tocs::pka::get_blob_data(guard.deref_mut(), blob).with_context(|| format!("blob {}: failed to read data", hex::encode(blob.hash)))?;
+    drop(guard);
+
+    // recompressing is the bit that really takes time
+    let recompressed_data = blob
+        .compression
+        .compress(&decompressed_data)
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("blob {}: failed to recompress data", hex::encode(blob.hash)))?;
+    let redecompressed_data = blob
+        .compression
+        .decompress_with_exact_output_size(&recompressed_data, blob.decompressed_size.try_into().expect("32 bits please"))
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("blob {}: failed to decompress the recompressed data", hex::encode(blob.hash)))?;
+    let sha256 = sha2::Sha256::digest(&decompressed_data);
+    let sha256: [u8; 32] = sha256.as_slice().try_into().expect("SHA256 result should be 32 byte long");
+    if blob.hash != sha256 {
+        return Err(anyhow::Error::msg(format!(
+            "blob {}: hash does not match sha256 of decompressed data {}",
+            hex::encode(blob.hash),
+            hex::encode(sha256)
+        )));
+    }
+    if decompressed_data != redecompressed_data {
+        return Err(anyhow::Error::msg(format!("blob {}: recompress->decompress changes data", hex::encode(blob.hash))));
+    }
+
+    let delta = (recompressed_data.len() as f64 - compressed_data.len() as f64).abs() / std::cmp::max(recompressed_data.len(), compressed_data.len()) as f64;
+    if !(delta < 0.05) {
+        // exact equality is unrealistic
+
+        let mut guard = io_mutex
+            .lock()
+            .map_err(|e| e.to_string())
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("blob {}: failed to acquire mutex for warning", hex::encode(blob.hash)))?;
+        log::warn!(
+            "{}: recompressing data changes size significantly ({} instead of {} bytes)",
+            hex::encode(blob.hash),
+            recompressed_data.len(),
+            compressed_data.len()
+        );
+    }
+
     Ok(())
 }
