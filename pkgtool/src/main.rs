@@ -488,8 +488,7 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     log::info!("metadata checks complete, starting checking contents");
 
     // check read->decompress->recompress->decompress loop and content hash
-    let io_mutex = std::sync::Mutex::new(f); // holding this mutex allows using the file or printing to stdout, or using log macros
-
+    let io_mutex = std::sync::Mutex::new(f);
     blobs.par_iter().map(|blob| pka_test_blob(&io_mutex, blob)).find_any(|result| result.is_err()).unwrap_or(Ok(()))?;
 
     log::info!("ok");
@@ -535,14 +534,8 @@ fn pka_test_blob<F: std::io::Read + std::io::Seek>(io_mutex: &std::sync::Mutex<F
     let delta = (recompressed_data.len() as f64 - compressed_data.len() as f64).abs() / std::cmp::max(recompressed_data.len(), compressed_data.len()) as f64;
     if !(delta < 0.05) {
         // exact equality is unrealistic
-
-        let mut guard = io_mutex
-            .lock()
-            .map_err(|e| e.to_string())
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("blob {}: failed to acquire mutex for warning", hex::encode(blob.hash)))?;
         log::warn!(
-            "{}: recompressing data changes size significantly ({} instead of {} bytes)",
+            "blob {}: recompressing data changes size significantly ({} instead of {} bytes)",
             hex::encode(blob.hash),
             recompressed_data.len(),
             compressed_data.len()
