@@ -4,6 +4,7 @@ use rayon::iter::IntoParallelRefIterator as _;
 use rayon::iter::ParallelIterator as _;
 use sha2::Digest as _;
 use std::io::Seek as _;
+use std::io::Write as _;
 use std::ops::DerefMut as _;
 
 #[derive(clap::Parser)]
@@ -125,16 +126,7 @@ fn main() -> anyhow::Result<()> {
             pkg,
             out,
             files,
-        }) => {
-            todo!(
-                "pkg unpack force={} raw={} pkg={} out={}, files={:?}",
-                force,
-                raw_i_know_what_i_am_doing,
-                pkg.display(),
-                out.display(),
-                files
-            );
-        }
+        }) => pkg_unpack(force, raw_i_know_what_i_am_doing, pkg, out, &files),
         CliArgs::Pka(PkaArgs::Info { path }) => pka_info(path),
         CliArgs::Pka(PkaArgs::Ls { path }) => pka_ls(path),
         CliArgs::Pka(PkaArgs::Stats { path, force }) => pka_stats(path, force),
@@ -161,8 +153,16 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
+fn name_to_path(name: &str) -> anyhow::Result<&std::path::Path> {
+    if !name.is_ascii() || name.chars().any(|c| c.is_ascii_control() || (c.is_ascii_whitespace() && c != ' ')) || name.contains('/') || name.contains('\\') {
+        Err(anyhow::Error::msg(format!("invalid file name '{}'", name)))
+    } else {
+        Ok(&std::path::Path::new(name))
+    }
+}
+
 fn name_is_ok(name: &str) -> bool {
-    name.is_ascii() && !name.chars().any(|c| c.is_ascii_control() || (c.is_ascii_whitespace() && c != ' ')) && !name.contains('/') && !name.contains('\\')
+    name_to_path(name).is_ok()
 }
 
 fn pkg_info<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
@@ -296,6 +296,54 @@ fn pkg_stats<P: AsRef<std::path::Path>>(dir: P) -> anyhow::Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, pkg: P, out: P, files: &[S]) -> anyhow::Result<()> {
+    let data = std::fs::read(&pkg).with_context(|| format!("couldn't read pkg file '{}'", pkg.as_ref().display()))?;
+    let mut cursor = std::io::Cursor::new(data);
+    let filelist = tocs::pkg::load_filelist(&mut cursor).with_context(|| format!("couldn't parse pkg file '{}'", pkg.as_ref().display()))?;
+    std::fs::create_dir_all(&out).with_context(|| format!("creating output directory {}", out.as_ref().display()))?;
+
+    let file_by_name: std::collections::HashMap<_, _> = filelist.iter().map(|entry| (entry.filename.clone(), entry)).collect();
+
+    let mut extract = |entry: &tocs::pkg::FileListEntry| {
+        if !name_is_ok(&entry.filename) {
+            return Err(anyhow::Error::msg(format!("invalid file name: {}", entry.filename)));
+        }
+        log::info!("extracting file '{}'", entry.filename);
+        let out_file = std::path::Path::join(out.as_ref(), name_to_path(&entry.filename)?);
+        let data = if raw {
+            tocs::pkg::get_data_raw(&mut cursor, entry)
+        } else {
+            tocs::pkg::get_data(&mut cursor, entry)
+        }
+        .with_context(|| format!("couldn't read data for pkg '{}', file '{}'", pkg.as_ref().display(), entry.filename))?;
+        let mut file = if force {
+            std::fs::OpenOptions::new().write(true).create(true).open(&out_file)
+        } else {
+            std::fs::OpenOptions::new().write(true).create_new(true).open(&out_file)
+        }
+        .with_context(|| format!("couldn't open output file '{}'", out_file.display()))?;
+        file.write_all(&data).with_context(|| format!("couldn't write data to file"))?;
+        Ok(())
+    };
+
+    if files.is_empty() {
+        for entry in filelist.iter() {
+            extract(entry)?;
+        }
+    } else {
+        for file in files.iter() {
+            match file_by_name.get(file.as_ref()) {
+                Some(entry) => extract(entry)?,
+                None => {
+                    return Err(anyhow::Error::msg(format!("pkg '{}' does not contain file '{}'", pkg.as_ref().display(), file.as_ref())))?;
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 

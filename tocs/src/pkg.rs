@@ -86,6 +86,7 @@ fn parse_filelist_entry<F: std::io::Read>(f: &mut F) -> Result<FileListEntry, Pk
     })
 }
 
+// TODO: get raw data as a slice instead of making a copy (since we read the full file anyway in application programs)
 pub fn get_data_raw<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
     if entry.compressed_size > MAX_DATA_SIZE {
         let x = entry.compressed_size;
