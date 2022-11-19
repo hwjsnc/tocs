@@ -10,7 +10,7 @@ enum Subcommand {
     /// Print the first error for each (if any)
     All {
         /// Don't attempt to fix game data with hardcoded values
-        #[clap(short, long)]
+        #[arg(short, long)]
         raw: bool,
     },
     /// Try to parse a specific tbl file.
@@ -20,7 +20,7 @@ enum Subcommand {
         game: GameVersion,
         path: std::path::PathBuf,
         /// Don't attempt to fix game data with hardcoded values
-        #[clap(short, long)]
+        #[arg(short, long)]
         raw: bool,
     },
     /// Try to parse a specific pkg file

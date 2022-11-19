@@ -7,7 +7,7 @@ use clap::Parser;
 #[derive(Debug, Parser)]
 struct Args {
     /// Either a directory or file.
-    #[clap(value_hint = clap::ValueHint::AnyPath)]
+    #[arg(value_hint = clap::ValueHint::AnyPath)]
     paths: Vec<std::path::PathBuf>,
 }
 

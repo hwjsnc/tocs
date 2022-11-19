@@ -7,13 +7,13 @@ use std::io::Seek as _;
 use std::ops::DerefMut as _;
 
 #[derive(clap::Parser)]
-#[clap(version, about)]
+#[command(version, about)]
 enum CliArgs {
     /// Commands related to .pkg files
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Pkg(PkgArgs),
     /// Commands related to .pka files
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Pka(PkaArgs),
 }
 
@@ -42,10 +42,10 @@ enum PkgArgs {
     /// Unpack contents of a .pkg
     Unpack {
         /// Overwrite existing data
-        #[clap(long, short)]
+        #[arg(long, short)]
         force: bool,
         /// Do not use this option! It is intended for testing and development. Unpacks data without attempting decompression.
-        #[clap(long)]
+        #[arg(long)]
         raw_i_know_what_i_am_doing: bool,
         /// Path to .pkg file to unpack
         pkg: std::path::PathBuf,
@@ -65,7 +65,7 @@ enum PkaArgs {
     /// Print .pka file content statistics in CSV format (You probably don't need this)
     Stats {
         /// Overwrite existing stat files
-        #[clap(long, short)]
+        #[arg(long, short)]
         force: bool,
         /// Path to .pka
         path: std::path::PathBuf,
@@ -79,13 +79,13 @@ enum PkaArgs {
     /// This also creates a file index for recompression
     UnpackPkgs {
         /// Overwrite existing data
-        #[clap(long, short)]
+        #[arg(long, short)]
         force: bool,
         /// Path to .pka file
-        #[clap(long)]
+        #[arg(long)]
         pka: std::path::PathBuf,
         /// Output directory (where the .pkg files will be written)
-        #[clap(long, short)]
+        #[arg(long, short)]
         out: std::path::PathBuf,
         /// Unpack these specific .pkgs (if none are given, unpack all)
         files: Vec<String>,
@@ -95,16 +95,16 @@ enum PkaArgs {
     /// This requires a lot of free space! For an estimate, use the pka info command.
     Unpack {
         /// Overwrite existing data
-        #[clap(long, short)]
+        #[arg(long, short)]
         force: bool,
         /// Do not use this option! It is intended for testing and development. Unpacks data without attempting decompression.
-        #[clap(long)]
+        #[arg(long)]
         raw_i_know_what_i_am_doing: bool,
         /// Path to .pka file
-        #[clap(long)]
+        #[arg(long)]
         pka: std::path::PathBuf,
         /// Output directory (where the files will be written)
-        #[clap(long, short)]
+        #[arg(long, short)]
         out: std::path::PathBuf,
         /// Unpack these specific files (if none are given, unpack all)
         files: Vec<String>,

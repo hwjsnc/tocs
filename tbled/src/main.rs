@@ -34,9 +34,9 @@ fn partition_entries_with_headers(headers: std::vec::Vec<SmolStr>, entries: std:
 
 #[derive(Debug, Parser)]
 struct CliArgs {
-    #[clap(short, long)]
+    #[arg(short, long)]
     game_version: Option<tocs::tbl::Version<'static>>,
-    #[clap(short, long)]
+    #[arg(short, long)]
     file: Option<std::path::PathBuf>,
 }
 

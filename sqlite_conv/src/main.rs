@@ -13,28 +13,28 @@ enum Args {
     /// Convert a folder of tbl files to a sqlite database
     Tbl_to_Sql {
         /// path of the folder containing the tbls
-        #[clap(long)]
+        #[arg(long)]
         tbl_path: std::path::PathBuf,
         /// path of the new database file
-        #[clap(long)]
+        #[arg(long)]
         db_path: std::path::PathBuf,
         /// game (CS1/CS2/CS3)
-        #[clap(long)]
+        #[arg(long)]
         game: Game,
     },
     /// Read data from a sqlite database and generate corresponding tbl files
     To_Tbl {
         /// path of the database file from which data should be read
-        #[clap(long)]
+        #[arg(long)]
         db_path: std::path::PathBuf,
         /// path to the directory that the tbls should be written to
-        #[clap(long)]
+        #[arg(long)]
         tbl_path: std::path::PathBuf,
         /// game (CS1/CS2/CS3/CS4/CS5)
-        #[clap(long)]
+        #[arg(long)]
         game: Game,
         /// overwrite any existing tbl files
-        #[clap(short, long)]
+        #[arg(short, long)]
         force: bool,
     },
     /// Read .pka file list and convert to sqlite for analysis
@@ -42,10 +42,10 @@ enum Args {
     /// Content is not included in the database, only metadata
     Pka_to_Sql {
         /// path to the pka file
-        #[clap(long)]
+        #[arg(long)]
         pka_path: std::path::PathBuf,
         /// path of the new database file
-        #[clap(long)]
+        #[arg(long)]
         db_path: std::path::PathBuf,
     },
 }
