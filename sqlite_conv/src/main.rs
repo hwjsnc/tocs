@@ -50,7 +50,7 @@ enum Args {
     },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Game {
     CS1,
     CS2,

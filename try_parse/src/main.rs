@@ -34,7 +34,7 @@ enum Subcommand {
 }
 
 // TODO: use generic parser in tocs?
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum GameVersion {
     CS1,
     CS2,

@@ -10,11 +10,11 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.2.6", features = ["derive"] }
-indexmap = "1.9.1"
-log = { version = "0.4.14" }
-rusqlite = "0.27"
-walkdir = "2.3"
+clap = { version = "4.0.26", features = ["derive"] }
+indexmap = "1.9.2"
+log = { version = "0.4.17" }
+rusqlite = "0.28"
+walkdir = "2.3.2"
 tocs = { path = "../tocs", features = ["rusqlite", "pkg"] }
-simple_logger = { version = "1", default-features = false, features = ["stderr"] }
+simple_logger = { version = "4", default-features = false, features = ["stderr"] }
 smol_str = { version = "0.1.23", default-features = false }
