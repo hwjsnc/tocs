@@ -641,6 +641,10 @@ fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
             let pkgpath = std::path::Path::join(out.as_ref(), pkgname);
             std::fs::create_dir_all(&pkgpath).with_context(|| format!("couldn't create output directory {} for pkg {}", out.as_ref().display(), pkg.name))?;
             for (name, hash) in pkg.filenames.iter().zip(pkg.hashes.iter()) {
+                if name.is_empty() {
+                    log::warn!("skipping file with empty name (blob hash {})", hex::encode(hash));
+                    continue;
+                }
                 log::debug!("unpacking {} (blob {})", name, hex::encode(hash));
                 let filename = std::path::Path::join(&pkgpath, name_to_path(&name)?);
                 let mut outfile = std::io::BufWriter::new(
