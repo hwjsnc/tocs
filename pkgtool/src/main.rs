@@ -49,8 +49,10 @@ enum PkgArgs {
         #[arg(long)]
         raw_i_know_what_i_am_doing: bool,
         /// Path to .pkg file to unpack
+        #[arg(long)]
         pkg: std::path::PathBuf,
         /// Output directory (where the file contents will be written)
+        #[arg(long, short)]
         out: std::path::PathBuf,
         /// Unpack these specific files (if none are given, unpack all)
         files: Vec<String>,
@@ -140,16 +142,7 @@ fn main() -> anyhow::Result<()> {
             pka,
             out,
             files,
-        }) => {
-            todo!(
-                "pka unpack force={} raw={} pka={} out={} files={:?}",
-                force,
-                raw_i_know_what_i_am_doing,
-                pka.display(),
-                out.display(),
-                files
-            )
-        }
+        }) => pka_unpack(force, raw_i_know_what_i_am_doing, pka, out, &files),
     }
 }
 
@@ -599,5 +592,109 @@ fn pka_test_blob<F: std::io::Read + std::io::Seek>(io_mutex: &std::sync::Mutex<F
         );
     }
 
+    Ok(())
+}
+
+fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, pka: P, out: P, files: &[S]) -> anyhow::Result<()> {
+    if raw && files.is_empty() {
+        return Err(anyhow::Error::msg("refusing to unpack complete pka raw"));
+    }
+
+    let mut f = std::io::BufReader::new(std::fs::File::open(pka.as_ref()).with_context(|| format!("couldn't open pka file '{}' for reading", pka.as_ref().display()))?);
+    let (pkgs, blobs) = tocs::pka::load_filelist(&mut f).with_context(|| format!("couldn't parse pka file '{}'", pka.as_ref().display()))?;
+
+    let mut open_options = std::fs::File::options();
+    open_options.write(true);
+    if force {
+        open_options.create(true);
+    } else {
+        open_options.create_new(true);
+    }
+    let open_options = open_options;
+
+    std::fs::create_dir_all(&out).with_context(|| format!("couldn't create output directory {}", out.as_ref().display()))?;
+
+    let blobs_by_hash: std::collections::HashMap<_, _> = blobs.iter().map(|blob| (blob.hash, blob)).collect();
+
+    if files.is_empty() {
+        // extract all
+
+        // write blob order file
+        {
+            let mut blobs = blobs.clone();
+            blobs.sort_by_key(|blob| blob.offset);
+            let mut f = std::io::BufWriter::new(
+                open_options
+                    .open(std::path::Path::join(out.as_ref(), std::path::Path::new("blob_order.txt")))
+                    .context("couldn't open blob order file for writing")?,
+            );
+            for blob in blobs.iter() {
+                writeln!(f, "{}", hex::encode(blob.hash)).context("couldn't write blob order file")?;
+            }
+            f.into_inner().context("couldn't close blob order file after writing")?;
+        }
+
+        // extract all files in all pkgs
+        for pkg in pkgs.iter() {
+            log::info!("unpacking contents of pkg {}", pkg.name);
+            let pkgname = name_to_path(&pkg.name)?;
+            let pkgpath = std::path::Path::join(out.as_ref(), pkgname);
+            std::fs::create_dir_all(&pkgpath).with_context(|| format!("couldn't create output directory {} for pkg {}", out.as_ref().display(), pkg.name))?;
+            for (name, hash) in pkg.filenames.iter().zip(pkg.hashes.iter()) {
+                log::debug!("unpacking {} (blob {})", name, hex::encode(hash));
+                let filename = std::path::Path::join(&pkgpath, name_to_path(&name)?);
+                let mut outfile = std::io::BufWriter::new(
+                    open_options
+                        .open(&filename)
+                        .with_context(|| format!("couldn't open file {} for pkg file {}/{}", filename.display(), pkg.name, name))?,
+                );
+                let blobinfo = match blobs_by_hash.get(hash) {
+                    Some(blobinfo) => blobinfo,
+                    None => {
+                        return Err(anyhow::Error::msg(format!("couldn't read data for pkg file {}/{}", pkg.name, name)));
+                    }
+                };
+                let data = if raw {
+                    unimplemented!("unpacking entire .pka raw data seems unnecessary")
+                } else {
+                    tocs::pka::get_blob_data(&mut f, blobinfo)
+                }
+                .with_context(|| format!("couldn't read data for {}/{}", pkg.name, name))?;
+                outfile.write_all(&data).with_context(|| format!("couldn't write data for pkg file {}/{}", pkg.name, name))?;
+            }
+        }
+    } else {
+        // extract only specific files
+
+        let blobs_by_name: std::collections::HashMap<_, _> = pkgs
+            .iter()
+            .flat_map(|pkg| {
+                pkg.filenames.iter().zip(pkg.hashes.iter()).filter_map(|(filename, hash)| {
+                    let name = format!("{}/{}", pkg.name, filename); // note: this is unambiguous since neither name contains "/"
+                    let blobinfo = blobs_by_hash.get(hash)?;
+                    Some((name, blobinfo))
+                })
+            })
+            .collect();
+        for file in files.iter() {
+            log::debug!("unpacking {}", file.as_ref());
+            let blobinfo = match blobs_by_name.get(file.as_ref()) {
+                Some(blobinfo) => blobinfo,
+                None => {
+                    return Err(anyhow::Error::msg(format!("no data for file {}", file.as_ref())));
+                }
+            };
+            let filename = std::path::Path::join(out.as_ref(), std::path::Path::new(file.as_ref()));
+            std::fs::create_dir_all(filename.parent().expect("result of a join should have a parent")).with_context(|| format!("couldn't create output directory {}", out.as_ref().display()))?;
+            let mut outfile = open_options.open(&filename).with_context(|| format!("couldn't open output file {}", filename.display()))?;
+            let data = if raw {
+                tocs::pka::get_blob_data_raw(&mut f, blobinfo)
+            } else {
+                tocs::pka::get_blob_data(&mut f, blobinfo)
+            }
+            .with_context(|| format!("couldn't read data for {}", file.as_ref()))?;
+            outfile.write_all(&data).with_context(|| format!("couldn't write data to {}", filename.display()))?;
+        }
+    }
     Ok(())
 }
