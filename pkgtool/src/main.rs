@@ -7,6 +7,7 @@ use std::io::Seek as _;
 use std::ops::DerefMut as _;
 
 #[derive(clap::Parser)]
+#[clap(version, about)]
 enum CliArgs {
     /// Commands related to .pkg files
     #[clap(subcommand)]
