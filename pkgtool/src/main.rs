@@ -248,8 +248,8 @@ fn pkg_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     for e in filelist.iter() {
         log::debug!("Testing {}", e.filename);
         assert!(name_is_ok(&e.filename));
-        let compressed_data = tocs::pkg::get_data_raw(&mut cursor, &e)?;
-        let decompressed_data = tocs::pkg::get_data(&mut cursor, &e)?;
+        let compressed_data = tocs::pkg::get_data_raw(&mut cursor, e)?;
+        let decompressed_data = tocs::pkg::get_data(&mut cursor, e)?;
         let recompressed_data = e.compression.compress(&decompressed_data).map_err(anyhow::Error::msg)?;
         let redecompressed_data = e
             .compression
@@ -326,7 +326,7 @@ fn pka_info<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     println!("number of blobs with no corresponding file: {} (should be 0)", blob_hashes.difference(&file_hashes).count());
 
     let compressed_size: u64 = blobs.iter().map(|blob| blob.compressed_size as u64).sum();
-    let blobs: std::collections::HashMap<_, _> = blobs.into_iter().map(|blob| (blob.hash, blob.clone())).collect();
+    let blobs: std::collections::HashMap<_, _> = blobs.into_iter().map(|blob| (blob.hash, blob)).collect();
     let decompressed_size: u64 = pkgs
         .iter()
         .flat_map(|pkg| pkg.hashes.iter().filter_map(|hash| blobs.get(hash)).map(|blob| blob.decompressed_size as u64))
@@ -343,7 +343,7 @@ fn pka_ls<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     let mut f = std::io::BufReader::new(std::fs::File::open(&path).with_context(|| format!("couldn't open pka file '{}' for reading", path.as_ref().display()))?);
     let (pkgs, blobs) = tocs::pka::load_filelist(&mut f).with_context(|| format!("couldn't parse pkg file '{}'", path.as_ref().display()))?;
 
-    let blobs: std::collections::HashMap<_, _> = blobs.into_iter().map(|blob| (blob.hash, blob.clone())).collect();
+    let blobs: std::collections::HashMap<_, _> = blobs.into_iter().map(|blob| (blob.hash, blob)).collect();
 
     for pkg in pkgs {
         println!("{}:", pkg.name);
@@ -416,9 +416,9 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     for pkg in pkgs.iter() {
         log::debug!("checking pkg {} name", pkg.name);
         assert!(name_is_ok(&pkg.name));
-        for (name, hash) in pkg.filenames.iter().zip(pkg.hashes.iter()) {
+        for name in pkg.filenames.iter() {
             log::debug!("checking file {} name", name);
-            assert!(name_is_ok(&name));
+            assert!(name_is_ok(name));
         }
     }
 
@@ -533,6 +533,7 @@ fn pka_test_blob<F: std::io::Read + std::io::Seek>(io_mutex: &std::sync::Mutex<F
     }
 
     let delta = (recompressed_data.len() as f64 - compressed_data.len() as f64).abs() / std::cmp::max(recompressed_data.len(), compressed_data.len()) as f64;
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     if !(delta < 0.05) {
         // exact equality is unrealistic
         log::warn!(

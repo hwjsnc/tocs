@@ -1,5 +1,3 @@
-use std::io::Write as _;
-
 extern crate clap;
 extern crate tocs;
 
@@ -284,10 +282,10 @@ pub fn parse_pkg(base_path: &std::path::Path) {
             for entry in filelist {
                 let tocs::pkg::FileListEntry {
                     filename,
-                    decompressed_size,
-                    compressed_size,
-                    data_offset,
-                    compression,
+                    decompressed_size: _,
+                    compressed_size: _,
+                    data_offset: _,
+                    compression: _,
                 } = &entry;
 
                 //log::info!("{filename}: decompressed size = {decompressed_size}, compressed size = {compressed_size} (0x{compressed_size:x}), data offset = {data_offset} (0x{data_offset:x}), compression = {compression:?}");
@@ -297,7 +295,14 @@ pub fn parse_pkg(base_path: &std::path::Path) {
                 //let mut k = 0;
                 let compressed = entry.compression.compress(&data).unwrap();
                 if compressed != raw_data {
-                    log::warn!("{filename}: compressed and uncompressed data does not match (recompressed data is {})", if compressed.len() > raw_data.len() { "bigger" } else if compressed.len() < raw_data.len() { "smaller" } else { "equally big" });
+                    log::warn!(
+                        "{filename}: compressed and uncompressed data does not match (recompressed data is {})",
+                        match compressed.len().cmp(&raw_data.len()) {
+                            std::cmp::Ordering::Greater => "bigger",
+                            std::cmp::Ordering::Equal => "equally big",
+                            std::cmp::Ordering::Less => "smaller",
+                        }
+                    );
                     /*
                     for i in 0..std::cmp::max(compressed.len(), raw_data.len()) {
                         let x = compressed.get(i);
@@ -321,7 +326,6 @@ pub fn parse_pkg(base_path: &std::path::Path) {
 }
 
 pub fn parse_pka(path: &std::path::Path) {
-    let mut total_size: usize = 0;
     let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
     let (pkgs, hashes) = tocs::pka::load_filelist(&mut f).unwrap();
     for pkg in pkgs {

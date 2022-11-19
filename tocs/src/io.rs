@@ -13,16 +13,16 @@ pub fn read_bytes<const N: usize, F: std::io::Read>(f: &mut F) -> Result<[u8; N]
 }
 
 pub enum ReadUtf8Error {
-    IOError(std::io::Error),
-    Utf8Error(std::str::Utf8Error),
-    UnexpectedPaddingError(u8),
+    IO(std::io::Error),
+    Utf8(std::str::Utf8Error),
+    UnexpectedPadding(u8),
 }
 
 pub fn read_cutf8_padded<F: std::io::Read>(f: &mut F, chunk_size: usize) -> Result<SmolStr, ReadUtf8Error> {
     let mut data: SmallVec<[u8; 64]> = SmallVec::new();
     let mut i = 0;
     loop {
-        let x = read_byte(f).map_err(ReadUtf8Error::IOError)?;
+        let x = read_byte(f).map_err(ReadUtf8Error::IO)?;
         i += 1;
         if x == 0 {
             break;
@@ -36,15 +36,15 @@ pub fn read_cutf8_padded<F: std::io::Read>(f: &mut F, chunk_size: usize) -> Resu
         match read_byte(f) {
             Ok(0) => {}
             Ok(x) => {
-                return Err(ReadUtf8Error::UnexpectedPaddingError(x));
+                return Err(ReadUtf8Error::UnexpectedPadding(x));
             }
             Err(e) => {
-                return Err(ReadUtf8Error::IOError(e));
+                return Err(ReadUtf8Error::IO(e));
             }
         }
         i += 1;
     }
 
     // check utf-8
-    std::str::from_utf8(&data).map(SmolStr::from).map_err(ReadUtf8Error::Utf8Error)
+    std::str::from_utf8(&data).map(SmolStr::from).map_err(ReadUtf8Error::Utf8)
 }

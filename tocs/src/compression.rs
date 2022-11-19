@@ -42,7 +42,7 @@ impl Compression {
             Compression::None => copy_buffer(r#in, out),
             Compression::LZSS => lzss_decompress_to_buffer(r#in, out),
             Compression::LZ4 => {
-                let len: i32 = out.len().try_into().map_err(|_| format!("lz4 decompression error: output size too big"))?;
+                let len: i32 = out.len().try_into().map_err(|_| "lz4 decompression error: output size too big".to_string())?;
                 lz4::block::decompress_to_buffer(r#in, Some(len), out).map_err(|e| format!("lz4 decompression error: {e}"))
             }
             Compression::Zstd => zstd::bulk::decompress_to_buffer(r#in, out).map_err(|e| format!("zstd decompression error: {e}")),
@@ -183,7 +183,11 @@ fn lzss_compress_with_key(data: &[u8], key: u8) -> Result<std::vec::Vec<u8>, Str
 
     const PREFIX_LEN: usize = 2; // needs to be <= 4 for correctness
     const REMOVE_EMPTY: bool = false;
-    assert!(PREFIX_LEN < 4 || REMOVE_EMPTY); // otherwise the hashmap may take up >4GB space
+
+    #[allow(clippy::assertions_on_constants)]
+    {
+        assert!(PREFIX_LEN < 4 || REMOVE_EMPTY); // otherwise the hashmap may take up >4GB space
+    }
 
     let mut offsets_to_try: HashMap<[u8; PREFIX_LEN], VecDeque<usize>> = HashMap::new();
 
@@ -239,7 +243,7 @@ fn lzss_compress_with_key(data: &[u8], key: u8) -> Result<std::vec::Vec<u8>, Str
                     // inserting a reference takes 3 bytes in the compressed stream, so the length needs to be more than that if we want to save space.
                     off = previous.len() - off;
                     if off >= key.into() {
-                        off = off + 1;
+                        off += 1;
                     }
                     output.push(key);
                     output.push(off.try_into().unwrap());
@@ -290,7 +294,7 @@ fn length_of_common_prefix(s1: &[u8], s2: &[u8]) -> usize {
             return i;
         }
     }
-    return std::cmp::min(s1.len(), s2.len());
+    std::cmp::min(s1.len(), s2.len())
 }
 
 #[cfg(test)]
@@ -504,6 +508,7 @@ mod test {
         }
     }
 
+    /*
     #[test]
     fn lzss_test() {
         todo!("test with actual game data?")
@@ -518,4 +523,5 @@ mod test {
     fn zstd_test() {
         todo!("test with actual game data?")
     }
+    */
 }
