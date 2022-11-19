@@ -157,7 +157,7 @@ fn name_to_path(name: &str) -> anyhow::Result<&std::path::Path> {
     if !name.is_ascii() || name.chars().any(|c| c.is_ascii_control() || (c.is_ascii_whitespace() && c != ' ')) || name.contains('/') || name.contains('\\') {
         Err(anyhow::Error::msg(format!("invalid file name '{}'", name)))
     } else {
-        Ok(&std::path::Path::new(name))
+        Ok(std::path::Path::new(name))
     }
 }
 
@@ -254,8 +254,8 @@ fn pkg_check_single(pkg: &std::path::Path) -> anyhow::Result<()> {
         if !name_is_ok(&e.filename) {
             return Err(anyhow::Error::msg(format!("{}: bad file name '{}'", pkg.display(), e.filename)));
         }
-        let compressed_data = tocs::pkg::get_data_raw(&mut cursor, e)?;
-        let decompressed_data = tocs::pkg::get_data(&mut cursor, e)?;
+        let compressed_data = tocs::pkg::get_data_raw_from_buffer(&data, e)?;
+        let decompressed_data = tocs::pkg::get_data_from_buffer(&data, e)?;
         let recompressed_data = e.compression.compress(&decompressed_data).map_err(anyhow::Error::msg)?;
         let redecompressed_data = e
             .compression
@@ -308,22 +308,22 @@ fn pkg_stats<P: AsRef<std::path::Path>>(dir: P) -> anyhow::Result<()> {
 
 fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, pkg: P, out: P, files: &[S]) -> anyhow::Result<()> {
     let data = std::fs::read(&pkg).with_context(|| format!("couldn't read pkg file '{}'", pkg.as_ref().display()))?;
-    let mut cursor = std::io::Cursor::new(data);
+    let mut cursor = std::io::Cursor::new(&data);
     let filelist = tocs::pkg::load_filelist(&mut cursor).with_context(|| format!("couldn't parse pkg file '{}'", pkg.as_ref().display()))?;
     std::fs::create_dir_all(&out).with_context(|| format!("creating output directory {}", out.as_ref().display()))?;
 
     let file_by_name: std::collections::HashMap<_, _> = filelist.iter().map(|entry| (entry.filename.clone(), entry)).collect();
 
-    let mut extract = |entry: &tocs::pkg::FileListEntry| {
+    let extract = |entry: &tocs::pkg::FileListEntry| {
         if !name_is_ok(&entry.filename) {
             return Err(anyhow::Error::msg(format!("invalid file name: {}", entry.filename)));
         }
         log::info!("extracting file '{}'", entry.filename);
         let out_file = std::path::Path::join(out.as_ref(), name_to_path(&entry.filename)?);
         let data = if raw {
-            tocs::pkg::get_data_raw(&mut cursor, entry)
+            tocs::pkg::get_data_raw_from_buffer(&data, entry).map(|slice| slice.to_vec())
         } else {
-            tocs::pkg::get_data(&mut cursor, entry)
+            tocs::pkg::get_data_from_buffer(&data, entry)
         }
         .with_context(|| format!("couldn't read data for pkg '{}', file '{}'", pkg.as_ref().display(), entry.filename))?;
         let mut file = if force {
@@ -332,7 +332,7 @@ fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
             std::fs::OpenOptions::new().write(true).create_new(true).open(&out_file)
         }
         .with_context(|| format!("couldn't open output file '{}'", out_file.display()))?;
-        file.write_all(&data).with_context(|| format!("couldn't write data to file"))?;
+        file.write_all(&data).with_context(|| format!("couldn't write data to file '{}'", out_file.display()))?;
         Ok(())
     };
 

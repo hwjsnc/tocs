@@ -86,36 +86,47 @@ fn parse_filelist_entry<F: std::io::Read>(f: &mut F) -> Result<FileListEntry, Pk
     })
 }
 
-// TODO: get raw data as a slice instead of making a copy (since we read the full file anyway in application programs)
-pub fn get_data_raw<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+fn check_entry_size(entry: &FileListEntry) -> Result<(), PkgError> {
     if entry.compressed_size > MAX_DATA_SIZE {
         let x = entry.compressed_size;
-        return Err(PkgError::Decompression(format!("error reading compressed data: size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})")));
+        Err(PkgError::Decompression(format!("error reading compressed data: size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})")))
+    } else if entry.decompressed_size > MAX_DATA_SIZE {
+        let x = entry.decompressed_size;
+        Err(PkgError::Decompression(format!(
+            "decompression error: decompressed size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})"
+        )))
+    } else {
+        Ok(())
     }
+}
+
+pub fn get_data_raw_from_file<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+    check_entry_size(entry)?;
     file.seek(std::io::SeekFrom::Start(entry.data_offset.into())).map_err(PkgError::IO)?;
     let mut compressed_data = vec![0; entry.compressed_size.try_into().expect("32 bits please")];
     file.read_exact(&mut compressed_data).map_err(PkgError::IO)?;
     Ok(compressed_data)
 }
 
-pub fn get_data<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    if entry.compressed_size > MAX_DATA_SIZE {
-        let x = entry.compressed_size;
-        return Err(PkgError::Decompression(format!(
-            "decompression error: compressed size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})"
-        )));
-    }
-    if entry.decompressed_size > MAX_DATA_SIZE {
-        let x = entry.decompressed_size;
-        return Err(PkgError::Decompression(format!(
-            "decompression error: decompressed size {x} (0x{x:x}) exceeds max size ({MAX_DATA_SIZE})"
-        )));
-    }
-
-    let compressed_data = get_data_raw(file, entry)?;
-
+pub fn get_data_from_file<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+    let compressed_data = get_data_raw_from_file(file, entry)?;
     entry
         .compression
         .decompress_with_exact_output_size(&compressed_data, entry.decompressed_size.try_into().expect("32 bits please"))
+        .map_err(PkgError::Decompression)
+}
+
+pub fn get_data_raw_from_buffer<'a>(data: &'a [u8], entry: &FileListEntry) -> Result<&'a [u8], PkgError> {
+    check_entry_size(entry)?;
+    let off1: usize = entry.data_offset.try_into().expect("32 bits please");
+    let off2: usize = off1 + <u32 as TryInto<usize>>::try_into(entry.compressed_size).expect("32 bits please");
+    Ok(&data[off1..off2])
+}
+
+pub fn get_data_from_buffer(data: &[u8], entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
+    let compressed_data = get_data_raw_from_buffer(data, entry)?;
+    entry
+        .compression
+        .decompress_with_exact_output_size(compressed_data, entry.decompressed_size.try_into().expect("32 bits please"))
         .map_err(PkgError::Decompression)
 }
