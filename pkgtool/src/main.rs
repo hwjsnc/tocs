@@ -210,21 +210,25 @@ fn pkg_ls<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
 
 fn pkg_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     if path.as_ref().is_dir() {
-        for direntry in walkdir::WalkDir::new(path.as_ref()) {
-            let direntry = direntry.unwrap();
-            let path = direntry.path();
-            if direntry.file_type().is_file() {
-                pkg_check(&path)?;
-            }
-        }
-        return Ok(());
+        let files: std::vec::Vec<_> = walkdir::WalkDir::new(path.as_ref())
+            .into_iter()
+            .map(|entry| entry.unwrap().path().to_owned())
+            .filter(|path| path.is_file())
+            .collect();
+        files.par_iter().map(|path| pkg_check_single(path.as_ref())).find_any(|result| result.is_err()).unwrap_or(Ok(()))?;
+    } else {
+        pkg_check_single(path.as_ref())?;
     }
+    log::info!("ok");
+    Ok(())
+}
 
-    log::info!("Checking file {}", path.as_ref().display());
+fn pkg_check_single(pkg: &std::path::Path) -> anyhow::Result<()> {
+    log::debug!("Checking file {}", pkg.display());
 
-    let data = std::fs::read(&path).with_context(|| format!("couldn't read pkg file '{}'", path.as_ref().display()))?;
+    let data = std::fs::read(&pkg).with_context(|| format!("couldn't read pkg file '{}'", pkg.display()))?;
     let mut cursor = std::io::Cursor::new(&data);
-    let filelist = tocs::pkg::load_filelist(&mut cursor).with_context(|| format!("couldn't parse pkg file '{}'", path.as_ref().display()))?;
+    let filelist = tocs::pkg::load_filelist(&mut cursor).with_context(|| format!("couldn't parse pkg file '{}'", pkg.display()))?;
 
     let offset_after_metadata = cursor.stream_position().expect("cursor stream_position should not fail");
 
@@ -236,25 +240,28 @@ fn pkg_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     for e in filelist.iter() {
         log::debug!("checking offset of entry {}", e.filename);
         if e.data_offset != expected_start {
-            panic!("{}: unexpected start ({} rather than {})", e.filename, e.data_offset, expected_start);
+            return Err(anyhow::Error::msg(format!("{}: unexpected start ({} rather than {})", e.filename, e.data_offset, expected_start)).context(format!("{}: consistency error", pkg.display())));
         }
         expected_start += e.compressed_size;
     }
     if <u32 as TryInto<usize>>::try_into(expected_start).expect("32 bits please") != data.len() {
-        panic!("trailing data starting at offset {} (0x{:x})", expected_start, expected_start);
+        return Err(anyhow::Error::msg(format!("trailing data starting at offset {} (0x{:x})", expected_start, expected_start)).context(format!("{}: consistency error", pkg.display())));
     }
 
     /* check read->decompress->recompress->decompress loop */
     for e in filelist.iter() {
-        log::debug!("Testing {}", e.filename);
-        assert!(name_is_ok(&e.filename));
+        log::debug!("Testing {} / {}", pkg.display(), e.filename);
+        if !name_is_ok(&e.filename) {
+            return Err(anyhow::Error::msg(format!("{}: bad file name '{}'", pkg.display(), e.filename)));
+        }
         let compressed_data = tocs::pkg::get_data_raw(&mut cursor, e)?;
         let decompressed_data = tocs::pkg::get_data(&mut cursor, e)?;
         let recompressed_data = e.compression.compress(&decompressed_data).map_err(anyhow::Error::msg)?;
         let redecompressed_data = e
             .compression
             .decompress_with_exact_output_size(&recompressed_data, e.decompressed_size.try_into().expect("32 bits please"))
-            .map_err(anyhow::Error::msg)?;
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("{}: couldn't decompress and recompress data", pkg.display()))?;
         assert_eq!(decompressed_data, redecompressed_data);
         if recompressed_data.len() != compressed_data.len() {
             // exact equality is unrealistic
@@ -267,7 +274,7 @@ fn pkg_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
         }
     }
 
-    println!("ok.");
+    log::debug!("{}: ok.", pkg.display());
 
     Ok(())
 }
