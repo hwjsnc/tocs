@@ -25,6 +25,7 @@ hex = "0.4.3"
 hex-literal = "0.3.4"
 indexmap = "1.9.2"
 itertools = "0.10.5"
+num-integer = "0.1.45"
 simple_logger = { version = "4", default-features = false, features = ["stderr"], optional = true }
 smallvec = "1.10.0"
 smol_str = { version = "0.1.23", default-features = false }

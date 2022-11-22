@@ -57,6 +57,17 @@ enum PkgArgs {
         /// Unpack these specific files (if none are given, unpack all)
         files: Vec<String>,
     },
+    /// Create .pkg from the contents of a given folder
+    Pack {
+        /// Path to the folder to pack
+        dir: std::path::PathBuf,
+        /// Compression type
+        #[arg(long, short)]
+        compression: CompressionArg,
+        /// Output .pkg file (if it is not given, append .pkg to the folder name)
+        #[arg(long, short)]
+        out: Option<std::path::PathBuf>,
+    },
 }
 
 #[derive(clap::Parser)]
@@ -114,6 +125,53 @@ enum PkaArgs {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompressionArg {
+    Uncompressed,
+    Lzss,
+    LZ4,
+    Zstd,
+}
+
+impl From<CompressionArg> for tocs::compression::Compression {
+    fn from(x: CompressionArg) -> Self {
+        match x {
+            CompressionArg::Uncompressed => tocs::compression::Compression::None,
+            CompressionArg::Lzss => tocs::compression::Compression::LZSS,
+            CompressionArg::LZ4 => tocs::compression::Compression::LZ4,
+            CompressionArg::Zstd => tocs::compression::Compression::Zstd,
+        }
+    }
+}
+
+impl clap::ValueEnum for CompressionArg {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[CompressionArg::Uncompressed, CompressionArg::Lzss, CompressionArg::LZ4, CompressionArg::Zstd]
+    }
+
+    fn to_possible_value<'a>(&self) -> Option<clap::builder::PossibleValue> {
+        Some(match self {
+            CompressionArg::Uncompressed => clap::builder::PossibleValue::new("uncompressed").help("no compression"),
+            CompressionArg::Lzss => clap::builder::PossibleValue::new("lzss").help("custom LZSS compression"),
+            CompressionArg::LZ4 => clap::builder::PossibleValue::new("lz4").help("LZ4 compression"),
+            CompressionArg::Zstd => clap::builder::PossibleValue::new("zstd").help("Zstandard compression"),
+        })
+    }
+}
+
+impl std::str::FromStr for CompressionArg {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "uncompressed" => Ok(CompressionArg::Uncompressed),
+            "lzss" => Ok(CompressionArg::Lzss),
+            "lz4" => Ok(CompressionArg::LZ4),
+            "zstd" => Ok(CompressionArg::Zstd),
+            _ => Err(format!("Invalid compression: {}", s)),
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
 
@@ -129,6 +187,7 @@ fn main() -> anyhow::Result<()> {
             out,
             files,
         }) => pkg_unpack(force, raw_i_know_what_i_am_doing, pkg, out, &files),
+        CliArgs::Pkg(PkgArgs::Pack { dir, out, compression }) => pkg_pack(&dir, &out.unwrap_or_else(|| dir.with_extension(".pkg")), compression.into()),
         CliArgs::Pka(PkaArgs::Info { path }) => pka_info(path),
         CliArgs::Pka(PkaArgs::Ls { path }) => pka_ls(path),
         CliArgs::Pka(PkaArgs::Stats { path, force }) => pka_stats(path, force),
@@ -344,6 +403,37 @@ fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
         }
     }
 
+    Ok(())
+}
+
+fn pkg_pack<P: AsRef<std::path::Path>>(dir: P, pkg: P, compression: tocs::compression::Compression) -> anyhow::Result<()> {
+    let mut files = vec![];
+    for entry in walkdir::WalkDir::new(dir.as_ref()) {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path == dir.as_ref() {
+            continue;
+        } else if path.is_file() {
+            let data = std::fs::read(&path).with_context(|| format!("couldn't read file '{}'", path.display()))?;
+            let name = path.file_name().expect("folder child should have a final component");
+            files.push((
+                name.to_os_string()
+                    .into_string()
+                    .map_err(|_| anyhow::Error::msg(format!("can't put filename '{}' into a .pkg", path.display())))?,
+                data,
+            ));
+        } else {
+            return Err(anyhow::Error::msg(format!("'{}' is not a file", path.display())));
+        }
+    }
+    let pkg_data = tocs::pkg::generate_pkg(&files, compression).context("couldn't create .pkg")?;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(pkg.as_ref())
+        .with_context(|| format!("couldn't open output file '{}'", pkg.as_ref().display()))?;
+    file.write(&pkg_data).with_context(|| format!("couldn't write to output file '{}'", pkg.as_ref().display()))?;
+    file.sync_data().with_context(|| format!("couldn't write to output file '{}'", pkg.as_ref().display()))?;
     Ok(())
 }
 
@@ -646,7 +736,7 @@ fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
                     continue;
                 }
                 log::debug!("unpacking {} (blob {})", name, hex::encode(hash));
-                let filename = std::path::Path::join(&pkgpath, name_to_path(&name)?);
+                let filename = std::path::Path::join(&pkgpath, name_to_path(name)?);
                 let mut outfile = std::io::BufWriter::new(
                     open_options
                         .open(&filename)

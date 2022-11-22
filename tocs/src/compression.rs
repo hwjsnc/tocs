@@ -36,6 +36,18 @@ impl std::convert::From<u32> for Compression {
     }
 }
 
+impl std::convert::From<Compression> for u32 {
+    fn from(c: Compression) -> u32 {
+        match c {
+            Compression::None => 0,
+            Compression::LZSS => 1,
+            Compression::LZ4 => 4,
+            Compression::Zstd => 16,
+            Compression::Unknown(x) => x,
+        }
+    }
+}
+
 impl Compression {
     pub fn decompress_to_buffer(&self, r#in: &[u8], out: &mut [u8]) -> Result<(), String> {
         let written = match self {

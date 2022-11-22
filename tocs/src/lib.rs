@@ -5,7 +5,7 @@ pub mod cs3;
 mod io;
 
 #[cfg(feature = "compression")]
-mod compression;
+pub mod compression;
 
 #[cfg(feature = "pkg")]
 pub mod pka;
