@@ -426,7 +426,7 @@ fn pkg_pack<P: AsRef<std::path::Path>>(dir: P, pkg: P, compression: tocs::compre
             return Err(anyhow::Error::msg(format!("'{}' is not a file", path.display())));
         }
     }
-    let pkg_data = tocs::pkg::generate_pkg(&files, compression).context("couldn't create .pkg")?;
+    let pkg_data = tocs::pkg::generate_pkg(files, compression).context("couldn't create .pkg")?;
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)

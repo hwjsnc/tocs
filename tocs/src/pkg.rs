@@ -4,6 +4,8 @@ For a description of the pkg file structure, see https://github.com/Sewer56/Sen-
 
 const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 
+const PADDING: usize = 64;
+
 use smol_str::SmolStr;
 
 pub use crate::compression::Compression;
@@ -131,102 +133,173 @@ pub fn get_data_from_buffer(data: &[u8], entry: &FileListEntry) -> Result<std::v
         .map_err(PkgError::Decompression)
 }
 
-/// Length of the given string in bytes, when serialized as a C string (i.e. with a trailing null byte) and padded up to a length that's a multiple of padding.
-pub(crate) fn padded_length(s: &str, padding: usize) -> usize {
-    assert!(padding > 1);
-    let (p, q) = num_integer::div_rem(s.len() + 1, padding);
-    if q == 0 {
-        p * padding
-    } else {
-        (p + 1) * padding
+pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>, I: IntoIterator<Item = (S, X)>>(files: I, compression: Compression) -> Result<std::vec::Vec<u8>, PkgError> {
+    let mut compressed_files = vec![];
+    // TODO: Parallelize this?
+    for (n, raw_data) in files {
+        let name = PaddedFilename::new(n.as_ref(), PADDING).map_err(PkgError::Filelist)?;
+        if raw_data.as_ref().len() > MAX_DATA_SIZE.try_into().expect("32 bits please") {
+            return Err(PkgError::Compression(format!(
+                "pkg file '{}': data size {} exceeds maximum ({})",
+                name,
+                raw_data.as_ref().len(),
+                MAX_DATA_SIZE
+            )));
+        }
+        let compressed = compression
+            .compress(raw_data.as_ref())
+            .map_err(|e| PkgError::Compression(format!("couldn't compress file '{}': {}", name, e)))?;
+        if compressed.len() > MAX_DATA_SIZE.try_into().expect("32 bits please") {
+            return Err(PkgError::Compression(format!(
+                "pkg file '{}': compressed data size {} exceeds maximum ({})",
+                name,
+                compressed.len(),
+                MAX_DATA_SIZE
+            )));
+        }
+        let decompressed_size: u32 = raw_data.as_ref().len().try_into().expect("32 bits please");
+        compressed_files.push(CompressedFile {
+            name,
+            data: compressed,
+            decompressed_size,
+            compression,
+        });
+    }
+
+    generate_pkg_from_compressed_files(&compressed_files)
+}
+
+/// name of a file in a .pkg, with a 0 byte terminator and padded to a multiple of the given length
+#[derive(Clone, Debug)]
+pub struct PaddedFilename {
+    name: SmolStr,
+    padding: usize,
+}
+
+impl PaddedFilename {
+    fn new(name: &str, padding: usize) -> Result<Self, String> {
+        assert!(padding >= 1);
+        if !name.is_ascii() {
+            Err(format!("name '{}' is not ASCII", name.escape_default()))
+        } else if name.chars().any(|c| c.is_ascii_control()) {
+            Err(format!("name '{}' contains control characters", name.escape_default()))
+        } else if name.chars().any(|c| c.is_ascii_whitespace() && c != ' ') {
+            Err(format!("name '{}' contains whitespace (other than literal space)", name.escape_default()))
+        } else if name.contains('/') || name.contains('\\') {
+            Err(format!("name '{}' contains path separators", name.escape_default()))
+        } else {
+            if name.is_empty() {
+                log::warn!("pkg file name is empty");
+            } else if name.len() > padding - 1 {
+                log::warn!("pkg file name length exceeds padding block size, idk if that'll work but you can try shrug emoji");
+            }
+            Ok(PaddedFilename { name: name.into(), padding })
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let (n, r) = num_integer::div_rem(self.name.len() + 1, self.padding);
+        if r == 0 {
+            n * self.padding
+        } else {
+            (n + 1) * self.padding
+        }
+    }
+
+    pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
+        let mut n = f.write(self.name.as_bytes())?;
+        n += f.write(&[0])?;
+        loop {
+            n += f.write(&[0])?;
+            if n % self.padding == 0 {
+                assert_eq!(n, self.len());
+                return Ok(n);
+            }
+        }
+    }
+
+    pub fn with_padding(&self, padding: usize) -> std::borrow::Cow<'_, Self> {
+        if padding == self.padding {
+            std::borrow::Cow::Borrowed(self)
+        } else {
+            std::borrow::Cow::Owned(PaddedFilename { name: self.name.clone(), padding })
+        }
+    }
+
+    pub fn padding(&self) -> usize {
+        self.padding
     }
 }
 
-/// Extend the name with a zero byte and pad it for use with .pkg files etc; also checks for validity of the file name
-pub(crate) fn pad_name(name: &str, padding: usize) -> Result<impl AsRef<[u8]>, PkgError> {
-    assert!(padding > 1);
-    if !name.is_ascii() {
-        Err(PkgError::Filelist(format!("name '{}' is not ASCII", name.escape_default())))
-    } else if name.chars().any(|c| c.is_ascii_control()) {
-        Err(PkgError::Filelist(format!("name '{}' contains control characters", name.escape_default())))
-    } else if name.chars().any(|c| c.is_ascii_whitespace() && c != ' ') {
-        Err(PkgError::Filelist(format!("name '{}' contains whitespace (other than literal space)", name.escape_default())))
-    } else if name.contains('/') || name.contains('\\') {
-        Err(PkgError::Filelist(format!("name '{}' contains path separators", name.escape_default())))
-    } else {
-        if name.len() + 1 > padding {
-            log::warn!("name length exceeds padding block size, idk if that'll work shrug emoji");
-        }
-        let n_zeros = (name.len() / padding + 1) * padding - name.len();
-        let mut result = smallvec::SmallVec::<[u8; 64]>::from(name.as_ref()); // 64 bytes is the largest padding I've seen and it's not too big as a default
-        for _ in 0..n_zeros {
-            result.push(0);
-        }
-        assert_eq!(result.len() % padding, 0);
-        assert!(result.len() > name.len());
-        assert!(result.len() < name.len() + padding);
-        Ok(result)
+impl AsRef<str> for PaddedFilename {
+    fn as_ref(&self) -> &str {
+        self.name.as_ref()
     }
 }
 
-pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>>(files: &[(S, X)], compression: Compression) -> Result<std::vec::Vec<u8>, PkgError> {
+impl std::fmt::Display for PaddedFilename {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.name.fmt(f)
+    }
+}
+
+pub struct CompressedFile {
+    pub name: PaddedFilename,
+    pub data: std::vec::Vec<u8>,
+    pub decompressed_size: u32,
+    pub compression: Compression,
+}
+
+pub fn generate_pkg_from_compressed_files(files: &[CompressedFile]) -> Result<std::vec::Vec<u8>, PkgError> {
     const PADDING: usize = 64;
 
     // precompute length of header/metadata because we'll need it later to insert the data offsets while constructing the header/metadata
-    let length_of_header: usize = files.iter().map(|(name, _)| padded_length(name.as_ref(), PADDING) + 4 * 4).sum();
-    let length_of_header: usize = length_of_header + 8;
-
-    // compress data and compute data offsets, starting from the end of the header/metadata
-    // pkg files are not super large (the biggest one are ~100MB, significantly smaller than 1 GB)
-    // It should be ok to store both the full uncompressed and full compressed data at the same time in main memory
-    let mut compressed_data: std::vec::Vec<std::vec::Vec<u8>> = vec![];
-    let mut data_offsets = vec![];
-    for (_, data) in files {
-        let x = compression.compress(data.as_ref()).map_err(PkgError::Compression)?;
-        let offset = data_offsets
-            .last()
-            .unwrap_or(&length_of_header)
-            .checked_add(compressed_data.last().map(|x| x.len()).unwrap_or(0))
-            .ok_or_else(|| PkgError::Filelist("compressed data is too big".to_string()))?;
-        compressed_data.push(x);
-        data_offsets.push(offset);
+    let mut length_of_header = 8;
+    for f in files.iter() {
+        assert_eq!(f.name.padding(), PADDING);
+        if f.data.len() > MAX_DATA_SIZE.try_into().expect("32 bits please") {
+            return Err(PkgError::Filelist(format!("File '{}' compressed data size exceeds max ({})", f.name.as_ref(), MAX_DATA_SIZE)));
+        }
+        length_of_header += f.name.len() + 4 * 4;
     }
-    let compressed_data = compressed_data;
-    let data_offsets = data_offsets;
+
+    let data_offsets = {
+        let mut data_offsets: std::vec::Vec<u32> = vec![];
+        let mut off: u32 = length_of_header.try_into().map_err(|_| PkgError::Filelist(String::from("header is too long")))?;
+        for f in files.iter() {
+            data_offsets.push(off);
+            off = <usize as TryInto<u32>>::try_into(f.data.len())
+                .ok()
+                .and_then(|len| len.checked_add(off))
+                .ok_or_else(|| PkgError::Filelist(format!("pkg file '{}': data offset too big", f.name)))?;
+        }
+        data_offsets
+    };
 
     // write header
     let mut output: std::vec::Vec<u8> = vec![];
     output.extend_from_slice(&[0, 0, 0, 0]); // checksum or something, ignored?
-    let number_of_files: u32 = files.len().try_into().expect("too many files");
+    let number_of_files: u32 = files.len().try_into().map_err(|_| PkgError::Filelist(String::from("too many files")))?;
     output.extend_from_slice(&number_of_files.to_le_bytes());
 
     // write metadata for each file
-    for ((name, raw_data), compressed_data, offset) in itertools::izip!(files.iter(), compressed_data.iter(), data_offsets.iter()) {
-        let padded_name = pad_name(name.as_ref(), PADDING)?;
-        output.extend_from_slice(padded_name.as_ref());
-        let decompressed_size: u32 = raw_data
-            .as_ref()
-            .len()
-            .try_into()
-            .map_err(|_| PkgError::Filelist(format!("decompressed data size ({}) too big", raw_data.as_ref().len())))?;
-        output.extend_from_slice(&decompressed_size.to_le_bytes());
-        let compressed_size: u32 = compressed_data
-            .len()
-            .try_into()
-            .map_err(|_| PkgError::Filelist(format!("compressed data size ({}) too big", compressed_data.len())))?;
+    for (f, offset) in files.iter().zip(data_offsets.iter()) {
+        f.name.write_to(&mut output).expect("writing to output vector should succeed");
+        output.extend_from_slice(&f.decompressed_size.to_le_bytes());
+        let compressed_size: u32 = f.data.len().try_into().map_err(|_| PkgError::Filelist(format!("compressed data size ({}) too big", f.data.len())))?;
         output.extend_from_slice(&compressed_size.to_le_bytes());
         let data_offset: u32 = (*offset).try_into().map_err(|_| PkgError::Filelist(format!("data offset is ({}) too big", offset)))?;
         output.extend_from_slice(&data_offset.to_le_bytes());
-        let compression: u32 = compression.into();
+        let compression: u32 = f.compression.into();
         output.extend_from_slice(&compression.to_le_bytes());
     }
 
     assert_eq!(output.len(), length_of_header);
 
     // write data
-    for (x, off) in compressed_data.iter().zip(data_offsets.iter()) {
-        assert_eq!(output.len(), *off);
-        output.extend_from_slice(x);
+    for (f, offset) in files.iter().zip(data_offsets.iter()) {
+        assert_eq!(output.len().try_into(), Ok(*offset));
+        output.extend_from_slice(&f.data);
     }
 
     Ok(output)
