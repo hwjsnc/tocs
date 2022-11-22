@@ -152,9 +152,9 @@ impl clap::ValueEnum for CompressionArg {
     fn to_possible_value<'a>(&self) -> Option<clap::builder::PossibleValue> {
         Some(match self {
             CompressionArg::Uncompressed => clap::builder::PossibleValue::new("uncompressed").help("no compression"),
-            CompressionArg::Lzss => clap::builder::PossibleValue::new("lzss").help("custom LZSS compression"),
-            CompressionArg::LZ4 => clap::builder::PossibleValue::new("lz4").help("LZ4 compression"),
-            CompressionArg::Zstd => clap::builder::PossibleValue::new("zstd").help("Zstandard compression"),
+            CompressionArg::Lzss => clap::builder::PossibleValue::new("lzss").help("custom LZSS compression (used by CS1/2)"),
+            CompressionArg::LZ4 => clap::builder::PossibleValue::new("lz4").help("LZ4 compression (used by CS3)"),
+            CompressionArg::Zstd => clap::builder::PossibleValue::new("zstd").help("Zstandard compression (used by CS4)"),
         })
     }
 }
