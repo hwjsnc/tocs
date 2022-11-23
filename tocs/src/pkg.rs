@@ -177,7 +177,7 @@ pub struct PaddedFilename {
 }
 
 impl PaddedFilename {
-    fn new(name: &str, padding: usize) -> Result<Self, String> {
+    pub fn new(name: &str, padding: usize) -> Result<Self, String> {
         assert!(padding >= 1);
         if !name.is_ascii() {
             Err(format!("name '{}' is not ASCII", name.escape_default()))

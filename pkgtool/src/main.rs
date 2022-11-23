@@ -192,9 +192,7 @@ fn main() -> anyhow::Result<()> {
         CliArgs::Pka(PkaArgs::Ls { path }) => pka_ls(path),
         CliArgs::Pka(PkaArgs::Stats { path, force }) => pka_stats(path, force),
         CliArgs::Pka(PkaArgs::Check { path }) => pka_check(path),
-        CliArgs::Pka(PkaArgs::UnpackPkgs { force, pka, out, files }) => {
-            todo!("pka unpackpkgs force={} pka={} out={} files={:?}", force, pka.display(), out.display(), files)
-        }
+        CliArgs::Pka(PkaArgs::UnpackPkgs { force, pka, out, files }) => pka_unpack_pkgs(force, pka, out, &files),
         CliArgs::Pka(PkaArgs::Unpack {
             force,
             raw_i_know_what_i_am_doing,
@@ -685,6 +683,80 @@ fn pka_test_blob<F: std::io::Read + std::io::Seek>(io_mutex: &std::sync::Mutex<F
     Ok(())
 }
 
+fn pka_unpack_pkgs<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, pka: P, out: P, files: &[S]) -> anyhow::Result<()> {
+    let mut f = std::io::BufReader::new(std::fs::File::open(pka.as_ref()).with_context(|| format!("couldn't open pka file '{}' for reading", pka.as_ref().display()))?);
+    let (pkgs, blobs) = tocs::pka::load_filelist(&mut f).with_context(|| format!("couldn't parse pka file '{}'", pka.as_ref().display()))?;
+
+    let mut open_options = std::fs::File::options();
+    open_options.write(true);
+    if force {
+        open_options.create(true);
+    } else {
+        open_options.create_new(true);
+    };
+
+    std::fs::create_dir_all(&out).with_context(|| format!("couldn't create output directory {}", out.as_ref().display()))?;
+
+    let blobs_by_hash: std::collections::HashMap<_, _> = blobs.iter().map(|blob| (blob.hash, blob.clone())).collect();
+
+    if files.is_empty() {
+        write_blob_order_file(&blobs, &open_options, out.as_ref())?;
+        for pkg in pkgs.iter() {
+            pka_unpack_single_pkg(&open_options, &mut f, out.as_ref(), &blobs_by_hash, pkg)?;
+        }
+    } else {
+        // we're (probably) not unpacking everything, so we don't need to be able to repack
+        let pkgs_by_name: std::collections::HashMap<_, _> = pkgs.iter().map(|pkg| (pkg.name.clone(), pkg)).collect();
+        for name in files {
+            let pkg = pkgs_by_name
+                .get(name.as_ref())
+                .ok_or_else(|| anyhow::Error::msg(format!("pkg '{}' not present in pka", name.as_ref())))?;
+            pka_unpack_single_pkg(&open_options, &mut f, out.as_ref(), &blobs_by_hash, pkg)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn pka_unpack_single_pkg<F: std::io::Read + std::io::Seek>(
+    open_options: &std::fs::OpenOptions,
+    pka: &mut F,
+    out_dir: &std::path::Path,
+    blobs_by_hash: &std::collections::HashMap<[u8; 32], tocs::pka::FileDataEntry>,
+    pkg: &tocs::pka::PkgListEntry,
+) -> anyhow::Result<()> {
+    log::debug!("unpack single pkg '{}'", &pkg.name);
+
+    let out = std::path::Path::join(out_dir, name_to_path(&pkg.name).with_context(|| format!("Invalid pkg file name '{}'", &pkg.name))?);
+
+    let mut pkg_files = vec![];
+    for (name, hash) in pkg.filenames.iter().zip(pkg.hashes.iter()) {
+        let blob = blobs_by_hash
+            .get(hash)
+            .ok_or_else(|| anyhow::Error::msg(format!("no data for file '{}/{}' (hash {})", pkg.name, name, hex::encode(hash))))?;
+        let compressed_data = tocs::pka::get_blob_data_raw(pka, blob).with_context(|| format!("couldn't read data for file '{}/{}'", pkg.name, name))?;
+        pkg_files.push(tocs::pkg::CompressedFile {
+            name: tocs::pkg::PaddedFilename::new(name, 64)
+                .map_err(anyhow::Error::msg)
+                .with_context(|| format!("couldn't write pkg data for file '{}/{}'", pkg.name, name))?,
+            data: compressed_data,
+            decompressed_size: blob.decompressed_size,
+            compression: blob.compression,
+        });
+    }
+
+    let data = tocs::pkg::generate_pkg_from_compressed_files(&pkg_files).with_context(|| format!("couldn't generate pkg data for pkg '{}'", pkg.name))?;
+
+    let mut out_file = open_options
+        .open(&out)
+        .with_context(|| anyhow::Error::msg(format!("couldn't open output file '{}' for writing", out.display())))?;
+    out_file
+        .write(&data)
+        .with_context(|| anyhow::Error::msg(format!("couldn't open output file '{}' for writing", out.display())))?;
+
+    Ok(())
+}
+
 fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, pka: P, out: P, files: &[S]) -> anyhow::Result<()> {
     if raw && files.is_empty() {
         return Err(anyhow::Error::msg("refusing to unpack complete pka raw"));
@@ -710,19 +782,7 @@ fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
         // extract all
 
         // write blob order file
-        {
-            let mut blobs = blobs.clone();
-            blobs.sort_by_key(|blob| blob.offset);
-            let mut f = std::io::BufWriter::new(
-                open_options
-                    .open(std::path::Path::join(out.as_ref(), std::path::Path::new("blob_order.txt")))
-                    .context("couldn't open blob order file for writing")?,
-            );
-            for blob in blobs.iter() {
-                writeln!(f, "{}", hex::encode(blob.hash)).context("couldn't write blob order file")?;
-            }
-            f.into_inner().context("couldn't close blob order file after writing")?;
-        }
+        write_blob_order_file(&blobs, &open_options, out.as_ref())?;
 
         // extract all files in all pkgs
         for pkg in pkgs.iter() {
@@ -790,5 +850,20 @@ fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
             outfile.write_all(&data).with_context(|| format!("couldn't write data to {}", filename.display()))?;
         }
     }
+    Ok(())
+}
+
+fn write_blob_order_file(blobs: &[tocs::pka::FileDataEntry], open_options: &std::fs::OpenOptions, out_dir: &std::path::Path) -> anyhow::Result<()> {
+    let mut blobs = blobs.to_vec();
+    blobs.sort_by_key(|blob| blob.offset);
+    let mut f = std::io::BufWriter::new(
+        open_options
+            .open(std::path::Path::join(out_dir, std::path::Path::new("blob_order.txt")))
+            .context("couldn't open blob order file for writing")?,
+    );
+    for blob in blobs.iter() {
+        writeln!(f, "{}", hex::encode(blob.hash)).context("couldn't write blob order file")?;
+    }
+    f.into_inner().context("couldn't close blob order file after writing")?;
     Ok(())
 }
