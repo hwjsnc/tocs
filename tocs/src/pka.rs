@@ -9,8 +9,10 @@ note:
 
 const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 
-use smol_str::SmolStr;
 use fallible_iterator::FallibleIterator;
+use smol_str::SmolStr;
+
+use sha2::Digest as _;
 
 use std::borrow::Borrow;
 use std::io::Seek as _;
@@ -148,6 +150,17 @@ pub fn get_blob_data<F: std::io::Read + std::io::Seek>(file: &mut F, blob: &File
 
 // TODO: get data by hash, get data by file name
 
+pub fn hash_data(data: &[u8]) -> [u8; 32] {
+    let sha256 = sha2::Sha256::digest(&data);
+    sha256.as_slice().try_into().expect("SHA256 result should be 32 byte long")
+}
+
+pub fn hash_compressed_data(data: &[u8], compression: Compression, decompressed_size: u32) -> Result<[u8; 32], String> {
+    // we could try to stream the decompressed data into the decompression algorithm, but the files should be small enough for this to not be necessary
+    let decompressed_data = compression.decompress_with_exact_output_size(data, decompressed_size.try_into().expect("32 bits please"))?;
+    Ok(hash_data(&decompressed_data))
+}
+
 #[derive(Debug)]
 pub enum PkaWriteError<E> {
     IO(std::io::Error),
@@ -165,7 +178,7 @@ pub struct CompressedBlobMetadata {
     pub compression: Compression,
 }
 
-impl<E: std::error::Error> std::fmt::Display for PkaWriteError<E> {
+impl<E: std::fmt::Display> std::fmt::Display for PkaWriteError<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             PkaWriteError::IO(e) => write!(f, "IO error: {e}"),
@@ -177,7 +190,7 @@ impl<E: std::error::Error> std::fmt::Display for PkaWriteError<E> {
     }
 }
 
-impl<E: std::error::Error> std::error::Error for PkaWriteError<E> {}
+impl<E: std::fmt::Debug + std::fmt::Display> std::error::Error for PkaWriteError<E> {}
 
 pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<Item = ([u8; 32], X), Error = E>>(
     path: &std::path::Path, // path to output file
@@ -196,9 +209,11 @@ pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<It
 
     // generate pkg list data (small enough to fit in main memory)
     let pkg_list_data = {
+        log::debug!("generating pkg list data");
         let mut data = vec![];
+        data.extend_from_slice(&[0, 0, 0, 0]); // checksum?
 
-        let number_of_pkgs: u32 = pkgs.len().try_into().map_err(|_| PkaWriteError::Metadata("too many pkgs".into()))?;
+        let number_of_pkgs: u32 = pkgs.len().try_into().expect("32 bits please");
         data.extend_from_slice(&number_of_pkgs.to_le_bytes());
 
         // we could sort the pkgs and filenames here, but it doesn't seem necessary
@@ -221,6 +236,7 @@ pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<It
 
     // compute offsets of each blob (and total file size)
     let (file_data_list, total_file_size) = {
+        log::debug!("computing blob offsets");
         // order blobs by how they appear in the blob_order.txt file
         // blobs that are missing from there will be sorted to the end
         let blob_index: std::collections::HashMap<[u8; 32], usize> = blob_order.into_iter().enumerate().map(|(i, hash)| (hash, i)).collect();
@@ -232,7 +248,7 @@ pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<It
             (None, None) => a.hash.cmp(&b.hash),
         });
 
-        let mut off: u64 = 0;
+        let mut off: u64 = 4; // for the number of hashes
         off += <usize as TryInto<u64>>::try_into(pkg_list_data.len()).expect("less than 64 bits please");
         off += 52 * <usize as TryInto<u64>>::try_into(blobinfo.len()).expect("less than 64 bits please"); // blob info list takes 52 bytes per entry
         let mut file_data_list = std::collections::BTreeMap::<[u8; 32], FileDataEntry>::new(); // This is a BTreeMap so that we iterate the values in order of ascending hash values
@@ -257,14 +273,16 @@ pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<It
 
     // generate blob list data (small enough to fit in main memory)
     let blob_list_data = {
-        // sort blobs by hash
+        log::debug!("generating file data list");
+        let number_of_hashes: u32 = file_data_list.len().try_into().expect("32 bits please");
         let mut data = std::vec::Vec::with_capacity(52 * file_data_list.len());
+        data.extend_from_slice(&number_of_hashes.to_le_bytes());
         for entry in file_data_list.values() {
             // note: file_data_list is a tree map so we iterate in key order, i.e. by ascending data hash
             data.extend_from_slice(&entry.hash);
             data.extend_from_slice(&entry.offset.to_le_bytes());
-            data.extend_from_slice(&entry.decompressed_size.to_le_bytes());
             data.extend_from_slice(&entry.compressed_size.to_le_bytes());
+            data.extend_from_slice(&entry.decompressed_size.to_le_bytes());
             data.extend_from_slice(&u32::from(entry.compression).to_le_bytes());
         }
         data

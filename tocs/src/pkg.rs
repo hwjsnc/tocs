@@ -6,6 +6,7 @@ const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 
 const PADDING: usize = 64;
 
+use fallible_iterator::FallibleIterator;
 use smol_str::SmolStr;
 
 pub use crate::compression::Compression;
@@ -102,6 +103,13 @@ fn check_entry_size(entry: &FileListEntry) -> Result<(), PkgError> {
     }
 }
 
+fn decompress_data(entry: &FileListEntry, compressed_data: &[u8]) -> Result<std::vec::Vec<u8>, PkgError> {
+    entry
+        .compression
+        .decompress_with_exact_output_size(&compressed_data, entry.decompressed_size.try_into().expect("32 bits please"))
+        .map_err(PkgError::Decompression)
+}
+
 pub fn get_data_raw_from_file<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
     check_entry_size(entry)?;
     file.seek(std::io::SeekFrom::Start(entry.data_offset.into())).map_err(PkgError::IO)?;
@@ -111,26 +119,93 @@ pub fn get_data_raw_from_file<F: std::io::Read + std::io::Seek>(file: &mut F, en
 }
 
 pub fn get_data_from_file<F: std::io::Read + std::io::Seek>(file: &mut F, entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    let compressed_data = get_data_raw_from_file(file, entry)?;
-    entry
-        .compression
-        .decompress_with_exact_output_size(&compressed_data, entry.decompressed_size.try_into().expect("32 bits please"))
-        .map_err(PkgError::Decompression)
+    get_data_raw_from_file(file, entry).and_then(|compressed| decompress_data(entry, &compressed))
 }
 
 pub fn get_data_raw_from_buffer<'a>(data: &'a [u8], entry: &FileListEntry) -> Result<&'a [u8], PkgError> {
     check_entry_size(entry)?;
     let off1: usize = entry.data_offset.try_into().expect("32 bits please");
     let off2: usize = off1 + <u32 as TryInto<usize>>::try_into(entry.compressed_size).expect("32 bits please");
-    Ok(&data[off1..off2])
+    let result = &data[off1..off2];
+    if result.len().try_into() != Ok(entry.compressed_size) {
+        Err(PkgError::Filelist(format!("pkg file '{}' extends past pkg boundary (from {} to {})", entry.filename, off1, off2)))
+    } else {
+        Ok(result)
+    }
 }
 
 pub fn get_data_from_buffer(data: &[u8], entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    let compressed_data = get_data_raw_from_buffer(data, entry)?;
-    entry
-        .compression
-        .decompress_with_exact_output_size(compressed_data, entry.decompressed_size.try_into().expect("32 bits please"))
-        .map_err(PkgError::Decompression)
+    get_data_raw_from_buffer(data, entry).and_then(|compressed| decompress_data(entry, &compressed))
+}
+
+pub struct Pkg {
+    data: std::vec::Vec<u8>,
+    filelist: std::vec::Vec<FileListEntry>,
+}
+
+impl Pkg {
+    pub fn new(data: std::vec::Vec<u8>) -> Result<Self, PkgError> {
+        let filelist = load_filelist(&mut std::io::Cursor::new(&data))?;
+        Ok(Self { data, filelist })
+    }
+
+    pub fn filelist(&self) -> &[FileListEntry] {
+        &self.filelist
+    }
+
+    pub fn entries(&self) -> impl FallibleIterator<Item = PkgRawEntry<'_>, Error = PkgError> {
+        fallible_iterator::convert(self.filelist.iter().map(|entry| {
+            Ok(PkgRawEntry {
+                metadata: entry,
+                data: get_data_raw_from_buffer(&self.data, entry)?,
+            })
+        }))
+    }
+
+    pub fn decompressed_entries(&self) -> impl FallibleIterator<Item = PkgEntry, Error = PkgError> + '_ {
+        self.entries().map(|raw_entry| {
+            Ok(PkgEntry {
+                name: raw_entry.metadata.filename.clone(),
+                data: raw_entry.decompressed_data()?,
+            })
+        })
+    }
+}
+
+pub struct PkgRawEntry<'a> {
+    metadata: &'a FileListEntry,
+    data: &'a [u8],
+}
+
+impl<'a> PkgRawEntry<'a> {
+    pub fn name(&self) -> impl std::borrow::Borrow<str> + '_ {
+        self.metadata.filename.clone()
+    }
+
+    pub fn compression(&self) -> Compression {
+        self.metadata.compression
+    }
+
+    pub fn compressed_size(&self) -> u32 {
+        self.metadata.compressed_size
+    }
+
+    pub fn decompressed_size(&self) -> u32 {
+        self.metadata.decompressed_size
+    }
+
+    pub fn compressed_data(&self) -> &'a [u8] {
+        self.data
+    }
+
+    pub fn decompressed_data(&self) -> Result<std::vec::Vec<u8>, PkgError> {
+        decompress_data(self.metadata, self.data)
+    }
+}
+
+pub struct PkgEntry {
+    pub name: SmolStr,
+    pub data: std::vec::Vec<u8>,
 }
 
 pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>, I: IntoIterator<Item = (S, X)>>(files: I, compression: Compression) -> Result<std::vec::Vec<u8>, PkgError> {

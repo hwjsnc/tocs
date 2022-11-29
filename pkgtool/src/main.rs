@@ -1,8 +1,11 @@
+use fallible_iterator::FallibleIterator;
+
 use anyhow::Context as _;
 use clap::Parser as _;
 use rayon::iter::IntoParallelRefIterator as _;
 use rayon::iter::ParallelIterator as _;
-use sha2::Digest as _;
+use std::borrow::Borrow as _;
+use std::io::BufRead as _;
 use std::io::Seek as _;
 use std::io::Write as _;
 use std::ops::DerefMut as _;
@@ -90,7 +93,7 @@ enum PkaArgs {
         path: std::path::PathBuf,
     },
     /// Unpack the .pka file and save its contents as .pkg files without decompressing them.
-    /// This also creates a file index for recompression
+    /// This also creates a file index (blob_order.txt) for recompression
     UnpackPkgs {
         /// Overwrite existing data
         #[arg(long, short)]
@@ -122,6 +125,18 @@ enum PkaArgs {
         out: std::path::PathBuf,
         /// Unpack these specific files (if none are given, unpack all)
         files: Vec<String>,
+    },
+    /// Packs a folder of .pkg files to a .pka, without recompressing.
+    PackFromPkgs {
+        /// Overwrite existing data
+        #[arg(long, short)]
+        force: bool,
+        /// Path of the folder containing .pkgs.
+        /// Needs to contain a blob_order.txt file.
+        dir: std::path::PathBuf,
+        /// Output .pka file
+        #[arg(long, short)]
+        out: std::path::PathBuf,
     },
 }
 
@@ -200,6 +215,7 @@ fn main() -> anyhow::Result<()> {
             out,
             files,
         }) => pka_unpack(force, raw_i_know_what_i_am_doing, pka, out, &files),
+        CliArgs::Pka(PkaArgs::PackFromPkgs { force, dir, out }) => pka_pack_pkgs(force, dir, out),
     }
 }
 
@@ -550,10 +566,10 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
 
     // wheck file names
     for pkg in pkgs.iter() {
-        log::debug!("checking pkg {} name", pkg.name);
+        log::debug!("checking pkg {}", pkg.name);
         assert!(name_is_ok(&pkg.name));
         for name in pkg.filenames.iter() {
-            log::debug!("checking file {} name", name);
+            log::debug!("checking file {}", name);
             assert!(name_is_ok(name));
         }
     }
@@ -655,13 +671,12 @@ fn pka_test_blob<F: std::io::Read + std::io::Seek>(io_mutex: &std::sync::Mutex<F
         .decompress_with_exact_output_size(&recompressed_data, blob.decompressed_size.try_into().expect("32 bits please"))
         .map_err(anyhow::Error::msg)
         .with_context(|| format!("blob {}: failed to decompress the recompressed data", hex::encode(blob.hash)))?;
-    let sha256 = sha2::Sha256::digest(&decompressed_data);
-    let sha256: [u8; 32] = sha256.as_slice().try_into().expect("SHA256 result should be 32 byte long");
-    if blob.hash != sha256 {
+    let hash = tocs::pka::hash_data(&decompressed_data);
+    if blob.hash != hash {
         return Err(anyhow::Error::msg(format!(
             "blob {}: hash does not match sha256 of decompressed data {}",
             hex::encode(blob.hash),
-            hex::encode(sha256)
+            hex::encode(hash)
         )));
     }
     if decompressed_data != redecompressed_data {
@@ -865,5 +880,116 @@ fn write_blob_order_file(blobs: &[tocs::pka::FileDataEntry], open_options: &std:
         writeln!(f, "{}", hex::encode(blob.hash)).context("couldn't write blob order file")?;
     }
     f.into_inner().context("couldn't close blob order file after writing")?;
+    Ok(())
+}
+
+fn read_blob_order_file(base_dir: &std::path::Path) -> anyhow::Result<std::vec::Vec<[u8; 32]>> {
+    let filename = std::path::Path::join(base_dir, "blob_order.txt");
+    log::debug!("reading blob order file '{}'", filename.display());
+    let mut hashes = vec![];
+    for line in std::io::BufReader::new(std::fs::File::open(&filename)?).lines() {
+        let line = line?;
+        let hash: [u8; 32] = hex::decode(&line)
+            .map_err(anyhow::Error::msg)
+            .and_then(|data| (&data[..]).try_into().map_err(anyhow::Error::msg))
+            .with_context(|| format!("invalid line '{}', expected a (hex encoded) SHA-256 hash", &line))?;
+        hashes.push(hash);
+    }
+    Ok(hashes)
+}
+
+fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyhow::Result<()> {
+    let blob_order = read_blob_order_file(dir.as_ref()).context("couldn't read blob order file")?;
+
+    log::info!("preparing file and blob index (this may take some time)");
+
+    let mut blob_info: std::collections::HashMap<[u8; 32], tocs::pka::CompressedBlobMetadata> = std::collections::HashMap::new();
+    let mut pkg_list: std::vec::Vec<tocs::pka::PkgListEntry> = vec![];
+    for direntry in std::fs::read_dir(dir.as_ref()).with_context(|| format!("couldn't open directory '{}' for reading", dir.as_ref().display()))? {
+        let direntry = direntry.with_context(|| format!("couldn't read directory '{}'", dir.as_ref().display()))?;
+        let path = direntry.path();
+        if path.is_file() {
+            if path.file_name() == Some(std::ffi::OsStr::new("blob_order.txt")) {
+                log::debug!("ignoring blob_order.txt file");
+            } else if path.extension() == Some(std::ffi::OsStr::new("pkg")) {
+                log::debug!("reading file '{}'", path.display());
+                let pkg_data = std::fs::read(&path)
+                    .map_err(tocs::pkg::PkgError::IO)
+                    .and_then(tocs::pkg::Pkg::new)
+                    .with_context(|| format!("couldn't read pkg file '{}'", path.display()))?;
+                let pkg_name: &str = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| anyhow::Error::msg(format!("invalid pkg file name: {}", path.display())))?;
+                let mut pkg_list_entry = tocs::pka::PkgListEntry {
+                    name: pkg_name.into(),
+                    filenames: vec![],
+                    hashes: vec![],
+                };
+                let mut entries = pkg_data.entries();
+                while let Some(pkg_entry) = entries.next().with_context(|| format!("couldn't parse pkg file '{}'", path.display()))? {
+                    let decompressed_data = pkg_entry
+                        .decompressed_data()
+                        .with_context(|| format!("couldn't read data for file '{}' in pkg '{}'", pkg_entry.name().borrow(), path.display()))?;
+                    let hash = tocs::pka::hash_data(&decompressed_data);
+                    let blobinfo = tocs::pka::CompressedBlobMetadata {
+                        hash,
+                        decompressed_size: pkg_entry.decompressed_size(),
+                        compressed_size: pkg_entry.compressed_size(),
+                        compression: pkg_entry.compression(),
+                    };
+                    if let Some(old) = blob_info.insert(hash, blobinfo) {
+                        if old != blobinfo {
+                            log::warn!("same blob ({}) appears with different sizes/compression", hex::encode(hash));
+                        }
+                    }
+                    pkg_list_entry.filenames.push(pkg_entry.name().borrow().into());
+                    pkg_list_entry.hashes.push(hash);
+                }
+                pkg_list.push(pkg_list_entry);
+            } else {
+                log::warn!("ignoring file '{}' because it doesn't end in .pkg", path.display());
+            }
+        } else {
+            log::debug!("ignoring file '{}' because it is not a file", path.display());
+        }
+    }
+    let blob_info: std::vec::Vec<tocs::pka::CompressedBlobMetadata> = blob_info.into_values().collect();
+
+    let blob_iterator = misc::fallible_read_dir(dir.as_ref())
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("couldn't open directory '{}' for reading", dir.as_ref().display()))?
+        .map(|dirent| Ok(dirent.path()))
+        .filter_map(|path| Ok((path.is_file() && path.extension() == Some(std::ffi::OsStr::new("pkg"))).then(|| path)))
+        .map_err(anyhow::Error::msg)
+        .inspect(|path| {
+            log::debug!("rereading file '{}'", path.display());
+            Ok(())
+        })
+        .map(|path| {
+            let data = std::fs::read(&path)
+                .map_err(anyhow::Error::msg)
+                .with_context(|| format!("couldn't read pkg file '{}'", path.display()))?;
+            let add_context = move |e: anyhow::Error| e.context(format!("couldn't parse pkg file '{}'", &path.display()));
+            let pkg = tocs::pkg::Pkg::new(data).map_err(anyhow::Error::msg).map_err(&add_context)?;
+            #[allow(clippy::needless_collect)] // allocating shouldn't be necessary here, but it is.
+            let pkg_entries: std::vec::Vec<_> = pkg
+                .entries()
+                .map(|entry| {
+                    let hash = tocs::pka::hash_data(&entry.decompressed_data()?);
+                    Ok((hash, entry.compressed_data().to_vec()))
+                })
+                .map_err(anyhow::Error::msg)
+                .map_err(&add_context)
+                .iterator()
+                .collect();
+            Ok(fallible_iterator::convert(pkg_entries.into_iter()))
+        })
+        .flatten();
+
+    log::info!("writing '{}' (this will take some time)", out.as_ref().display());
+    tocs::pka::write_pka_from_compressed_data(out.as_ref(), force, pkg_list, blob_order, blob_info, blob_iterator).map_err(anyhow::Error::msg)?;
+
+    log::info!("done");
     Ok(())
 }
