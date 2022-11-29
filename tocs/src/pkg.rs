@@ -206,6 +206,12 @@ impl PaddedFilename {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        // is_empty doesn't really make sense because it could either mean the attribute is empty, or the padded string is empty (which it never is because of the terminating null byte).
+        // clippy wants an is_empty() method, and I guess rather than suppressing the warning I add this note here.
+        unreachable!()
+    }
+
     pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
         let mut n = f.write(self.name.as_bytes())?;
         n += f.write(&[0])?;
@@ -288,8 +294,7 @@ pub fn generate_pkg_from_compressed_files(files: &[CompressedFile]) -> Result<st
         output.extend_from_slice(&f.decompressed_size.to_le_bytes());
         let compressed_size: u32 = f.data.len().try_into().map_err(|_| PkgError::Filelist(format!("compressed data size ({}) too big", f.data.len())))?;
         output.extend_from_slice(&compressed_size.to_le_bytes());
-        let data_offset: u32 = (*offset).try_into().map_err(|_| PkgError::Filelist(format!("data offset is ({}) too big", offset)))?;
-        output.extend_from_slice(&data_offset.to_le_bytes());
+        output.extend_from_slice(&offset.to_le_bytes());
         let compression: u32 = f.compression.into();
         output.extend_from_slice(&compression.to_le_bytes());
     }
