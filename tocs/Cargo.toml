@@ -7,9 +7,6 @@ edition = "2021"
 name = "tocs"
 path = "src/lib.rs"
 
-[release]
-overflow-checks = true
-
 [features]
 default = ["private-tests", "pkg"]
 private-tests = ["simple_logger"] # test bit-identical roundtrip of tbl data
