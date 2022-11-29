@@ -527,6 +527,7 @@ name = "tocs"
 version = "0.1.0"
 dependencies = [
  "blake2",
+ "fallible-iterator",
  "hashbrown 0.13.1",
  "hex",
  "hex-literal",

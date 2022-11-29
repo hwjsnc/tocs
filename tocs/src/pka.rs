@@ -10,10 +10,16 @@ note:
 const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 
 use smol_str::SmolStr;
+use fallible_iterator::FallibleIterator;
+
+use std::borrow::Borrow;
+use std::io::Seek as _;
+use std::io::Write as _;
 
 use crate::compression::Compression;
-
 use crate::io::read_bytes;
+use crate::pkg::PaddedFilename;
+
 pub use crate::pkg::PkgError;
 
 #[derive(Clone, Debug)]
@@ -141,3 +147,153 @@ pub fn get_blob_data<F: std::io::Read + std::io::Seek>(file: &mut F, blob: &File
 }
 
 // TODO: get data by hash, get data by file name
+
+#[derive(Debug)]
+pub enum PkaWriteError<E> {
+    IO(std::io::Error),
+    Metadata(String),
+    Missing([u8; 32]),
+    Blob(E),
+    Compression(String),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct CompressedBlobMetadata {
+    pub hash: [u8; 32],
+    pub decompressed_size: u32,
+    pub compressed_size: u32,
+    pub compression: Compression,
+}
+
+impl<E: std::error::Error> std::fmt::Display for PkaWriteError<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            PkaWriteError::IO(e) => write!(f, "IO error: {e}"),
+            PkaWriteError::Metadata(s) => write!(f, "metadata error: {s}"),
+            PkaWriteError::Missing(hash) => write!(f, "blob with hash {} is present in metadata, but there is no such", hex::encode(hash)),
+            PkaWriteError::Blob(e) => write!(f, "blob read error: {e}"),
+            PkaWriteError::Compression(e) => write!(f, "decompression error: {e}"),
+        }
+    }
+}
+
+impl<E: std::error::Error> std::error::Error for PkaWriteError<E> {}
+
+pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<Item = ([u8; 32], X), Error = E>>(
+    path: &std::path::Path, // path to output file
+    overwrite_if_exists: bool,
+    pkgs: std::vec::Vec<PkgListEntry>,
+    blob_order: std::vec::Vec<[u8; 32]>, // order of actual data in the output file; missing or superfluous hashes are fine
+    blobinfo: std::vec::Vec<CompressedBlobMetadata>,
+    mut blobdata: I, // this should be a streaming iterator to save memory (all blobs together are >10 GB)
+) -> Result<(), PkaWriteError<E>> {
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(overwrite_if_exists)
+        .create_new(!overwrite_if_exists)
+        .open(path)
+        .map_err(PkaWriteError::IO)?;
+
+    // generate pkg list data (small enough to fit in main memory)
+    let pkg_list_data = {
+        let mut data = vec![];
+
+        let number_of_pkgs: u32 = pkgs.len().try_into().map_err(|_| PkaWriteError::Metadata("too many pkgs".into()))?;
+        data.extend_from_slice(&number_of_pkgs.to_le_bytes());
+
+        // we could sort the pkgs and filenames here, but it doesn't seem necessary
+        for pkg in pkgs {
+            let PkgListEntry { name, filenames, hashes } = pkg.borrow();
+            assert_eq!(filenames.len(), hashes.len());
+            let pkg_name = PaddedFilename::new(name, 32).map_err(PkaWriteError::Metadata)?;
+            pkg_name.write_to(&mut data).expect("writing to vector shouldn't fail");
+            let number_of_files: u32 = filenames.len().try_into().map_err(|_| PkaWriteError::Metadata("too many files in pkg".into()))?;
+            data.extend_from_slice(&number_of_files.to_le_bytes());
+            for (filename, hash) in filenames.iter().zip(hashes.iter()) {
+                let filename = PaddedFilename::new(filename, 64).map_err(PkaWriteError::Metadata)?;
+                filename.write_to(&mut data).expect("writing to vector shouldn't fail");
+                data.extend_from_slice(hash);
+            }
+        }
+
+        data
+    };
+
+    // compute offsets of each blob (and total file size)
+    let (file_data_list, total_file_size) = {
+        // order blobs by how they appear in the blob_order.txt file
+        // blobs that are missing from there will be sorted to the end
+        let blob_index: std::collections::HashMap<[u8; 32], usize> = blob_order.into_iter().enumerate().map(|(i, hash)| (hash, i)).collect();
+        let mut blobinfo = blobinfo;
+        blobinfo.sort_unstable_by(|a, b| match (blob_index.get(&a.hash), blob_index.get(&b.hash)) {
+            (Some(i), Some(j)) => i.cmp(j),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.hash.cmp(&b.hash),
+        });
+
+        let mut off: u64 = 0;
+        off += <usize as TryInto<u64>>::try_into(pkg_list_data.len()).expect("less than 64 bits please");
+        off += 52 * <usize as TryInto<u64>>::try_into(blobinfo.len()).expect("less than 64 bits please"); // blob info list takes 52 bytes per entry
+        let mut file_data_list = std::collections::BTreeMap::<[u8; 32], FileDataEntry>::new(); // This is a BTreeMap so that we iterate the values in order of ascending hash values
+        for blob in blobinfo.iter() {
+            let entry = FileDataEntry {
+                hash: blob.hash,
+                offset: off,
+                decompressed_size: blob.decompressed_size,
+                compressed_size: blob.compressed_size,
+                compression: blob.compression,
+            };
+            if file_data_list.insert(blob.hash, entry).is_some() {
+                return Err(PkaWriteError::Metadata(format!("Duplicate metadata for blob with hash {}", hex::encode(blob.hash))));
+            }
+            off = off
+                .checked_add(blob.compressed_size.into())
+                .ok_or_else(|| PkaWriteError::Metadata("total size of blobs is too big".to_string()))?;
+        }
+
+        (file_data_list, off)
+    };
+
+    // generate blob list data (small enough to fit in main memory)
+    let blob_list_data = {
+        // sort blobs by hash
+        let mut data = std::vec::Vec::with_capacity(52 * file_data_list.len());
+        for entry in file_data_list.values() {
+            // note: file_data_list is a tree map so we iterate in key order, i.e. by ascending data hash
+            data.extend_from_slice(&entry.hash);
+            data.extend_from_slice(&entry.offset.to_le_bytes());
+            data.extend_from_slice(&entry.decompressed_size.to_le_bytes());
+            data.extend_from_slice(&entry.compressed_size.to_le_bytes());
+            data.extend_from_slice(&u32::from(entry.compression).to_le_bytes());
+        }
+        data
+    };
+
+    // write header
+    file.write(&pkg_list_data).map_err(PkaWriteError::IO)?;
+    file.write(&blob_list_data).map_err(PkaWriteError::IO)?;
+
+    file.set_len(total_file_size).map_err(PkaWriteError::IO)?;
+
+    // write data blobs
+    let mut written_hashes = std::collections::HashSet::new();
+    while let Some((hash, blob)) = blobdata.next().map_err(PkaWriteError::Blob)? {
+        if let Some(FileDataEntry { offset, .. }) = file_data_list.get(&hash) {
+            if written_hashes.insert(hash) {
+                // we only need to write each blob once
+                file.seek(std::io::SeekFrom::Start(*offset)).map_err(PkaWriteError::IO)?;
+                file.write(blob.borrow()).map_err(PkaWriteError::IO)?;
+                file.seek(std::io::SeekFrom::Start(*offset)).map_err(PkaWriteError::IO)?;
+            }
+        } else {
+            return Err(PkaWriteError::Metadata(format!("File metadata is missing blob with hash '{}'", hex::encode(hash))));
+        }
+    }
+
+    if let Some(missing) = file_data_list.keys().find(|hash| !written_hashes.contains(*hash)) {
+        return Err(PkaWriteError::Missing(*missing));
+    }
+
+    Ok(())
+}

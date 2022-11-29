@@ -11,7 +11,7 @@ path = "src/lib.rs"
 default = ["private-tests", "pkg"]
 private-tests = ["simple_logger"] # test bit-identical roundtrip of tbl data
 rusqlite = ["dep:rusqlite"]
-pkg = ["compression"]
+pkg = ["compression", "dep:fallible-iterator"]
 compression = ["dep:lz4", "dep:zstd", "dep:hashbrown"]
 proptest = ["dep:proptest"]
 
@@ -20,6 +20,7 @@ lazy_static = "1.4"
 log = "0.4.17"
 lz4 = { version = "1.24.0", optional = true }
 blake2 = "0.10.5"
+fallible-iterator = { version = "0.2", optional = true }
 hashbrown = { version = "0.13.1", optional = true }
 hex = "0.4.3"
 hex-literal = "0.3.4"
