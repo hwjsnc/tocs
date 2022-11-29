@@ -16,6 +16,8 @@ Here's a short overview:
   Support for "structured parsing" (instead of having tbl entry data be an opaque blob) is very limited atm, but it will hopefully get better as I learn more about what everything does, which will hopefully happen as I build tools that allow me to learn it more quickly.
   If you want to programmatically modify tbl files in Rust, this is what you want.
 
+- `misc` contains miscellaneous functionality that isn't specific to the games.
+
 - `sqlite_conv` is a CLI program to convert from tbls to a sqlite database.
   This sqlite database can be edited, e.g. with [sqlitebrowser](https://sqlitebrowser.org/) and converted back to tbl files.
   WARNING:
