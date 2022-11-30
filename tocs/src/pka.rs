@@ -183,7 +183,7 @@ impl<E: std::fmt::Display> std::fmt::Display for PkaWriteError<E> {
         match self {
             PkaWriteError::IO(e) => write!(f, "IO error: {e}"),
             PkaWriteError::Metadata(s) => write!(f, "metadata error: {s}"),
-            PkaWriteError::Missing(hash) => write!(f, "blob with hash {} is present in metadata, but there is no such", hex::encode(hash)),
+            PkaWriteError::Missing(hash) => write!(f, "hash {} is present in metadata, but there is no such blob", hex::encode(hash)),
             PkaWriteError::Blob(e) => write!(f, "blob read error: {e}"),
             PkaWriteError::Compression(e) => write!(f, "decompression error: {e}"),
         }

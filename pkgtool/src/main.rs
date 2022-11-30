@@ -903,9 +903,11 @@ fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyh
 
     log::info!("preparing file and blob index (this may take some time)");
 
-    // this part is IO-bound because it's mostly reading, decompressing (which is fast), and hashing (which is faster)
+    // this part is IO-bound except on SSD
+    // we could probably parallelize it.
     let mut blob_info: std::collections::HashMap<[u8; 32], tocs::pka::CompressedBlobMetadata> = std::collections::HashMap::new();
     let mut pkg_list: std::vec::Vec<tocs::pka::PkgListEntry> = vec![];
+    let mut blobs_that_need_to_be_read: std::collections::HashMap<std::path::PathBuf, std::vec::Vec<(usize, [u8; 32])>> = std::collections::HashMap::new();
     misc::fallible_read_dir(dir.as_ref())
         .map_err(anyhow::Error::msg)
         .with_context(|| format!("couldn't open directory '{}' for reading", dir.as_ref().display()))?
@@ -939,7 +941,7 @@ fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyh
                 filenames: vec![],
                 hashes: vec![],
             };
-            pkg_data.entries().map_err(anyhow::Error::msg).for_each(|entry| {
+            pkg_data.entries().map_err(anyhow::Error::msg).enumerate().for_each(|(i, entry)| {
                 let decompressed_data = entry
                     .decompressed_data()
                     .with_context(|| format!("couldn't read data for file '{}' in pkg '{}'", entry.name().borrow(), path.display()))?;
@@ -954,6 +956,13 @@ fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyh
                     if old != blobinfo {
                         log::warn!("same blob ({}) appears with different sizes/compression", hex::encode(hash));
                     }
+                } else {
+                    blobs_that_need_to_be_read
+                        .entry(path.clone())
+                        .and_modify(|entries| {
+                            entries.push((i, hash));
+                        })
+                        .or_insert_with(|| vec![(i, hash)]);
                 }
                 pkg_list_entry.filenames.push(entry.name().borrow().into());
                 pkg_list_entry.hashes.push(hash);
@@ -964,41 +973,26 @@ fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyh
         })?;
     let blob_info: std::vec::Vec<tocs::pka::CompressedBlobMetadata> = blob_info.into_values().collect();
 
-    // This part is mostly IO bound because it's mostly reading and writing (slow), and decompression and hashing (fast)
-    // TODO: we can reduce reading by preparing an index mapping hash to pkg/pkg-entry, then we need to read only once per hash
-    let blob_iterator = misc::fallible_read_dir(dir.as_ref())
-        .map_err(anyhow::Error::msg)
-        .with_context(|| format!("couldn't open directory '{}' for reading", dir.as_ref().display()))?
-        .map(|dirent| Ok(dirent.path()))
-        .filter_map(|path| Ok((path.is_file() && path.extension() == Some(std::ffi::OsStr::new("pkg"))).then(|| path)))
-        .map_err(anyhow::Error::msg)
-        .inspect(|path| {
-            log::debug!("rereading file '{}'", path.display());
-            Ok(())
-        })
-        .map(|path| {
-            let data = std::fs::read(&path)
-                .map_err(anyhow::Error::msg)
-                .with_context(|| format!("couldn't read pkg file '{}'", path.display()))?;
-            let add_context = move |e: anyhow::Error| e.context(format!("couldn't parse pkg file '{}'", &path.display()));
-            let pkg = tocs::pkg::Pkg::new(data).map_err(anyhow::Error::msg).map_err(&add_context)?;
-            #[allow(clippy::needless_collect)] // allocating shouldn't be necessary here, but it is.
-            let pkg_entries: std::vec::Vec<_> = pkg
-                .entries()
-                .map(|entry| {
-                    let hash = tocs::pka::hash_data(&entry.decompressed_data()?);
-                    Ok((hash, entry.compressed_data().to_vec()))
-                })
-                .map_err(anyhow::Error::msg)
-                .map_err(&add_context)
-                .iterator()
-                .collect();
-            Ok(fallible_iterator::convert(pkg_entries.into_iter()))
-        })
-        .flatten();
+    // This part is IO bound because it's mostly reading and writing
+    // TODO: it might be possible to do better by memory mmapping both the pkgs and the pka and then copying from source to target (with no intermediate allocation). We would however need to break abstraction and/or unsafely transmute the mmapped memory to a &[u8].
+    let blob_iterator = blobs_that_need_to_be_read.into_iter().map(|(pkgpath, entries_to_read)| {
+        log::debug!("reading '{}'", pkgpath.display());
+        let mut pkgfile = std::io::BufReader::new(std::fs::File::open(&pkgpath).with_context(|| format!("couldn't open pkg '{}'", pkgpath.display()))?);
+        let filelist = tocs::pkg::load_filelist(&mut pkgfile).with_context(|| format!("couldn't read pkg '{}'", pkgpath.display()))?;
+        let mut entries_to_read = entries_to_read;
+        entries_to_read.sort_unstable_by_key(|(i, _)| *i); // read blobs in order
+        let blobs: std::vec::Vec<([u8; 32], std::vec::Vec<u8>)> = fallible_iterator::convert(
+            entries_to_read
+                .into_iter()
+                .map(|(i, hash)| tocs::pkg::get_data_raw_from_file(&mut pkgfile, &filelist[i]).map(|data| (hash, data))),
+        )
+        .collect()
+        .with_context(|| format!("couldn't read entries of pkg '{}'", pkgpath.display()))?;
+        Ok(fallible_iterator::convert(blobs.into_iter().map(Ok::<_, anyhow::Error>)))
+    });
 
     log::info!("writing '{}' (this will take some time)", out.as_ref().display());
-    tocs::pka::write_pka_from_compressed_data(out.as_ref(), force, pkg_list, blob_order, blob_info, blob_iterator).map_err(anyhow::Error::msg)?;
+    tocs::pka::write_pka_from_compressed_data(out.as_ref(), force, pkg_list, blob_order, blob_info, fallible_iterator::convert(blob_iterator).flatten()).map_err(anyhow::Error::msg)?;
 
     log::info!("done");
     Ok(())

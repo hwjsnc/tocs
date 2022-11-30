@@ -5,10 +5,11 @@ pkgtool
 
 So far, it supports:
 - reading metadata for analysis
-- checking pkg/pka integrity (or parser integrity I guess)
+- checking pkg/pka integrity (or parser integrity depending on your view)
 - extracting assets from .pkg files
 - extracting assets from .pka files
 - converting extracted assets back into .pkg files
+- converting extracted assets back into .pka files
 
 Note:
 - `pkgtool` has several subcommands. They are not fully documented here to avoid duplication and inconsistencies, but if you run the program with `--help` flag, you can get a list of available commands/subcommands/flags and what they do.
@@ -19,6 +20,9 @@ Note:
   However, if you also want to change assets and update the .pka, you have to extract all assets.
 - .pka integrity checks are very slow.
   They might take many minutes or even hours depending on your hardware (mostly CPU).
+- Writing a .pka is a complex task (especially when you want to do it fast and not take up 10 of GB of main memory).
+  As a result, bugs are possible.
+  I recommend checking .pka integrity after packing.
 
 To get more detail about what's going on (e.g. to see if progress is being made), you can set the [`RUST_LOG` environment variable](https://docs.rs/simple_logger/4.0.0/simple_logger/struct.SimpleLogger.html#method.env) to `debug` or `trace`.
 This will likely produce a lot of output and may or may not slow down execution.
