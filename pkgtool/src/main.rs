@@ -392,12 +392,12 @@ fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
             tocs::pkg::get_data_from_buffer(&data, entry)
         }
         .with_context(|| format!("couldn't read data for pkg '{}', file '{}'", pkg.as_ref().display(), entry.filename))?;
-        let mut file = if force {
-            std::fs::OpenOptions::new().write(true).create(true).open(&out_file)
-        } else {
-            std::fs::OpenOptions::new().write(true).create_new(true).open(&out_file)
-        }
-        .with_context(|| format!("couldn't open output file '{}'", out_file.display()))?;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(force)
+            .create_new(!force)
+            .open(&out_file)
+            .with_context(|| format!("couldn't open output file '{}'", out_file.display()))?;
         file.write_all(&data).with_context(|| format!("couldn't write data to file '{}'", out_file.display()))?;
         Ok(())
     };
