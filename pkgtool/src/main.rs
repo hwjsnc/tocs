@@ -384,7 +384,7 @@ fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
         if !name_is_ok(&entry.filename) {
             return Err(anyhow::Error::msg(format!("invalid file name: {}", entry.filename)));
         }
-        log::info!("extracting file '{}'", entry.filename);
+        log::debug!("extracting file '{}'", entry.filename);
         let out_file = std::path::Path::join(out.as_ref(), name_to_path(&entry.filename)?);
         let data = if raw {
             tocs::pkg::get_data_raw_from_buffer(&data, entry).map(|slice| slice.to_vec())
@@ -801,7 +801,7 @@ fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
 
         // extract all files in all pkgs
         for pkg in pkgs.iter() {
-            log::info!("unpacking contents of pkg {}", pkg.name);
+            log::debug!("unpacking contents of pkg {}", pkg.name);
             let pkgname = name_to_path(&pkg.name)?;
             let pkgpath = std::path::Path::join(out.as_ref(), pkgname);
             std::fs::create_dir_all(&pkgpath).with_context(|| format!("couldn't create output directory {} for pkg {}", out.as_ref().display(), pkg.name))?;
