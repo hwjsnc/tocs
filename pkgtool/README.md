@@ -30,4 +30,4 @@ This will likely produce a lot of output and may or may not slow down execution.
 History
 -------
 
-- No official release yet.
+- No significant changes since 1.0
