@@ -33,6 +33,7 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<std::vec::Vec<FileLi
 pub enum PkgError {
     IO(std::io::Error),
     Utf8(std::str::Utf8Error),
+    Filename(AsciiNameError),
     Filelist(String),
     Decompression(String),
     Compression(String),
@@ -43,6 +44,7 @@ impl std::fmt::Display for PkgError {
         match self {
             PkgError::IO(e) => write!(f, "IO error: {e}"),
             PkgError::Utf8(e) => write!(f, "UTF-8 decode error: {e}"),
+            PkgError::Filename(e) => write!(f, "pkg file name error: {e}"),
             PkgError::Filelist(s) => write!(f, "pkg file list error: {s}"),
             PkgError::Decompression(e) => write!(f, "decompression error: {e}"),
             PkgError::Compression(e) => write!(f, "decompression error: {e}"),
@@ -212,7 +214,7 @@ pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>, I: IntoIterator<Item = (S, X)
     let mut compressed_files = vec![];
     // TODO: Parallelize this?
     for (n, raw_data) in files {
-        let name = PaddedAsciiName::new(n.as_ref(), PADDING).map_err(PkgError::Filelist)?;
+        let name = PaddedAsciiName::new(n.as_ref(), PADDING).map_err(PkgError::Filename)?;
         if raw_data.as_ref().len() > MAX_DATA_SIZE.try_into().expect("32 bits please") {
             return Err(PkgError::Compression(format!(
                 "pkg file '{}': data size {} exceeds maximum ({})",
@@ -246,128 +248,45 @@ pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>, I: IntoIterator<Item = (S, X)
 
 /// name of a file in a .pkg, with a 0 byte terminator and padded to a multiple of the given length
 #[derive(Clone, Debug)]
-pub struct PaddedByteString {
-    bytes: smallvec::SmallVec<[u8; 64]>, // bytestring excluding null terminator and padding
-    padding: usize,
-}
-
-impl PaddedByteString {
-    pub fn new(bytes: &[u8], padding: usize) -> Result<Self, String> {
-        assert!(padding >= 1);
-        if bytes.iter().copied().any(|c| c == 0) {
-            Err(format!("bytes '{:x?}' contain a null byte", bytes))
-        } else {
-            Ok(Self {
-                bytes: bytes.as_ref().into(),
-                padding,
-            })
-        }
-    }
-
-    pub fn len_with_padding(&self) -> usize {
-        let (n, r) = num_integer::div_rem(self.bytes.len() + 1, self.padding);
-        if r == 0 {
-            n * self.padding
-        } else {
-            (n + 1) * self.padding
-        }
-    }
-
-    pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
-        let mut n = f.write(&self.bytes)?;
-        n += f.write(&[0])?;
-        loop {
-            n += f.write(&[0])?;
-            if n % self.padding == 0 {
-                assert_eq!(n, self.len_with_padding());
-                return Ok(n);
-            }
-        }
-    }
-
-    pub fn with_padding(&self, padding: usize) -> std::borrow::Cow<'_, Self> {
-        if padding == self.padding {
-            std::borrow::Cow::Borrowed(self)
-        } else {
-            std::borrow::Cow::Owned(Self { bytes: self.bytes.clone(), padding })
-        }
-    }
-
-    pub fn padding(&self) -> usize {
-        self.padding
-    }
-
-    pub fn as_bytes_excluding_terminator_and_padding(&self) -> &[u8] {
-        &self.bytes
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PaddedAsciiString {
-    bytes: PaddedByteString,
-}
-
-impl PaddedAsciiString {
-    pub fn new(str: &str, padding: usize) -> Result<Self, String> {
-        assert!(padding >= 1);
-        if str.is_ascii() {
-            PaddedByteString::new(str.as_bytes(), padding).map(|bytes| Self { bytes })
-        } else {
-            Err(format!("string '{str}' contains a non-ASCII char"))
-        }
-    }
-
-    pub fn len_with_padding(&self) -> usize {
-        self.bytes.len_with_padding()
-    }
-
-    pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
-        self.bytes.write_to(f)
-    }
-
-    pub fn padding(&self) -> usize {
-        self.bytes.padding()
-    }
-
-    pub fn as_bytes_excluding_terminator_and_padding(&self) -> &[u8] {
-        self.bytes.as_bytes_excluding_terminator_and_padding()
-    }
-
-    pub fn as_str(&self) -> &str {
-        /*
-        unsafe {
-            // creation is only possible with valid ASCII strings and ASCII is a subset of UTF-8
-            std::str::from_utf8_unchecked(self.as_bytes_excluding_terminator_and_padding())
-        }
-        */
-        std::str::from_utf8(self.as_bytes_excluding_terminator_and_padding()).expect("creation is only possible with valid ASCII strings")
-    }
-}
-
-impl std::fmt::Display for PaddedAsciiString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.as_str().fmt(f)
-    }
-}
-
-/// name of a file in a .pkg, with a 0 byte terminator and padded to a multiple of the given length
-#[derive(Clone, Debug)]
 pub struct PaddedAsciiName {
-    name: PaddedAsciiString,
+    name: crate::io::PaddedAsciiString,
 }
+
+#[derive(Clone, Debug)]
+pub enum AsciiNameError {
+    ContainsCtrlChar,
+    ContainsWhitespace,
+    ContainsPathSep,
+    IsEmpty,
+    Padded(crate::io::PaddedStringError),
+}
+
+impl std::fmt::Display for AsciiNameError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::ContainsCtrlChar => write!(f, "name contains control characters"),
+            Self::ContainsWhitespace => write!(f, "name contains whitespace (other than literal space)"),
+            Self::ContainsPathSep => write!(f, "name contains a path separator"),
+            Self::IsEmpty => write!(f, "name is empty"),
+            Self::Padded(e) => write!(f, "padded string error: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for AsciiNameError {}
 
 impl PaddedAsciiName {
-    pub fn new(name: &str, padding: usize) -> Result<Self, String> {
+    pub fn new(name: &str, padding: usize) -> Result<Self, AsciiNameError> {
         assert!(padding >= 1);
-        let s = PaddedAsciiString::new(name, padding)?;
+        let s = crate::io::PaddedAsciiString::new(name, padding).map_err(AsciiNameError::Padded)?;
         if name.chars().any(|c| c.is_ascii_control()) {
-            Err(format!("name '{}' contains control characters", name.escape_default()))
+            Err(AsciiNameError::ContainsCtrlChar)
         } else if name.chars().any(|c| c.is_ascii_whitespace() && c != ' ') {
-            Err(format!("name '{}' contains whitespace (other than literal space)", name.escape_default()))
+            Err(AsciiNameError::ContainsWhitespace)
         } else if name.contains('/') || name.contains('\\') {
-            Err(format!("name '{}' contains path separators", name.escape_default()))
+            Err(AsciiNameError::ContainsPathSep)
         } else if name.is_empty() {
-            Err(format!("name '{}' is empty", name.escape_default()))
+            Err(AsciiNameError::IsEmpty)
         } else {
             if s.len_with_padding() > padding {
                 log::warn!("file name length exceeds padding block size, idk if that'll work but you can try shrug emoji");
@@ -376,15 +295,17 @@ impl PaddedAsciiName {
         }
     }
 
-    pub fn try_from_os_str(name: &std::ffi::OsStr, padding: usize) -> Result<Self, String> {
+    /*
+    pub fn try_from_os_str(name: &std::ffi::OsStr, padding: usize) -> Result<Self, AsciiNameError> {
         name.to_str().ok_or_else(|| format!("invalid UTF-8: '{name:?}'")).and_then(|s| Self::new(s, padding))
     }
 
-    pub fn try_from_path(path: &std::path::Path, padding: usize) -> Result<Self, String> {
+    pub fn try_from_path(path: &std::path::Path, padding: usize) -> Result<Self, AsciiNameError> {
         path.file_name()
             .ok_or_else(|| format!("no file name component: '{}'", path.display()))
             .and_then(|s| Self::try_from_os_str(s, padding))
     }
+    */
 
     pub fn len_with_padding(&self) -> usize {
         self.name.len_with_padding()
