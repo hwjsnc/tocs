@@ -246,6 +246,61 @@ pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>, I: IntoIterator<Item = (S, X)
 
 /// name of a file in a .pkg, with a 0 byte terminator and padded to a multiple of the given length
 #[derive(Clone, Debug)]
+pub struct PaddedByteString {
+    bytes: smallvec::SmallVec<[u8; 64]>, // bytestring excluding null terminator and padding
+    padding: usize,
+}
+
+impl PaddedByteString {
+    pub fn new(bytes: &[u8], padding: usize) -> Result<Self, String> {
+        assert!(padding >= 1);
+        if bytes.iter().copied().any(|c| c == 0) {
+            Err(format!("bytes '{:x?}' contain a null byte", bytes))
+        } else {
+            Ok(Self { bytes: bytes.into(), padding })
+        }
+    }
+
+    pub fn len_with_padding(&self) -> usize {
+        let (n, r) = num_integer::div_rem(self.bytes.len() + 1, self.padding);
+        if r == 0 {
+            n * self.padding
+        } else {
+            (n + 1) * self.padding
+        }
+    }
+
+    pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
+        let mut n = f.write(&self.bytes)?;
+        n += f.write(&[0])?;
+        loop {
+            n += f.write(&[0])?;
+            if n % self.padding == 0 {
+                assert_eq!(n, self.len_with_padding());
+                return Ok(n);
+            }
+        }
+    }
+
+    pub fn with_padding(&self, padding: usize) -> std::borrow::Cow<'_, Self> {
+        if padding == self.padding {
+            std::borrow::Cow::Borrowed(self)
+        } else {
+            std::borrow::Cow::Owned(Self { bytes: self.bytes.clone(), padding })
+        }
+    }
+
+    pub fn padding(&self) -> usize {
+        self.padding
+    }
+
+    pub fn as_bytes_excluding_terminator_and_padding(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
+/// name of a file in a .pkg, with a 0 byte terminator and padded to a multiple of the given length
+#[derive(Clone, Debug)]
 pub struct PaddedAsciiString {
     name: smallvec::SmallVec<[u8; 64]>, // name excluding null terminator and padding; 64 bytes is the maximum padding in the original files (as far as I know)
     padding: usize,
@@ -312,7 +367,7 @@ impl PaddedAsciiString {
         if padding == self.padding {
             std::borrow::Cow::Borrowed(self)
         } else {
-            std::borrow::Cow::Owned(PaddedAsciiString { name: self.name.clone(), padding })
+            std::borrow::Cow::Owned(Self { name: self.name.clone(), padding })
         }
     }
 
