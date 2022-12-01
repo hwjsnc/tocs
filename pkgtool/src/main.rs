@@ -52,7 +52,6 @@ enum PkgArgs {
         #[arg(long)]
         raw_i_know_what_i_am_doing: bool,
         /// Path to .pkg file to unpack
-        #[arg(long)]
         pkg: std::path::PathBuf,
         /// Output directory (where the file contents will be written)
         #[arg(long, short)]
@@ -99,7 +98,6 @@ enum PkaArgs {
         #[arg(long, short)]
         force: bool,
         /// Path to .pka file
-        #[arg(long)]
         pka: std::path::PathBuf,
         /// Output directory (where the .pkg files will be written)
         #[arg(long, short)]
@@ -118,7 +116,6 @@ enum PkaArgs {
         #[arg(long)]
         raw_i_know_what_i_am_doing: bool,
         /// Path to .pka file
-        #[arg(long)]
         pka: std::path::PathBuf,
         /// Output directory (where the files will be written)
         #[arg(long, short)]
