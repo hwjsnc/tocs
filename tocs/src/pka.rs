@@ -50,7 +50,10 @@ fn parse_filename<F: std::io::Read>(f: &mut F, padding: usize) -> Result<SmolStr
 
 pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgListEntry>, std::vec::Vec<FileDataEntry>), PkgError> {
     // header
-    let _data = read_bytes::<4, _>(f).map_err(PkgError::IO)?; // TODO: do we expect a certain value?
+    let magic = read_bytes::<4, _>(f).map_err(PkgError::IO)?;
+    if magic != [0x0d, 0xcf, 0xf7, 0x7f] {
+        return Err(PkgError::Filelist(format!("unexpected magic bytes: {magic:?}")));
+    }
     let number_of_pkgs = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
     log::debug!("number of pkgs in pka: {number_of_pkgs}");
 
@@ -195,7 +198,7 @@ impl<E: std::fmt::Debug + std::fmt::Display> std::error::Error for PkaWriteError
 pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<Item = ([u8; 32], X), Error = E>>(
     path: &std::path::Path, // path to output file
     overwrite_if_exists: bool,
-    pkgs: std::vec::Vec<PkgListEntry>,
+    pkgs: std::vec::Vec<PkgListEntry>, // TODO: take a struct with PaddedFileNames?
     blob_order: std::vec::Vec<[u8; 32]>, // order of actual data in the output file; missing or superfluous hashes are fine
     blobinfo: std::vec::Vec<CompressedBlobMetadata>,
     mut blobdata: I, // this should be a streaming iterator to save memory (all blobs together are >10 GB)
@@ -211,7 +214,7 @@ pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<It
     let pkg_list_data = {
         log::debug!("generating pkg list data");
         let mut data = vec![];
-        data.extend_from_slice(&[0, 0, 0, 0]); // checksum?
+        data.extend_from_slice(&[0x0d, 0xcf, 0xf7, 0x7f]); // magic bytes
 
         let number_of_pkgs: u32 = pkgs.len().try_into().expect("32 bits please");
         data.extend_from_slice(&number_of_pkgs.to_le_bytes());

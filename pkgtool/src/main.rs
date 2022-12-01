@@ -2,6 +2,7 @@ use fallible_iterator::FallibleIterator;
 
 use anyhow::Context as _;
 use clap::Parser as _;
+use rayon::iter::IndexedParallelIterator as _;
 use rayon::iter::IntoParallelRefIterator as _;
 use rayon::iter::ParallelIterator as _;
 use std::borrow::Borrow as _;
@@ -138,6 +139,29 @@ enum PkaArgs {
         #[arg(long, short)]
         out: std::path::PathBuf,
     },
+    /// Compresses and packs files in a given folder to a .pka.
+    /// Only immediate subfolders whose name ends in .pkg will be considered.
+    /// All such folders are expected to contain only files (all of which will be packed).
+    Pack {
+        /// Overwrite existing data
+        #[arg(long, short)]
+        force: bool,
+        /// Compression type
+        #[arg(long, short)]
+        compression: CompressionArg,
+        /// Cache the compressed data in main memory.
+        // This will avoid recompression and speed up the whole process a lot.
+        // However, it requires a lot of main memory (enough to hold the combined compressed data plus overhead).
+        // Only consider using this option if you have significantly more than 16 GiB main memory.
+        #[arg(long)]
+        cache_compressed_data: bool,
+        /// Path of the folder.
+        /// Needs to contain a blob_order.txt file.
+        dir: std::path::PathBuf,
+        /// Output .pka file
+        #[arg(long, short)]
+        out: std::path::PathBuf,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -216,6 +240,13 @@ fn main() -> anyhow::Result<()> {
             files,
         }) => pka_unpack(force, raw_i_know_what_i_am_doing, pka, out, &files),
         CliArgs::Pka(PkaArgs::PackFromPkgs { force, dir, out }) => pka_pack_pkgs(force, dir, out),
+        CliArgs::Pka(PkaArgs::Pack {
+            force,
+            cache_compressed_data,
+            dir,
+            out,
+            compression,
+        }) => pka_pack(force, cache_compressed_data, dir, out, compression.into()),
     }
 }
 
@@ -996,4 +1027,145 @@ fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyh
 
     log::info!("done");
     Ok(())
+}
+
+fn pka_pack<P: AsRef<std::path::Path>>(force: bool, cache_compressed_data: bool, dir: P, out: P, compression: tocs::compression::Compression) -> anyhow::Result<()> {
+    let blob_order = read_blob_order_file(dir.as_ref()).context("couldn't read blob order file")?;
+
+    log::info!("reading directory");
+    let mut names_and_paths: std::vec::Vec<(smol_str::SmolStr, std::vec::Vec<(smol_str::SmolStr, std::path::PathBuf)>)> = vec![];
+    let mut dir_iter = misc::fallible_read_dir(dir.as_ref()).with_context(|| format!("couldn't open directory '{}' for reading", dir.as_ref().display()))?;
+    while let Some(direntry) = dir_iter.next()? {
+        let path = direntry.path();
+        let metadata = direntry
+            .metadata()
+            .map_err(|e| anyhow::Error::msg(e).context(format!("couldn't obtain metadata for '{}'", path.display())))?;
+        if metadata.is_dir() {
+            if path.extension() == Some(std::ffi::OsStr::new("pkg")) {
+                log::debug!("reading '{}'", path.display());
+            } else {
+                log::debug!("ignoring '{}' because it doesn't end in .pkg", path.display());
+                continue;
+            }
+        } else {
+            log::debug!("ignoring '{}' because it's not a directory", path.display());
+            continue;
+        }
+        let pkgname = path
+            .file_name()
+            .expect("direntry should have a file name")
+            .to_str()
+            .ok_or_else(|| anyhow::Error::msg(format!("invalid package name: {}", path.display())))?
+            .into();
+        let mut pkg_dir_iter = misc::fallible_read_dir(&path).with_context(|| format!("couldn't open directory '{}' for reading", path.display()))?;
+        let mut files = vec![];
+        while let Some(subdirentry) = pkg_dir_iter.next()? {
+            let path = subdirentry.path();
+            let filename = path
+                .file_name()
+                .expect("direntry should have a file name")
+                .to_str()
+                .ok_or_else(|| anyhow::Error::msg(format!("invalid file name: {}", path.display())))?
+                .into();
+            files.push((filename, path));
+        }
+        names_and_paths.push((pkgname, files));
+    }
+
+    log::info!("building blob index (this will take a long time)");
+    // we don't want to recompress data more than absolutely necessary, so we always look up the hash first
+    let blob_info: std::sync::Mutex<std::collections::HashMap<[u8; 32], tocs::pka::CompressedBlobMetadata>> = std::sync::Mutex::new(std::collections::HashMap::new());
+    let compressed_data_cache: std::sync::Mutex<std::collections::HashMap<[u8; 32], std::vec::Vec<u8>>> = std::sync::Mutex::new(std::collections::HashMap::new());
+    let metadata: std::collections::HashMap<(usize, usize), tocs::pka::CompressedBlobMetadata> = names_and_paths
+        .par_iter()
+        .enumerate()
+        .flat_map_iter(|(i, (_, files))| files.iter().enumerate().map(move |(j, (_, path))| ((i, j), path)))
+        .map(|(k, path)| {
+            // I would like to return a Result here, but I don't see how it's feasible without post-processing (which could lead to a lot of wasted processing after an error has already occurred)
+            let data = std::fs::read(path).unwrap();
+            let hash = tocs::pka::hash_data(&data);
+            let guard = blob_info.lock().unwrap();
+            // since the pka hash algorithm (SHA256) is cryptographically secure, collisions are so unlikely that we don't need to worry about them
+            let metadata = if let Some(metadata) = (*guard).get(&hash) {
+                *metadata
+            } else {
+                drop(guard);
+                let compressed_data = compression.compress(&data).unwrap();
+                let decompressed_size: u32 = data.len().try_into().unwrap();
+                let compressed_size: u32 = compressed_data.len().try_into().unwrap();
+                let metadata = tocs::pka::CompressedBlobMetadata {
+                    hash,
+                    decompressed_size,
+                    compressed_size,
+                    compression,
+                };
+                let mut guard = blob_info.lock().unwrap();
+                (*guard).insert(hash, metadata);
+                if cache_compressed_data {
+                    drop(guard);
+                    let mut guard = compressed_data_cache.lock().unwrap();
+                    guard.entry(hash).or_insert(compressed_data);
+                }
+                metadata
+            };
+            (k, metadata)
+        })
+        .collect();
+    let blob_info: std::vec::Vec<_> = blob_info.into_inner().unwrap().into_values().collect();
+
+    log::info!("building file index");
+    let mut pkg_list: std::vec::Vec<tocs::pka::PkgListEntry> = vec![];
+    let mut file_hashes: std::collections::HashMap<[u8; 32], std::path::PathBuf> = std::collections::HashMap::new();
+    for (i, (pkgname, files)) in names_and_paths.into_iter().enumerate() {
+        let mut filenames = vec![];
+        let mut hashes = vec![];
+        for (j, (filename, path)) in files.into_iter().enumerate() {
+            let hash = metadata.get(&(i, j)).expect("we read all file metadata earlier").hash;
+            filenames.push(filename.clone());
+            hashes.push(hash);
+            file_hashes.entry(hash).or_insert(path);
+        }
+        pkg_list.push(tocs::pka::PkgListEntry {
+            name: pkgname.clone(),
+            filenames,
+            hashes,
+        });
+    }
+
+    if cache_compressed_data {
+        log::info!("writing '{}' (this will take some time)", out.as_ref().display());
+        let compressed_data_cache = compressed_data_cache.into_inner().unwrap();
+        tocs::pka::write_pka_from_compressed_data(
+            out.as_ref(),
+            force,
+            pkg_list,
+            blob_order,
+            blob_info,
+            fallible_iterator::convert(compressed_data_cache.into_iter().map(anyhow::Ok)),
+        )
+        .map_err(anyhow::Error::msg)
+    } else {
+        log::info!("writing '{}' (this will take a long time)", out.as_ref().display());
+        // TODO: parallelize this
+        // rayon doesn't do this currently, see https://github.com/rayon-rs/rayon/issues/210
+        let (sender, receiver) = std::sync::mpsc::channel();
+
+        std::thread::spawn(move || {
+            file_hashes.par_iter().for_each_with(sender, |sender, (hash, path)| {
+                sender
+                    .send(
+                        std::fs::read(&path)
+                            .map_err(anyhow::Error::msg)
+                            .and_then(|data| compression.compress(&data).map_err(anyhow::Error::msg))
+                            .with_context(|| format!("couldn't read '{}'", path.display()))
+                            .map(|compressed_data| (*hash, compressed_data)),
+                    )
+                    .expect("receiver should be connected");
+            });
+        });
+
+        let blob_iter = fallible_iterator::convert(receiver.iter());
+
+        tocs::pka::write_pka_from_compressed_data(out.as_ref(), force, pkg_list, blob_order, blob_info, blob_iter).map_err(anyhow::Error::msg)
+    }
 }

@@ -17,5 +17,6 @@ misc = { path = "../misc" }
 rayon = "1.6"
 sha2 = "0.10.6"
 simple_logger = { version = "4", default-features = false }
+smol_str = "0.1.23"
 tocs = { path = "../tocs", features = ["default", "pkg"] }
 walkdir = "2.3.2"

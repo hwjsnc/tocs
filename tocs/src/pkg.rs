@@ -272,6 +272,14 @@ impl PaddedFilename {
         }
     }
 
+    pub fn try_from_os_str(name: &std::ffi::OsStr, padding: usize) -> Result<Self, String> {
+        name.to_str().ok_or_else(|| format!("invalid UTF-8: '{name:?}'")).and_then(|s| Self::new(s, padding))
+    }
+
+    pub fn try_from_path(path: &std::path::Path, padding: usize) -> Result<Self, String> {
+        path.file_name().ok_or_else(|| format!("no file name component: '{}'", path.display())).and_then(|s| Self::try_from_os_str(s, padding))
+    }
+
     pub fn len(&self) -> usize {
         let (n, r) = num_integer::div_rem(self.name.len() + 1, self.padding);
         if r == 0 {

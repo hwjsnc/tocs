@@ -26,3 +26,8 @@ Note:
 
 To get more detail about what's going on (e.g. to see if progress is being made), you can set the [`RUST_LOG` environment variable](https://docs.rs/simple_logger/4.0.0/simple_logger/struct.SimpleLogger.html#method.env) to `debug` or `trace`.
 This will likely produce a lot of output and may or may not slow down execution.
+
+History
+-------
+
+- No official release yet.
