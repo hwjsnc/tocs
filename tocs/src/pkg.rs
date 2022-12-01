@@ -4,12 +4,13 @@ For a description of the pkg file structure, see https://github.com/Sewer56/Sen-
 
 const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 
-const PADDING: usize = 64;
-
 use fallible_iterator::FallibleIterator;
 
 pub use crate::compression::Compression;
 use crate::io::{read_bytes, PaddedByteString};
+
+pub type FileNameUnchecked = PaddedByteString<64>;
+pub type FileName = PaddedAsciiName<64>;
 
 pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<std::vec::Vec<FileListEntry>, PkgError> {
     let _data = read_bytes::<4, _>(f).map_err(PkgError::IO)?; // TODO: magic header or a hash or something???
@@ -64,7 +65,7 @@ impl From<crate::io::PaddedStringReadError> for PkgError {
 /// The file name is "unchecked" (not really, but not many checks are done) so that we can handle unexpected file names in the original data
 #[derive(Clone, Debug)]
 pub struct FileListEntry {
-    pub filename: PaddedByteString,
+    pub filename: FileNameUnchecked,
     pub decompressed_size: u32,
     pub compressed_size: u32,
     pub data_offset: u32,
@@ -72,7 +73,7 @@ pub struct FileListEntry {
 }
 
 fn parse_filelist_entry<F: std::io::Read>(f: &mut F) -> Result<FileListEntry, PkgError> {
-    let filename = PaddedByteString::read(f, 64).map_err(PkgError::from)?;
+    let filename = FileNameUnchecked::read(f).map_err(PkgError::from)?;
     log::trace!("filename: {}", String::from_utf8_lossy(filename.as_bytes_excluding_terminator_and_padding()));
     let decompressed_size = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
     log::trace!("raw size: {decompressed_size} (0x{decompressed_size:x})");
@@ -185,11 +186,11 @@ pub struct PkgRawEntry<'a> {
 }
 
 impl<'a> PkgRawEntry<'a> {
-    pub fn name(&self) -> Result<PaddedAsciiName, PkgError> {
+    pub fn name(&self) -> Result<FileName, PkgError> {
         PaddedAsciiName::try_from(&self.metadata.filename).map_err(PkgError::Filename)
     }
 
-    pub fn unchecked_name(&self) -> &PaddedByteString {
+    pub fn unchecked_name(&self) -> &FileNameUnchecked {
         &self.metadata.filename
     }
 
@@ -215,7 +216,7 @@ impl<'a> PkgRawEntry<'a> {
 }
 
 pub struct PkgEntry {
-    pub name: PaddedAsciiName,
+    pub name: FileName,
     pub data: std::vec::Vec<u8>,
 }
 
@@ -223,7 +224,7 @@ pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>, I: IntoIterator<Item = (S, X)
     let mut compressed_files = vec![];
     // TODO: Parallelize this?
     for (n, raw_data) in files {
-        let name = PaddedAsciiName::new(n.as_ref(), PADDING).map_err(PkgError::Filename)?;
+        let name = FileName::new(n.as_ref()).map_err(PkgError::Filename)?;
         if raw_data.as_ref().len() > MAX_DATA_SIZE.try_into().expect("32 bits please") {
             return Err(PkgError::Compression(format!(
                 "pkg file '{}': data size {} exceeds maximum ({})",
@@ -257,8 +258,8 @@ pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>, I: IntoIterator<Item = (S, X)
 
 /// name of a file in a .pkg, with a 0 byte terminator and padded to a multiple of the given length
 #[derive(Clone, Debug)]
-pub struct PaddedAsciiName {
-    name: crate::io::PaddedAsciiString,
+pub struct PaddedAsciiName<const PADDING: usize> {
+    name: crate::io::PaddedAsciiString<PADDING>,
 }
 
 #[derive(Clone, Debug)]
@@ -297,11 +298,9 @@ impl std::fmt::Display for AsciiNameError {
 
 impl std::error::Error for AsciiNameError {}
 
-// TODO: padding as associated constant; type PkgName = PaddedAsciiName<64>
-impl PaddedAsciiName {
-    pub fn new(name: &str, padding: usize) -> Result<Self, AsciiNameError> {
-        assert!(padding >= 1);
-        let s = crate::io::PaddedAsciiString::new(name, padding).map_err(AsciiNameError::from)?;
+impl<const PADDING: usize> PaddedAsciiName<PADDING> {
+    pub fn new(name: &str) -> Result<Self, AsciiNameError> {
+        let s = crate::io::PaddedAsciiString::<PADDING>::new(name).map_err(AsciiNameError::from)?;
         if name.chars().any(|c| c.is_ascii_control()) {
             Err(AsciiNameError::ContainsCtrlChar)
         } else if name.chars().any(|c| c.is_ascii_whitespace() && c != ' ') {
@@ -311,26 +310,30 @@ impl PaddedAsciiName {
         } else if name.is_empty() {
             Err(AsciiNameError::IsEmpty)
         } else {
-            if s.len_with_padding() > padding {
-                log::warn!("file name length exceeds padding block size, idk if that'll work but you can try shrug emoji");
+            if s.len_with_padding() > PADDING {
+                log::warn!(
+                    "file name length ({}) exceeds padding block size ({}), idk if that'll work but you can try shrug emoji",
+                    s.len_with_padding(),
+                    PADDING
+                );
             }
             Ok(Self { name: s })
         }
     }
 
-    pub fn new_from_bytes(bytes: &[u8], padding: usize) -> Result<Self, AsciiNameError> {
-        std::str::from_utf8(bytes).map_err(|e| AsciiNameError::Utf8(Some(e))).and_then(|str| Self::new(str, padding))
+    pub fn new_from_bytes(bytes: &[u8]) -> Result<Self, AsciiNameError> {
+        std::str::from_utf8(bytes).map_err(|e| AsciiNameError::Utf8(Some(e))).and_then(|str| Self::new(str))
     }
 
-    pub fn try_from_os_str(name: &std::ffi::OsStr, padding: usize) -> Result<Self, AsciiNameError> {
+    pub fn try_from_os_str(name: &std::ffi::OsStr) -> Result<Self, AsciiNameError> {
         match name.to_str() {
-            Some(s) => Self::new(s, padding),
+            Some(s) => Self::new(s),
             None => Err(AsciiNameError::Utf8(None)),
         }
     }
 
-    pub fn try_from_path(path: &std::path::Path, padding: usize) -> Result<Self, AsciiNameError> {
-        Self::try_from_os_str(path.as_os_str(), padding)
+    pub fn try_from_path(path: &std::path::Path) -> Result<Self, AsciiNameError> {
+        Self::try_from_os_str(path.as_os_str())
     }
 
     pub fn len_with_padding(&self) -> usize {
@@ -339,10 +342,6 @@ impl PaddedAsciiName {
 
     pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
         self.name.write_to(f)
-    }
-
-    pub fn padding(&self) -> usize {
-        self.name.padding()
     }
 
     pub fn as_bytes_excluding_terminator_and_padding(&self) -> &[u8] {
@@ -360,40 +359,37 @@ impl PaddedAsciiName {
     }
 }
 
-impl TryFrom<&crate::io::PaddedByteString> for PaddedAsciiName {
+impl<const PADDING: usize> TryFrom<&crate::io::PaddedByteString<PADDING>> for PaddedAsciiName<PADDING> {
     type Error = AsciiNameError;
-    fn try_from(s: &crate::io::PaddedByteString) -> Result<Self, Self::Error> {
-        Self::new_from_bytes(s.as_bytes_excluding_terminator_and_padding(), s.padding())
+    fn try_from(s: &crate::io::PaddedByteString<PADDING>) -> Result<Self, Self::Error> {
+        Self::new_from_bytes(s.as_bytes_excluding_terminator_and_padding())
     }
 }
 
-impl TryFrom<crate::io::PaddedByteString> for PaddedAsciiName {
+impl<const PADDING: usize> TryFrom<crate::io::PaddedByteString<PADDING>> for PaddedAsciiName<PADDING> {
     type Error = AsciiNameError;
-    fn try_from(s: crate::io::PaddedByteString) -> Result<Self, Self::Error> {
+    fn try_from(s: crate::io::PaddedByteString<PADDING>) -> Result<Self, Self::Error> {
         Self::try_from(&s)
     }
 }
 
-impl std::fmt::Display for PaddedAsciiName {
+impl<const PADDING: usize> std::fmt::Display for PaddedAsciiName<PADDING> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.name.fmt(f)
     }
 }
 
 pub struct CompressedFile {
-    pub name: PaddedAsciiName,
+    pub name: FileName,
     pub data: std::vec::Vec<u8>,
     pub decompressed_size: u32,
     pub compression: Compression,
 }
 
 pub fn generate_pkg_from_compressed_files(files: &[CompressedFile]) -> Result<std::vec::Vec<u8>, PkgError> {
-    const PADDING: usize = 64;
-
     // precompute length of header/metadata because we'll need it later to insert the data offsets while constructing the header/metadata
     let mut length_of_header = 8;
     for f in files.iter() {
-        assert_eq!(f.name.padding(), PADDING);
         if f.data.len() > MAX_DATA_SIZE.try_into().expect("32 bits please") {
             return Err(PkgError::Filelist(format!("File '{}' compressed data size exceeds max ({})", f.name.as_str(), MAX_DATA_SIZE)));
         }

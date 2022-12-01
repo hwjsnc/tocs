@@ -974,8 +974,7 @@ fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyh
                 .map_err(tocs::pkg::PkgError::IO)
                 .and_then(tocs::pkg::Pkg::new)
                 .with_context(|| format!("couldn't read pkg file '{}'", path.display()))?;
-            let pkgname =
-                tocs::pkg::PaddedAsciiName::try_from_os_str(path.file_name().expect("direntry should have a file name"), 32).with_context(|| format!("invalid pkg file name: {}", path.display()))?;
+            let pkgname = tocs::pka::PkgName::try_from_os_str(path.file_name().expect("direntry should have a file name")).with_context(|| format!("invalid pkg file name: {}", path.display()))?;
             let mut pkg_list_entry = tocs::pka::PkgListEntry { name: pkgname, files: vec![] };
             pkg_data.entries().map_err(anyhow::Error::msg).enumerate().for_each(|(i, entry)| {
                 let name = entry.name()?;
@@ -1038,7 +1037,7 @@ fn pka_pack<P: AsRef<std::path::Path>>(force: bool, cache_compressed_data: bool,
     let blob_order = read_blob_order_file(dir.as_ref()).context("couldn't read blob order file")?;
 
     log::info!("reading directory");
-    let mut names_and_paths: std::vec::Vec<(tocs::pkg::PaddedAsciiName, std::vec::Vec<(tocs::pkg::PaddedAsciiName, std::path::PathBuf)>)> = vec![];
+    let mut names_and_paths: std::vec::Vec<(tocs::pka::PkgName, std::vec::Vec<(tocs::pka::FileName, std::path::PathBuf)>)> = vec![];
     let mut dir_iter = misc::fallible_read_dir(dir.as_ref()).with_context(|| format!("couldn't open directory '{}' for reading", dir.as_ref().display()))?;
     while let Some(direntry) = dir_iter.next()? {
         let path = direntry.path();
@@ -1056,13 +1055,13 @@ fn pka_pack<P: AsRef<std::path::Path>>(force: bool, cache_compressed_data: bool,
             log::debug!("ignoring '{}' because it's not a directory", path.display());
             continue;
         }
-        let pkgname = tocs::pkg::PaddedAsciiName::try_from_os_str(path.file_name().expect("direntry should have a file name"), 32)
+        let pkgname = tocs::pka::PkgName::try_from_os_str(path.file_name().expect("direntry should have a file name"))
             .with_context(|| anyhow::Error::msg(format!("invalid package name: {}", path.display())))?;
         let mut pkg_dir_iter = misc::fallible_read_dir(&path).with_context(|| format!("couldn't open directory '{}' for reading", path.display()))?;
         let mut files = vec![];
         while let Some(subdirentry) = pkg_dir_iter.next()? {
             let path = subdirentry.path();
-            let filename = tocs::pkg::PaddedAsciiName::try_from_os_str(path.file_name().expect("direntry should have a file name"), 64)
+            let filename = tocs::pka::FileName::try_from_os_str(path.file_name().expect("direntry should have a file name"))
                 .with_context(|| anyhow::Error::msg(format!("invalid file name: {}", path.display())))?;
             files.push((filename, path));
         }

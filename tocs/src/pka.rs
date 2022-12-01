@@ -21,29 +21,32 @@ use crate::compression::Compression;
 use crate::io::{read_bytes, PaddedByteString};
 use crate::pkg::PaddedAsciiName;
 
-pub use crate::pkg::PkgError;
+pub use crate::pkg::{FileName, FileNameUnchecked, PkgError};
+
+pub type PkgNameUnchecked = PaddedByteString<32>;
+pub type PkgName = PaddedAsciiName<32>;
 
 #[derive(Clone, Debug)]
 pub struct PkgListEntryUnchecked {
-    pub name: PaddedByteString,
+    pub name: PkgNameUnchecked,
     pub files: std::vec::Vec<PkgFileListEntryUnchecked>,
 }
 
 #[derive(Clone, Debug)]
 pub struct PkgFileListEntryUnchecked {
-    pub name: PaddedByteString,
+    pub name: FileNameUnchecked,
     pub hash: [u8; 32],
 }
 
 #[derive(Clone, Debug)]
 pub struct PkgListEntry {
-    pub name: PaddedAsciiName,
+    pub name: PkgName,
     pub files: std::vec::Vec<PkgFileListEntry>,
 }
 
 #[derive(Clone, Debug)]
 pub struct PkgFileListEntry {
-    pub name: PaddedAsciiName,
+    pub name: FileName,
     pub hash: [u8; 32],
 }
 
@@ -70,13 +73,13 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgLi
     for i in 0..number_of_pkgs {
         log::trace!("reading pkg {} of {}", i + 1, number_of_pkgs);
         let mut files = vec![];
-        let pkg_filename = PaddedByteString::read(f, 32).map_err(|e| PkgError::Filelist(e.to_string()))?;
+        let pkg_filename = PkgNameUnchecked::read(f).map_err(|e| PkgError::Filelist(e.to_string()))?;
         log::trace!("pkg filename: {}", pkg_filename.to_utf8_lossy());
         let number_of_files = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
         log::trace!("number of files in pkg: {number_of_files}");
         for j in 0..number_of_files {
             log::trace!("reading file {} of {}", j + 1, number_of_files);
-            let filename = PaddedByteString::read(f, 64)?;
+            let filename = FileNameUnchecked::read(f)?;
             log::trace!("file name: {}", filename.to_utf8_lossy());
             let hash = read_bytes::<32, _>(f).map_err(PkgError::IO)?;
             log::trace!("file hash: {}", hex::encode(hash));
