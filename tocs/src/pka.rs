@@ -198,7 +198,7 @@ impl<E: std::fmt::Debug + std::fmt::Display> std::error::Error for PkaWriteError
 pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<Item = ([u8; 32], X), Error = E>>(
     path: &std::path::Path, // path to output file
     overwrite_if_exists: bool,
-    pkgs: std::vec::Vec<PkgListEntry>, // TODO: take a struct with PaddedFileNames?
+    pkgs: std::vec::Vec<PkgListEntry>,   // TODO: take a struct with PaddedFileNames?
     blob_order: std::vec::Vec<[u8; 32]>, // order of actual data in the output file; missing or superfluous hashes are fine
     blobinfo: std::vec::Vec<CompressedBlobMetadata>,
     mut blobdata: I, // this should be a streaming iterator to save memory (all blobs together are >10 GB)

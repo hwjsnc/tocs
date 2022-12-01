@@ -106,7 +106,7 @@ fn check_entry_size(entry: &FileListEntry) -> Result<(), PkgError> {
 fn decompress_data(entry: &FileListEntry, compressed_data: &[u8]) -> Result<std::vec::Vec<u8>, PkgError> {
     entry
         .compression
-        .decompress_with_exact_output_size(&compressed_data, entry.decompressed_size.try_into().expect("32 bits please"))
+        .decompress_with_exact_output_size(compressed_data, entry.decompressed_size.try_into().expect("32 bits please"))
         .map_err(PkgError::Decompression)
 }
 
@@ -135,7 +135,7 @@ pub fn get_data_raw_from_buffer<'a>(data: &'a [u8], entry: &FileListEntry) -> Re
 }
 
 pub fn get_data_from_buffer(data: &[u8], entry: &FileListEntry) -> Result<std::vec::Vec<u8>, PkgError> {
-    get_data_raw_from_buffer(data, entry).and_then(|compressed| decompress_data(entry, &compressed))
+    get_data_raw_from_buffer(data, entry).and_then(|compressed| decompress_data(entry, compressed))
 }
 
 pub struct Pkg {
@@ -277,7 +277,9 @@ impl PaddedFilename {
     }
 
     pub fn try_from_path(path: &std::path::Path, padding: usize) -> Result<Self, String> {
-        path.file_name().ok_or_else(|| format!("no file name component: '{}'", path.display())).and_then(|s| Self::try_from_os_str(s, padding))
+        path.file_name()
+            .ok_or_else(|| format!("no file name component: '{}'", path.display()))
+            .and_then(|s| Self::try_from_os_str(s, padding))
     }
 
     pub fn len(&self) -> usize {
