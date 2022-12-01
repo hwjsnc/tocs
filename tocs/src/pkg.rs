@@ -322,7 +322,7 @@ impl<const PADDING: usize> PaddedAsciiName<PADDING> {
     }
 
     pub fn new_from_bytes(bytes: &[u8]) -> Result<Self, AsciiNameError> {
-        std::str::from_utf8(bytes).map_err(|e| AsciiNameError::Utf8(Some(e))).and_then(|str| Self::new(str))
+        std::str::from_utf8(bytes).map_err(|e| AsciiNameError::Utf8(Some(e))).and_then(Self::new)
     }
 
     pub fn try_from_os_str(name: &std::ffi::OsStr) -> Result<Self, AsciiNameError> {

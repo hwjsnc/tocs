@@ -584,7 +584,7 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     for pkg in pkgs.iter() {
         let pkgname = tocs::pkg::PaddedAsciiName::try_from(&pkg.name)?;
         for file in pkg.files.iter() {
-            if file.name.as_bytes_excluding_terminator_and_padding().len() == 0 {
+            if file.name.as_bytes_excluding_terminator_and_padding().is_empty() {
                 log::warn!("empty file name in pkg {}", pkgname);
                 continue;
             } else {
@@ -826,7 +826,7 @@ fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
             std::fs::create_dir_all(&pkgpath).with_context(|| format!("couldn't create output directory {} for pkg {}", out.as_ref().display(), pkgname))?;
             for file in pkg.files.iter() {
                 let name = tocs::pkg::PaddedAsciiName::try_from(&file.name).map_err(anyhow::Error::msg)?;
-                if name.as_bytes_excluding_terminator_and_padding().len() == 0 {
+                if name.as_bytes_excluding_terminator_and_padding().is_empty() {
                     if file.hash == hex_literal::hex!("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855") {
                         log::warn!("ignoring empty file with empty name (blob hash {})", hex::encode(file.hash));
                     } else {
@@ -834,7 +834,6 @@ fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
                     }
                     continue;
                 }
-                let name = tocs::pkg::PaddedAsciiName::try_from(name).map_err(anyhow::Error::msg)?;
                 log::debug!("unpacking {} (blob {})", name, hex::encode(file.hash));
                 let filename = std::path::Path::join(&pkgpath, name.as_path());
                 let mut outfile = std::io::BufWriter::new(

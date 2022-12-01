@@ -347,10 +347,20 @@ fn pka_metadata_to_new_db<P: AsRef<std::path::Path>>(pkapath: P, dbpath: P) {
     let mut f = std::io::BufReader::new(std::fs::File::open(pkapath).unwrap());
     let (pkgs, hashes) = tocs::pka::load_filelist(&mut f).unwrap();
     for pkg in pkgs {
-        for (name, hash) in pkg.filenames.iter().zip(pkg.hashes) {
-            let p: &str = pkg.name.as_ref();
-            let f: &str = name.as_ref();
-            tx.execute("insert into files (pkg, file, hash) values (?1, ?2, ?3)", rusqlite::params![p, f, hash]).unwrap();
+        let p = tocs::pka::PkgName::try_from(pkg.name).unwrap();
+        for entry in pkg.files {
+            // special case for cs4:
+            let filename;
+            let f: &str;
+            if entry.name.as_bytes_excluding_terminator_and_padding().is_empty() {
+                f = "";
+            } else {
+                filename = tocs::pka::FileName::try_from(entry.name).unwrap();
+                f = filename.as_str();
+            }
+
+            tx.execute("insert into files (pkg, file, hash) values (?1, ?2, ?3)", rusqlite::params![p.as_str(), f, entry.hash])
+                .unwrap();
         }
     }
     for hash in hashes {

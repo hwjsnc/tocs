@@ -287,7 +287,7 @@ pub fn parse_pkg(base_path: &std::path::Path) {
                     data_offset: _,
                     compression: _,
                 } = &entry;
-                let filename = tocs::pkg::PaddedAsciiName::from_padded_byte_string(&filename).unwrap();
+                let filename = tocs::pkg::FileName::try_from(filename).unwrap();
 
                 //log::info!("{filename}: decompressed size = {decompressed_size}, compressed size = {compressed_size} (0x{compressed_size:x}), data offset = {data_offset} (0x{data_offset:x}), compression = {compression:?}");
                 let raw_data = tocs::pkg::get_data_raw_from_file(&mut f, &entry).unwrap();
@@ -330,9 +330,11 @@ pub fn parse_pka(path: &std::path::Path) {
     let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
     let (pkgs, hashes) = tocs::pka::load_filelist(&mut f).unwrap();
     for pkg in pkgs {
-        log::info!("pkg: {}", pkg.name);
-        for (name, hash) in pkg.filenames.iter().zip(pkg.hashes) {
-            log::info!("file: name = {}, hash = {}", name, hex::encode(hash));
+        log::debug!("pkg: {}", pkg.name.to_utf8_lossy());
+        log::info!("pkg: {}", tocs::pka::PkgName::try_from(pkg.name).unwrap());
+        for file in pkg.files {
+            log::debug!("file: name = {}, hash = '{}'", file.name.to_utf8_lossy(), hex::encode(file.hash));
+            log::info!("file: name = {}, hash = '{}'", tocs::pka::FileName::try_from(file.name).unwrap(), hex::encode(file.hash));
         }
     }
     for hash in hashes {
