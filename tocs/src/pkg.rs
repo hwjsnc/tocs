@@ -212,7 +212,7 @@ pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>, I: IntoIterator<Item = (S, X)
     let mut compressed_files = vec![];
     // TODO: Parallelize this?
     for (n, raw_data) in files {
-        let name = PaddedFilename::new(n.as_ref(), PADDING).map_err(PkgError::Filelist)?;
+        let name = PaddedAsciiString::new(n.as_ref(), PADDING).map_err(PkgError::Filelist)?;
         if raw_data.as_ref().len() > MAX_DATA_SIZE.try_into().expect("32 bits please") {
             return Err(PkgError::Compression(format!(
                 "pkg file '{}': data size {} exceeds maximum ({})",
@@ -246,16 +246,18 @@ pub fn generate_pkg<S: AsRef<str>, X: AsRef<[u8]>, I: IntoIterator<Item = (S, X)
 
 /// name of a file in a .pkg, with a 0 byte terminator and padded to a multiple of the given length
 #[derive(Clone, Debug)]
-pub struct PaddedFilename {
-    name: SmolStr,
+pub struct PaddedAsciiString {
+    name: smallvec::SmallVec<[u8; 64]>, // name excluding null terminator and padding; 64 bytes is the maximum padding in the original files (as far as I know)
     padding: usize,
 }
 
-impl PaddedFilename {
+impl PaddedAsciiString {
     pub fn new(name: &str, padding: usize) -> Result<Self, String> {
         assert!(padding >= 1);
         if !name.is_ascii() {
             Err(format!("name '{}' is not ASCII", name.escape_default()))
+        } else if name.bytes().any(|c| c == 0) {
+            Err(format!("name '{}' contains null byte", name.escape_default()))
         } else if name.chars().any(|c| c.is_ascii_control()) {
             Err(format!("name '{}' contains control characters", name.escape_default()))
         } else if name.chars().any(|c| c.is_ascii_whitespace() && c != ' ') {
@@ -268,7 +270,10 @@ impl PaddedFilename {
             } else if name.len() > padding - 1 {
                 log::warn!("pkg file name length exceeds padding block size, idk if that'll work but you can try shrug emoji");
             }
-            Ok(PaddedFilename { name: name.into(), padding })
+            Ok(PaddedAsciiString {
+                name: name.as_bytes().into(),
+                padding,
+            })
         }
     }
 
@@ -282,7 +287,7 @@ impl PaddedFilename {
             .and_then(|s| Self::try_from_os_str(s, padding))
     }
 
-    pub fn len(&self) -> usize {
+    pub fn len_with_padding(&self) -> usize {
         let (n, r) = num_integer::div_rem(self.name.len() + 1, self.padding);
         if r == 0 {
             n * self.padding
@@ -291,19 +296,13 @@ impl PaddedFilename {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        // is_empty doesn't really make sense because it could either mean the attribute is empty, or the padded string is empty (which it never is because of the terminating null byte).
-        // clippy wants an is_empty() method, and I guess rather than suppressing the warning I add this note here.
-        unreachable!()
-    }
-
     pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
-        let mut n = f.write(self.name.as_bytes())?;
+        let mut n = f.write(&self.name)?;
         n += f.write(&[0])?;
         loop {
             n += f.write(&[0])?;
             if n % self.padding == 0 {
-                assert_eq!(n, self.len());
+                assert_eq!(n, self.len_with_padding());
                 return Ok(n);
             }
         }
@@ -313,29 +312,31 @@ impl PaddedFilename {
         if padding == self.padding {
             std::borrow::Cow::Borrowed(self)
         } else {
-            std::borrow::Cow::Owned(PaddedFilename { name: self.name.clone(), padding })
+            std::borrow::Cow::Owned(PaddedAsciiString { name: self.name.clone(), padding })
         }
     }
 
     pub fn padding(&self) -> usize {
         self.padding
     }
-}
 
-impl AsRef<str> for PaddedFilename {
-    fn as_ref(&self) -> &str {
-        self.name.as_ref()
+    pub fn to_str(&self) -> &str {
+        std::str::from_utf8(&self.name).expect("UTF-8 validity should be checked on creating")
+    }
+
+    pub fn as_bytes_excluding_terminator_and_padding(&self) -> &[u8] {
+        &self.name
     }
 }
 
-impl std::fmt::Display for PaddedFilename {
+impl std::fmt::Display for PaddedAsciiString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.name.fmt(f)
+        self.to_str().fmt(f)
     }
 }
 
 pub struct CompressedFile {
-    pub name: PaddedFilename,
+    pub name: PaddedAsciiString,
     pub data: std::vec::Vec<u8>,
     pub decompressed_size: u32,
     pub compression: Compression,
@@ -349,9 +350,9 @@ pub fn generate_pkg_from_compressed_files(files: &[CompressedFile]) -> Result<st
     for f in files.iter() {
         assert_eq!(f.name.padding(), PADDING);
         if f.data.len() > MAX_DATA_SIZE.try_into().expect("32 bits please") {
-            return Err(PkgError::Filelist(format!("File '{}' compressed data size exceeds max ({})", f.name.as_ref(), MAX_DATA_SIZE)));
+            return Err(PkgError::Filelist(format!("File '{}' compressed data size exceeds max ({})", f.name.to_str(), MAX_DATA_SIZE)));
         }
-        length_of_header += f.name.len() + 4 * 4;
+        length_of_header += f.name.len_with_padding() + 4 * 4;
     }
 
     let data_offsets = {
