@@ -431,6 +431,7 @@ dependencies = [
  "csv",
  "fallible-iterator",
  "hex",
+ "hex-literal",
  "log",
  "misc",
  "rayon",

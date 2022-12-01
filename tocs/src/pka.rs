@@ -10,7 +10,6 @@ note:
 const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 
 use fallible_iterator::FallibleIterator;
-use smol_str::SmolStr;
 
 use sha2::Digest as _;
 
@@ -19,16 +18,33 @@ use std::io::Seek as _;
 use std::io::Write as _;
 
 use crate::compression::Compression;
-use crate::io::read_bytes;
+use crate::io::{read_bytes, PaddedByteString};
 use crate::pkg::PaddedAsciiName;
 
 pub use crate::pkg::PkgError;
 
 #[derive(Clone, Debug)]
+pub struct PkgListEntryUnchecked {
+    pub name: PaddedByteString,
+    pub files: std::vec::Vec<PkgFileListEntryUnchecked>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PkgFileListEntryUnchecked {
+    pub name: PaddedByteString,
+    pub hash: [u8; 32],
+}
+
+#[derive(Clone, Debug)]
 pub struct PkgListEntry {
-    pub name: SmolStr,
-    pub filenames: std::vec::Vec<SmolStr>,
-    pub hashes: std::vec::Vec<[u8; 32]>,
+    pub name: PaddedAsciiName,
+    pub files: std::vec::Vec<PkgFileListEntry>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PkgFileListEntry {
+    pub name: PaddedAsciiName,
+    pub hash: [u8; 32],
 }
 
 #[derive(Clone, Debug)]
@@ -40,15 +56,7 @@ pub struct FileDataEntry {
     pub compression: Compression,
 }
 
-fn parse_filename<F: std::io::Read>(f: &mut F, padding: usize) -> Result<SmolStr, PkgError> {
-    crate::io::read_cutf8_padded(f, padding).map_err(|e| match e {
-        crate::io::ReadUtf8Error::IO(e) => PkgError::IO(e),
-        crate::io::ReadUtf8Error::Utf8(e) => PkgError::Utf8(e),
-        crate::io::ReadUtf8Error::UnexpectedPadding(x) => PkgError::Filelist(format!("unexpected padding byte {x} (0x{x:x})")),
-    })
-}
-
-pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgListEntry>, std::vec::Vec<FileDataEntry>), PkgError> {
+pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgListEntryUnchecked>, std::vec::Vec<FileDataEntry>), PkgError> {
     // header
     let magic = read_bytes::<4, _>(f).map_err(PkgError::IO)?;
     if magic != [0x0d, 0xcf, 0xf7, 0x7f] {
@@ -61,26 +69,20 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgLi
     let mut pkgs = std::vec::Vec::with_capacity(number_of_pkgs.try_into().expect("32 bits please"));
     for i in 0..number_of_pkgs {
         log::trace!("reading pkg {} of {}", i + 1, number_of_pkgs);
-        let mut filenames = vec![];
-        let mut hashes = vec![];
-        let pkg_filename = parse_filename(f, 32)?;
-        log::trace!("pkg filename: {pkg_filename}");
+        let mut files = vec![];
+        let pkg_filename = PaddedByteString::read(f, 32).map_err(|e| PkgError::Filelist(e.to_string()))?;
+        log::trace!("pkg filename: {}", pkg_filename.to_utf8_lossy());
         let number_of_files = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
         log::trace!("number of files in pkg: {number_of_files}");
         for j in 0..number_of_files {
             log::trace!("reading file {} of {}", j + 1, number_of_files);
-            let filename = parse_filename(f, 64)?;
-            log::trace!("file name: {filename}");
+            let filename = PaddedByteString::read(f, 64)?;
+            log::trace!("file name: {}", filename.to_utf8_lossy());
             let hash = read_bytes::<32, _>(f).map_err(PkgError::IO)?;
             log::trace!("file hash: {}", hex::encode(hash));
-            filenames.push(filename);
-            hashes.push(hash);
+            files.push(PkgFileListEntryUnchecked { name: filename, hash });
         }
-        pkgs.push(PkgListEntry {
-            name: pkg_filename,
-            filenames,
-            hashes,
-        });
+        pkgs.push(PkgListEntryUnchecked { name: pkg_filename, files });
     }
 
     let number_of_hashes = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
@@ -221,15 +223,11 @@ pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<It
 
         // we could sort the pkgs and filenames here, but it doesn't seem necessary
         for pkg in pkgs {
-            let PkgListEntry { name, filenames, hashes } = pkg.borrow();
-            assert_eq!(filenames.len(), hashes.len());
-            let pkg_name = PaddedAsciiName::new(name.as_str(), 32).map_err(|e| PkaWriteError::Metadata(e.to_string()))?;
-            pkg_name.write_to(&mut data).expect("writing to vector shouldn't fail");
-            let number_of_files: u32 = filenames.len().try_into().map_err(|_| PkaWriteError::Metadata("too many files in pkg".into()))?;
+            pkg.name.write_to(&mut data).expect("writing to vector shouldn't fail");
+            let number_of_files: u32 = pkg.files.len().try_into().map_err(|_| PkaWriteError::Metadata("too many files in pkg".into()))?;
             data.extend_from_slice(&number_of_files.to_le_bytes());
-            for (filename, hash) in filenames.iter().zip(hashes.iter()) {
-                let filename = PaddedAsciiName::new(filename.as_str(), 64).map_err(|e| PkaWriteError::Metadata(e.to_string()))?;
-                filename.write_to(&mut data).expect("writing to vector shouldn't fail");
+            for PkgFileListEntry { name, hash } in pkg.files.iter() {
+                name.write_to(&mut data).expect("writing to vector shouldn't fail");
                 data.extend_from_slice(hash);
             }
         }

@@ -13,7 +13,7 @@ It supports:
 
 Note:
 - `pkgtool` has several subcommands. They are not fully documented here to avoid duplication and inconsistencies, but if you run the program with the `--help` flag, you can get a list of available commands/subcommands/flags and what they do.
-- Extracting all assets from a .pka will take a lot of space (e.g. ~50 GiB for Cold Steel 4).
+- Extracting all assets from a .pka will take a lot of space (e.g. ~70 GiB for Cold Steel 3).
   For an estimate, use the `pkg info` command.
 - Extracting all assets from a .pka will also take some time (up to a few minutes, depends mostly on your disk speed).
   If you only want to extract a handful of assets, that is possible and will be much faster.

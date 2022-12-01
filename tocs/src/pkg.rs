@@ -22,9 +22,6 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<std::vec::Vec<FileLi
         let entry = parse_filelist_entry(f)?;
         filelist.push(entry);
     }
-
-    // TODO: check that data ranges are overlap-free and leave no space?
-
     Ok(filelist)
 }
 
@@ -53,6 +50,15 @@ impl std::fmt::Display for PkgError {
 
 impl std::error::Error for PkgError {}
 
+impl From<crate::io::PaddedStringReadError> for PkgError {
+    fn from(error: crate::io::PaddedStringReadError) -> Self {
+        match error {
+            crate::io::PaddedStringReadError::Io(e) => PkgError::IO(e),
+            _ => PkgError::Filelist(error.to_string()),
+        }
+    }
+}
+
 /// entry in the "file list" of the pkg
 /// This is the type returned by the parser.
 /// The file name is "unchecked" (not really, but not many checks are done) so that we can handle unexpected file names in the original data
@@ -66,7 +72,7 @@ pub struct FileListEntry {
 }
 
 fn parse_filelist_entry<F: std::io::Read>(f: &mut F) -> Result<FileListEntry, PkgError> {
-    let filename = PaddedByteString::read(f, 64).map_err(|e| PkgError::Filelist(e.to_string()))?;
+    let filename = PaddedByteString::read(f, 64).map_err(PkgError::from)?;
     log::trace!("filename: {}", String::from_utf8_lossy(filename.as_bytes_excluding_terminator_and_padding()));
     let decompressed_size = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
     log::trace!("raw size: {decompressed_size} (0x{decompressed_size:x})");
@@ -180,7 +186,7 @@ pub struct PkgRawEntry<'a> {
 
 impl<'a> PkgRawEntry<'a> {
     pub fn name(&self) -> Result<PaddedAsciiName, PkgError> {
-        PaddedAsciiName::from_padded_byte_string(&self.metadata.filename).map_err(PkgError::Filename)
+        PaddedAsciiName::try_from(&self.metadata.filename).map_err(PkgError::Filename)
     }
 
     pub fn unchecked_name(&self) -> &PaddedByteString {
@@ -261,17 +267,30 @@ pub enum AsciiNameError {
     ContainsWhitespace,
     ContainsPathSep,
     IsEmpty,
-    Padded(crate::io::PaddedStringError),
+    Ascii,
+    Utf8(Option<std::str::Utf8Error>),
+}
+
+impl From<crate::io::PaddedStringError> for AsciiNameError {
+    fn from(error: crate::io::PaddedStringError) -> Self {
+        match error {
+            crate::io::PaddedStringError::ContainsNull => Self::ContainsCtrlChar,
+            crate::io::PaddedStringError::Ascii => Self::Ascii,
+            crate::io::PaddedStringError::Utf8(e) => Self::Utf8(Some(e)),
+        }
+    }
 }
 
 impl std::fmt::Display for AsciiNameError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            Self::ContainsCtrlChar => write!(f, "name contains control characters"),
+            Self::ContainsCtrlChar => write!(f, "name contains control character(s)"),
             Self::ContainsWhitespace => write!(f, "name contains whitespace (other than literal space)"),
             Self::ContainsPathSep => write!(f, "name contains a path separator"),
             Self::IsEmpty => write!(f, "name is empty"),
-            Self::Padded(e) => write!(f, "padded string error: {e}"),
+            Self::Ascii => write!(f, "name is not valid ASCII"),
+            Self::Utf8(Some(e)) => write!(f, "UTF-8 error: {e}"),
+            Self::Utf8(None) => write!(f, "UTF-8 conversion error"),
         }
     }
 }
@@ -282,7 +301,7 @@ impl std::error::Error for AsciiNameError {}
 impl PaddedAsciiName {
     pub fn new(name: &str, padding: usize) -> Result<Self, AsciiNameError> {
         assert!(padding >= 1);
-        let s = crate::io::PaddedAsciiString::new(name, padding).map_err(AsciiNameError::Padded)?;
+        let s = crate::io::PaddedAsciiString::new(name, padding).map_err(AsciiNameError::from)?;
         if name.chars().any(|c| c.is_ascii_control()) {
             Err(AsciiNameError::ContainsCtrlChar)
         } else if name.chars().any(|c| c.is_ascii_whitespace() && c != ' ') {
@@ -300,27 +319,19 @@ impl PaddedAsciiName {
     }
 
     pub fn new_from_bytes(bytes: &[u8], padding: usize) -> Result<Self, AsciiNameError> {
-        std::str::from_utf8(bytes)
-            .map_err(crate::io::PaddedStringError::Utf8)
-            .map_err(AsciiNameError::Padded)
-            .and_then(|str| Self::new(str, padding))
+        std::str::from_utf8(bytes).map_err(|e| AsciiNameError::Utf8(Some(e))).and_then(|str| Self::new(str, padding))
     }
 
-    pub fn from_padded_byte_string(name: &PaddedByteString) -> Result<Self, AsciiNameError> {
-        Self::new_from_bytes(name.as_bytes_excluding_terminator_and_padding(), name.padding())
-    }
-
-    /*
     pub fn try_from_os_str(name: &std::ffi::OsStr, padding: usize) -> Result<Self, AsciiNameError> {
-        name.to_str().ok_or_else(|| format!("invalid UTF-8: '{name:?}'")).and_then(|s| Self::new(s, padding))
+        match name.to_str() {
+            Some(s) => Self::new(s, padding),
+            None => Err(AsciiNameError::Utf8(None)),
+        }
     }
 
     pub fn try_from_path(path: &std::path::Path, padding: usize) -> Result<Self, AsciiNameError> {
-        path.file_name()
-            .ok_or_else(|| format!("no file name component: '{}'", path.display()))
-            .and_then(|s| Self::try_from_os_str(s, padding))
+        Self::try_from_os_str(path.as_os_str(), padding)
     }
-    */
 
     pub fn len_with_padding(&self) -> usize {
         self.name.len_with_padding()
@@ -346,6 +357,20 @@ impl PaddedAsciiName {
         let p = &std::path::Path::new(self.as_str());
         assert_eq!(p.components().count(), 1); // no path separators
         p
+    }
+}
+
+impl TryFrom<&crate::io::PaddedByteString> for PaddedAsciiName {
+    type Error = AsciiNameError;
+    fn try_from(s: &crate::io::PaddedByteString) -> Result<Self, Self::Error> {
+        Self::new_from_bytes(s.as_bytes_excluding_terminator_and_padding(), s.padding())
+    }
+}
+
+impl TryFrom<crate::io::PaddedByteString> for PaddedAsciiName {
+    type Error = AsciiNameError;
+    fn try_from(s: crate::io::PaddedByteString) -> Result<Self, Self::Error> {
+        Self::try_from(&s)
     }
 }
 
