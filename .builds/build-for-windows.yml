@@ -6,6 +6,7 @@ sources:
   - https://git.sr.ht/~quf/tocs
 artifacts:
   - tocs/tbled/target/x86_64-pc-windows-gnu/release/tbled.exe
+  - tocs/pktool/target/x86_64-pc-windows-gnu/release/pktool.exe
 tasks:
  - install-install-toolchain: |
     rustup install stable
@@ -13,4 +14,7 @@ tasks:
     rustup target add x86_64-pc-windows-gnu
  - build-tbled: |
     cd tocs/tbled
+    cargo build --release --target x86_64-pc-windows-gnu
+ - build-pkgtool: |
+    cd tocs/pkgtool
     cargo build --release --target x86_64-pc-windows-gnu
