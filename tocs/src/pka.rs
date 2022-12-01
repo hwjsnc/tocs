@@ -223,12 +223,12 @@ pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<It
         for pkg in pkgs {
             let PkgListEntry { name, filenames, hashes } = pkg.borrow();
             assert_eq!(filenames.len(), hashes.len());
-            let pkg_name = PaddedAsciiString::new(name, 32).map_err(PkaWriteError::Metadata)?;
+            let pkg_name = PaddedAsciiString::new(name.as_str(), 32).map_err(PkaWriteError::Metadata)?;
             pkg_name.write_to(&mut data).expect("writing to vector shouldn't fail");
             let number_of_files: u32 = filenames.len().try_into().map_err(|_| PkaWriteError::Metadata("too many files in pkg".into()))?;
             data.extend_from_slice(&number_of_files.to_le_bytes());
             for (filename, hash) in filenames.iter().zip(hashes.iter()) {
-                let filename = PaddedAsciiString::new(filename, 64).map_err(PkaWriteError::Metadata)?;
+                let filename = PaddedAsciiString::new(filename.as_str(), 64).map_err(PkaWriteError::Metadata)?;
                 filename.write_to(&mut data).expect("writing to vector shouldn't fail");
                 data.extend_from_slice(hash);
             }

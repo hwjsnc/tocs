@@ -782,7 +782,7 @@ fn pka_unpack_single_pkg<F: std::io::Read + std::io::Seek>(
             .ok_or_else(|| anyhow::Error::msg(format!("no data for file '{}/{}' (hash {})", pkg.name, name, hex::encode(hash))))?;
         let compressed_data = tocs::pka::get_blob_data_raw(pka, blob).with_context(|| format!("couldn't read data for file '{}/{}'", pkg.name, name))?;
         pkg_files.push(tocs::pkg::CompressedFile {
-            name: tocs::pkg::PaddedAsciiString::new(name, 64)
+            name: tocs::pkg::PaddedAsciiName::new(name, 64)
                 .map_err(anyhow::Error::msg)
                 .with_context(|| format!("couldn't write pkg data for file '{}/{}'", pkg.name, name))?,
             data: compressed_data,
