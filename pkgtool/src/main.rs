@@ -5,7 +5,6 @@ use clap::Parser as _;
 use rayon::iter::IndexedParallelIterator as _;
 use rayon::iter::IntoParallelRefIterator as _;
 use rayon::iter::ParallelIterator as _;
-use std::borrow::Borrow as _;
 use std::io::BufRead as _;
 use std::io::Seek as _;
 use std::io::Write as _;
@@ -250,16 +249,13 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
+// TODO: remove this
 fn name_to_path(name: &str) -> anyhow::Result<&std::path::Path> {
     if !name.is_ascii() || name.chars().any(|c| c.is_ascii_control() || (c.is_ascii_whitespace() && c != ' ')) || name.contains('/') || name.contains('\\') {
         Err(anyhow::Error::msg(format!("invalid file name '{}'", name)))
     } else {
         Ok(std::path::Path::new(name))
     }
-}
-
-fn name_is_ok(name: &str) -> bool {
-    name_to_path(name).is_ok()
 }
 
 fn pkg_info<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
@@ -295,7 +291,7 @@ fn pkg_ls<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     for e in filelist.iter() {
         println!(
             "{:64} (compressed size {} bytes, decompressed size {} bytes (compression factor {:.3}), compression={}",
-            e.filename,
+            e.filename.to_utf8().map_err(anyhow::Error::msg)?,
             e.compressed_size,
             e.decompressed_size,
             e.compressed_size as f64 / std::cmp::max(1, e.decompressed_size) as f64,
@@ -326,18 +322,23 @@ fn pkg_check_single(pkg: &std::path::Path) -> anyhow::Result<()> {
     let data = std::fs::read(&pkg).with_context(|| format!("couldn't read pkg file '{}'", pkg.display()))?;
     let mut cursor = std::io::Cursor::new(&data);
     let filelist = tocs::pkg::load_filelist(&mut cursor).with_context(|| format!("couldn't parse pkg file '{}'", pkg.display()))?;
-
     let offset_after_metadata = cursor.stream_position().expect("cursor stream_position should not fail");
 
-    /* check that data does not overlap and leaves no space empty */
-    let mut filelist = filelist;
-    filelist.sort_by_key(|e| e.data_offset);
-    let filelist = filelist;
+    log::debug!("checking pkg entry names");
+    let mut filelist_with_checked_names = vec![];
+    for entry in filelist.into_iter() {
+        let name = tocs::pkg::PaddedAsciiName::from_padded_byte_string(&entry.filename).map_err(anyhow::Error::msg)?;
+        filelist_with_checked_names.push((name, entry));
+    }
+
+    log::debug!("checking that data does not overlap and leaves no space empty");
+    filelist_with_checked_names.sort_by_key(|(_, entry)| entry.data_offset);
+    let filelist_with_checked_names = filelist_with_checked_names;
     let mut expected_start: u32 = offset_after_metadata.try_into().expect("data should be < 4GiB");
-    for e in filelist.iter() {
-        log::debug!("checking offset of entry {}", e.filename);
+    for (name, e) in filelist_with_checked_names.iter() {
+        log::debug!("checking offset of entry {name}");
         if e.data_offset != expected_start {
-            return Err(anyhow::Error::msg(format!("{}: unexpected start ({} rather than {})", e.filename, e.data_offset, expected_start)).context(format!("{}: consistency error", pkg.display())));
+            return Err(anyhow::Error::msg(format!("{name}: unexpected start ({} rather than {})", e.data_offset, expected_start)).context(format!("{}: consistency error", pkg.display())));
         }
         expected_start += e.compressed_size;
     }
@@ -345,12 +346,9 @@ fn pkg_check_single(pkg: &std::path::Path) -> anyhow::Result<()> {
         return Err(anyhow::Error::msg(format!("trailing data starting at offset {} (0x{:x})", expected_start, expected_start)).context(format!("{}: consistency error", pkg.display())));
     }
 
-    /* check read->decompress->recompress->decompress loop */
-    for e in filelist.iter() {
-        log::debug!("Testing {} / {}", pkg.display(), e.filename);
-        if !name_is_ok(&e.filename) {
-            return Err(anyhow::Error::msg(format!("{}: bad file name '{}'", pkg.display(), e.filename)));
-        }
+    log::debug!("checking read->decompress->recompress->decompress loop");
+    for (name, e) in filelist_with_checked_names.iter() {
+        log::debug!("Testing {}/{}", pkg.display(), name);
         let compressed_data = tocs::pkg::get_data_raw_from_buffer(&data, e)?;
         let decompressed_data = tocs::pkg::get_data_from_buffer(&data, e)?;
         let recompressed_data = e.compression.compress(&decompressed_data).map_err(anyhow::Error::msg)?;
@@ -362,12 +360,7 @@ fn pkg_check_single(pkg: &std::path::Path) -> anyhow::Result<()> {
         assert_eq!(decompressed_data, redecompressed_data);
         if recompressed_data.len() != compressed_data.len() {
             // exact equality is unrealistic
-            log::warn!(
-                "{}: recompressing data changes size ({} instead of {} bytes)",
-                e.filename,
-                recompressed_data.len(),
-                compressed_data.len()
-            );
+            log::warn!("{}: recompressing data changes size ({} instead of {} bytes)", name, recompressed_data.len(), compressed_data.len());
         }
     }
 
@@ -385,12 +378,14 @@ fn pkg_stats<P: AsRef<std::path::Path>>(dir: P) -> anyhow::Result<()> {
         let direntry = direntry.unwrap();
         let path = direntry.path();
         if direntry.file_type().is_file() {
+            // TODO: use Pkg struct rather than reading the filelist
             let data = std::fs::read(&path).with_context(|| format!("couldn't read pkg file '{}'", path.display()))?;
             let filelist = tocs::pkg::load_filelist(&mut std::io::Cursor::new(data)).with_context(|| format!("couldn't parse pkg file '{}'", path.display()))?;
             for e in filelist.iter() {
+                let name = tocs::pkg::PaddedAsciiName::from_padded_byte_string(&e.filename).context("invalid pkg entry name")?;
                 csv.write_record(&[
                     path.display().to_string(),
-                    e.filename.to_string(),
+                    name.to_string(),
                     e.decompressed_size.to_string(),
                     e.compressed_size.to_string(),
                     e.data_offset.to_string(),
@@ -409,20 +404,18 @@ fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
     let filelist = tocs::pkg::load_filelist(&mut cursor).with_context(|| format!("couldn't parse pkg file '{}'", pkg.as_ref().display()))?;
     std::fs::create_dir_all(&out).with_context(|| format!("creating output directory {}", out.as_ref().display()))?;
 
-    let file_by_name: std::collections::HashMap<_, _> = filelist.iter().map(|entry| (entry.filename.clone(), entry)).collect();
+    let file_by_name: std::collections::HashMap<_, _> = filelist.iter().map(|entry| (entry.filename.as_bytes_excluding_terminator_and_padding(), entry)).collect();
 
     let extract = |entry: &tocs::pkg::FileListEntry| {
-        if !name_is_ok(&entry.filename) {
-            return Err(anyhow::Error::msg(format!("invalid file name: {}", entry.filename)));
-        }
-        log::debug!("extracting file '{}'", entry.filename);
-        let out_file = std::path::Path::join(out.as_ref(), name_to_path(&entry.filename)?);
+        let name = tocs::pkg::PaddedAsciiName::from_padded_byte_string(&entry.filename).context("invalid pkg entry name")?;
+        log::debug!("extracting file '{}'", name);
+        let out_file = std::path::Path::join(out.as_ref(), name.as_path());
         let data = if raw {
             tocs::pkg::get_data_raw_from_buffer(&data, entry).map(|slice| slice.to_vec())
         } else {
             tocs::pkg::get_data_from_buffer(&data, entry)
         }
-        .with_context(|| format!("couldn't read data for pkg '{}', file '{}'", pkg.as_ref().display(), entry.filename))?;
+        .with_context(|| format!("couldn't read data for pkg '{}', file '{}'", pkg.as_ref().display(), name))?;
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create(force)
@@ -430,7 +423,7 @@ fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
             .open(&out_file)
             .with_context(|| format!("couldn't open output file '{}'", out_file.display()))?;
         file.write_all(&data).with_context(|| format!("couldn't write data to file '{}'", out_file.display()))?;
-        Ok(())
+        anyhow::Ok(())
     };
 
     if files.is_empty() {
@@ -439,7 +432,7 @@ fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
         }
     } else {
         for file in files.iter() {
-            match file_by_name.get(file.as_ref()) {
+            match file_by_name.get(file.as_ref().as_bytes()) {
                 Some(entry) => extract(entry)?,
                 None => {
                     return Err(anyhow::Error::msg(format!("pkg '{}' does not contain file '{}'", pkg.as_ref().display(), file.as_ref())))?;
@@ -595,14 +588,9 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     let mut f = std::io::BufReader::new(std::fs::File::open(&path).with_context(|| format!("couldn't open pka file '{}' for reading", path.as_ref().display()))?);
     let (pkgs, blobs) = tocs::pka::load_filelist(&mut f).with_context(|| format!("couldn't parse pkg file '{}'", path.as_ref().display()))?;
 
-    // wheck file names
+    // check file names
     for pkg in pkgs.iter() {
-        log::debug!("checking pkg {}", pkg.name);
-        assert!(name_is_ok(&pkg.name));
-        for name in pkg.filenames.iter() {
-            log::debug!("checking file {}", name);
-            assert!(name_is_ok(name));
-        }
+        todo!("check names")
     }
 
     let offset_after_metadata = f.stream_position()?;
@@ -973,9 +961,10 @@ fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyh
                 hashes: vec![],
             };
             pkg_data.entries().map_err(anyhow::Error::msg).enumerate().for_each(|(i, entry)| {
+                let name = entry.name()?;
                 let decompressed_data = entry
                     .decompressed_data()
-                    .with_context(|| format!("couldn't read data for file '{}' in pkg '{}'", entry.name().borrow(), path.display()))?;
+                    .with_context(|| format!("couldn't read data for file '{}' in pkg '{}'", name, path.display()))?;
                 let hash = tocs::pka::hash_data(&decompressed_data);
                 let blobinfo = tocs::pka::CompressedBlobMetadata {
                     hash,
@@ -995,7 +984,7 @@ fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyh
                         })
                         .or_insert_with(|| vec![(i, hash)]);
                 }
-                pkg_list_entry.filenames.push(entry.name().borrow().into());
+                pkg_list_entry.filenames.push(name.as_str().into());
                 pkg_list_entry.hashes.push(hash);
                 Ok(())
             })?;

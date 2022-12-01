@@ -18,6 +18,7 @@ pub enum ReadUtf8Error {
     UnexpectedPadding(u8),
 }
 
+// TODO: remove in favour of PaddedString_::read() associated functions
 pub fn read_cutf8_padded<F: std::io::Read>(f: &mut F, chunk_size: usize) -> Result<SmolStr, ReadUtf8Error> {
     let mut data: SmallVec<[u8; 64]> = SmallVec::new();
     let mut i = 0;
@@ -68,8 +69,29 @@ impl std::fmt::Display for PaddedStringError {
 
 impl std::error::Error for PaddedStringError {}
 
+#[derive(Debug)]
+pub enum PaddedStringReadError {
+    Io(std::io::Error),
+    Padding(u8),
+    Utf8(std::str::Utf8Error),
+    Ascii,
+}
+
+impl std::fmt::Display for PaddedStringReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            PaddedStringReadError::Io(e) => write!(f, "IO error: {e}"),
+            PaddedStringReadError::Padding(b) => write!(f, "Unexpected padding: {b} (0x{b:x})"),
+            PaddedStringReadError::Ascii => write!(f, "non-ASCII characters present"),
+            PaddedStringReadError::Utf8(e) => write!(f, "UTF-8 error: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for PaddedStringReadError {}
+
 /// A string of non-null bytes, followed by a terminating null-byte and padded (with null bytes) to a multiple of a certain length
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] // TODO: Eq and Ord don't make sense at the moment because two different (bytes, padding) pairs may correspond to the exact same bytes => solution: make padding a compile-time associated constant and don't deal with this situation at all; for the moment, we do need Eq and Hash (for hashmaps)
 pub struct PaddedByteString {
     bytes: smallvec::SmallVec<[u8; 64]>, // bytestring excluding null terminator and padding
     padding: usize,
@@ -115,6 +137,46 @@ impl PaddedByteString {
 
     pub fn as_bytes_excluding_terminator_and_padding(&self) -> &[u8] {
         &self.bytes
+    }
+
+    pub fn to_utf8_lossy(&self) -> std::borrow::Cow<'_, str> {
+        String::from_utf8_lossy(&self.bytes)
+    }
+
+    pub fn to_utf8(&self) -> Result<&str, std::str::Utf8Error> {
+        std::str::from_utf8(&self.bytes)
+    }
+
+    pub fn read<F: std::io::Read>(f: &mut F, padding: usize) -> Result<Self, PaddedStringReadError> {
+        assert!(padding >= 1);
+
+        let mut bytes: SmallVec<[u8; 64]> = SmallVec::new();
+        let mut i = 0;
+        loop {
+            let x = read_byte(f).map_err(PaddedStringReadError::Io)?;
+            i += 1;
+            if x == 0 {
+                break;
+            } else {
+                bytes.push(x);
+            }
+        }
+
+        // read padding
+        while (i % padding) != 0 {
+            match read_byte(f) {
+                Ok(0) => {}
+                Ok(x) => {
+                    return Err(PaddedStringReadError::Padding(x));
+                }
+                Err(e) => {
+                    return Err(PaddedStringReadError::Io(e));
+                }
+            }
+            i += 1;
+        }
+
+        Ok(Self { bytes, padding })
     }
 }
 

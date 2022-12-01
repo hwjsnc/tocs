@@ -287,6 +287,7 @@ pub fn parse_pkg(base_path: &std::path::Path) {
                     data_offset: _,
                     compression: _,
                 } = &entry;
+                let filename = tocs::pkg::PaddedAsciiName::from_padded_byte_string(&filename).unwrap();
 
                 //log::info!("{filename}: decompressed size = {decompressed_size}, compressed size = {compressed_size} (0x{compressed_size:x}), data offset = {data_offset} (0x{data_offset:x}), compression = {compression:?}");
                 let raw_data = tocs::pkg::get_data_raw_from_file(&mut f, &entry).unwrap();

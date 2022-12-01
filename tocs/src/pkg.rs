@@ -7,10 +7,9 @@ const MAX_DATA_SIZE: u32 = 1 << 30; // a single asset > 1GB is pretty unlikely
 const PADDING: usize = 64;
 
 use fallible_iterator::FallibleIterator;
-use smol_str::SmolStr;
 
 pub use crate::compression::Compression;
-use crate::io::read_bytes;
+use crate::io::{read_bytes, PaddedByteString};
 
 pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<std::vec::Vec<FileListEntry>, PkgError> {
     let _data = read_bytes::<4, _>(f).map_err(PkgError::IO)?; // TODO: magic header or a hash or something???
@@ -54,26 +53,21 @@ impl std::fmt::Display for PkgError {
 
 impl std::error::Error for PkgError {}
 
+/// entry in the "file list" of the pkg
+/// This is the type returned by the parser.
+/// The file name is "unchecked" (not really, but not many checks are done) so that we can handle unexpected file names in the original data
 #[derive(Clone, Debug)]
 pub struct FileListEntry {
-    pub filename: SmolStr,
+    pub filename: PaddedByteString,
     pub decompressed_size: u32,
     pub compressed_size: u32,
     pub data_offset: u32,
     pub compression: Compression,
 }
 
-fn parse_filename<F: std::io::Read>(f: &mut F) -> Result<SmolStr, PkgError> {
-    crate::io::read_cutf8_padded(f, 64).map_err(|e| match e {
-        crate::io::ReadUtf8Error::IO(e) => PkgError::IO(e),
-        crate::io::ReadUtf8Error::Utf8(e) => PkgError::Utf8(e),
-        crate::io::ReadUtf8Error::UnexpectedPadding(x) => PkgError::Filelist(format!("unexpected padding byte {x} (0x{x:x})")),
-    })
-}
-
 fn parse_filelist_entry<F: std::io::Read>(f: &mut F) -> Result<FileListEntry, PkgError> {
-    let filename = parse_filename(f)?;
-    log::trace!("filename: {filename}");
+    let filename = PaddedByteString::read(f, 64).map_err(|e| PkgError::Filelist(e.to_string()))?;
+    log::trace!("filename: {}", String::from_utf8_lossy(filename.as_bytes_excluding_terminator_and_padding()));
     let decompressed_size = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
     log::trace!("raw size: {decompressed_size} (0x{decompressed_size:x})");
     let compressed_size = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
@@ -130,7 +124,12 @@ pub fn get_data_raw_from_buffer<'a>(data: &'a [u8], entry: &FileListEntry) -> Re
     let off2: usize = off1 + <u32 as TryInto<usize>>::try_into(entry.compressed_size).expect("32 bits please");
     let result = &data[off1..off2];
     if result.len().try_into() != Ok(entry.compressed_size) {
-        Err(PkgError::Filelist(format!("pkg file '{}' extends past pkg boundary (from {} to {})", entry.filename, off1, off2)))
+        Err(PkgError::Filelist(format!(
+            "pkg file '{}' extends past pkg boundary (from {} to {})",
+            String::from_utf8_lossy(entry.filename.as_bytes_excluding_terminator_and_padding()),
+            off1,
+            off2
+        )))
     } else {
         Ok(result)
     }
@@ -167,7 +166,7 @@ impl Pkg {
     pub fn decompressed_entries(&self) -> impl FallibleIterator<Item = PkgEntry, Error = PkgError> + '_ {
         self.entries().map(|raw_entry| {
             Ok(PkgEntry {
-                name: raw_entry.metadata.filename.clone(),
+                name: raw_entry.name()?,
                 data: raw_entry.decompressed_data()?,
             })
         })
@@ -180,8 +179,12 @@ pub struct PkgRawEntry<'a> {
 }
 
 impl<'a> PkgRawEntry<'a> {
-    pub fn name(&self) -> impl std::borrow::Borrow<str> + '_ {
-        self.metadata.filename.clone()
+    pub fn name(&self) -> Result<PaddedAsciiName, PkgError> {
+        PaddedAsciiName::from_padded_byte_string(&self.metadata.filename).map_err(PkgError::Filename)
+    }
+
+    pub fn unchecked_name(&self) -> &PaddedByteString {
+        &self.metadata.filename
     }
 
     pub fn compression(&self) -> Compression {
@@ -206,7 +209,7 @@ impl<'a> PkgRawEntry<'a> {
 }
 
 pub struct PkgEntry {
-    pub name: SmolStr,
+    pub name: PaddedAsciiName,
     pub data: std::vec::Vec<u8>,
 }
 
@@ -275,6 +278,7 @@ impl std::fmt::Display for AsciiNameError {
 
 impl std::error::Error for AsciiNameError {}
 
+// TODO: padding as associated constant; type PkgName = PaddedAsciiName<64>
 impl PaddedAsciiName {
     pub fn new(name: &str, padding: usize) -> Result<Self, AsciiNameError> {
         assert!(padding >= 1);
@@ -293,6 +297,17 @@ impl PaddedAsciiName {
             }
             Ok(Self { name: s })
         }
+    }
+
+    pub fn new_from_bytes(bytes: &[u8], padding: usize) -> Result<Self, AsciiNameError> {
+        std::str::from_utf8(bytes)
+            .map_err(crate::io::PaddedStringError::Utf8)
+            .map_err(AsciiNameError::Padded)
+            .and_then(|str| Self::new(str, padding))
+    }
+
+    pub fn from_padded_byte_string(name: &PaddedByteString) -> Result<Self, AsciiNameError> {
+        Self::new_from_bytes(name.as_bytes_excluding_terminator_and_padding(), name.padding())
     }
 
     /*
@@ -325,6 +340,12 @@ impl PaddedAsciiName {
 
     pub fn as_str(&self) -> &str {
         self.name.as_str()
+    }
+
+    pub fn as_path(&self) -> &std::path::Path {
+        let p = &std::path::Path::new(self.as_str());
+        assert_eq!(p.components().count(), 1); // no path separators
+        p
     }
 }
 
