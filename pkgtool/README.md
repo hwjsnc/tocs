@@ -39,6 +39,6 @@ Related projects / information
 Releases (downloads & changelogs)
 ---------------------------------
 
-### [v1.0.0](https://git.sr.ht/~quf/tocs/refs/download/pktools-v1.0.0/pkgtools-v1.0.0.exe)
+### [v1.0.0](https://git.sr.ht/~quf/tocs/refs/download/pkgtool-v1.0.0/pkgtool-v1.0.0.exe)
 
 - initial public version
