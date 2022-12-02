@@ -27,7 +27,18 @@ Note:
 To get more detail about what's going on (e.g. to see if progress is being made), you can set the [`RUST_LOG` environment variable](https://docs.rs/simple_logger/4.0.0/simple_logger/struct.SimpleLogger.html#method.env) to `debug` or `trace` before running the program.
 This will likely produce a lot of output and may or may not slow down execution.
 
-History
--------
+Related projects / information
+------------------------------
 
-- No significant changes since 1.0
+- [Sen-no-Kiseki-Sharp by Sewer56](https://github.com/Sewer56/Sen-no-Kiseki-PKG-Sharp), a CLI utility for .pkg files
+- [Explanation of pkg file structure by Sewer56](https://github.com/Sewer56/Sen-no-Kiseki-PKG-Sharp/blob/master/docs/PKG-File-Structure.md)
+- [Explanation of LZSS compression by Sewer56](https://github.com/Sewer56/Sen-no-Kiseki-PKG-Sharp/blob/master/docs/Compression-Explained.md)
+- [Description of pka file structure by CeruleanSky](https://github.com/Sewer56/Sen-no-Kiseki-PKG-Sharp/pull/4/files)
+- [Discussion of asset compression by Durante](https://steamcommunity.com/games/991270/announcements/detail/1806446683762590792)
+
+Releases (downloads & changelogs)
+---------------------------------
+
+### [v1.0.0](https://git.sr.ht/~quf/tocs/refs/download/pktools-v1.0.0/pkgtools-v1.0.0.exe)
+
+- initial public version
