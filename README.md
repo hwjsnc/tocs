@@ -12,9 +12,18 @@ This project is split up into several crates (some libraries, some binaries) due
 Here's a short overview:
 
 - `tocs` is the core library.
-  It currently supports serialization and deserialization of tbl files for Cold Steel 1/2/3.
-  Support for "structured parsing" (instead of having tbl entry data be an opaque blob) is very limited atm, but it will hopefully get better as I learn more about what everything does, which will hopefully happen as I build tools that allow me to learn it more quickly.
-  If you want to programmatically modify tbl files in Rust, this is what you want.
+  It currently supports:
+
+  - serialization and deserialization of tbl files for Cold Steel 1/2/3/4.
+  - packing/unpacking .pkg and .pka asset files
+
+  If you want to programmatically modify tbl or pkg/pka files in Rust, this is what you want.
+
+- `tbled` is a GUI tbl editor.
+  For more information, see [its own README](tbled/README.md).
+
+- `pkgtool` is a CLI program for packing/unpacking .pkg and .pka package files.
+  For more information, see [its own README](pkgtool/README.md).
 
 - `misc` contains miscellaneous functionality that isn't specific to the games.
 
@@ -25,12 +34,6 @@ Here's a short overview:
   As I learn more about the data, columns will be added/removed/renamed.
   If you created a database using some version of the program, it will likely be impossible to turn back to tbl using any other version.
   If you want to upgrade and need to persist the data from the database, first convert it to tbl files, then convert the tbls back to a new database after the upgrade.
-
-- `tbled` is a GUI tbl editor.
-  For more information, see [its own README](tbled/README.md).
-
-- `pkgtool` is a CLI program for packing/unpacking .pkg and .pka package files.
-  For more information, see [its own README](pkgtool/README.md).
 
 - `try_parse` is a CLI program that attempts to parse all game data and prints any errors.
   It's there for finding instances where the game data doesn't follow the rules we've reverse engineered.
