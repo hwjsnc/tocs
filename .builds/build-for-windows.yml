@@ -6,7 +6,7 @@ sources:
   - https://git.sr.ht/~quf/tocs
 artifacts:
   - tocs/tbled/target/x86_64-pc-windows-gnu/release/tbled.exe
-  - tocs/pktool/target/x86_64-pc-windows-gnu/release/pktool.exe
+  - tocs/pkgtool/target/x86_64-pc-windows-gnu/release/pkgtool.exe
 tasks:
  - install-install-toolchain: |
     rustup install stable
