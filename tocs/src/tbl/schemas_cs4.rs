@@ -141,7 +141,7 @@
         ("unknown_float_1", Type::F32),
         ("unknown_float_2", Type::F32),
         ("unknown_float_3", Type::F32),
-        ("effects", Type::Repeat(5, Box::new(Type::Ref(SmolStr::new("effect"))))),
+        ("effects", Type::Repeat(5, Box::new(Type::Ref(Header::new("effect").unwrap())))),
         ("str", Type::I32),
         ("def", Type::I32),
         ("ats", Type::I32),
@@ -179,7 +179,7 @@
         ("unknown_float_1", Type::F32),
         ("unknown_float_2", Type::F32),
         ("unknown_float_3", Type::F32),
-        ("effects", Type::Repeat(5, Box::new(Type::Ref(SmolStr::new("effect"))))),
+        ("effects", Type::Repeat(5, Box::new(Type::Ref(Header::new("effect").unwrap())))),
         ("str", Type::I32),
         ("def", Type::I32),
         ("ats", Type::I32),
@@ -230,7 +230,7 @@
         ("unknown_float_1", Type::F32),
         ("unknown_float_2", Type::F32),
         ("unknown_float_3", Type::F32),
-        ("effects", Type::Repeat(5, Box::new(Type::Ref(SmolStr::new("effect"))))),
+        ("effects", Type::Repeat(5, Box::new(Type::Ref(Header::new("effect").unwrap())))),
         ("cast_delay", Type::U8),
         ("recovery_delay", Type::U8),
         ("cost", Type::U16),
@@ -506,10 +506,10 @@
     (SmolStr::new("QSCook"), [
         ("regular_name", Type::CUtf8),
         ("unknown_data_1", Type::X(34)),
-        ("superb", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
-        ("regular", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
-        ("peculiar", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
-        ("unique", Type::Ref(SmolStr::new("QSCookVariantDescription"))),
+        ("superb", Type::Ref(Header::new("QSCookVariantDescription").unwrap())),
+        ("regular", Type::Ref(Header::new("QSCookVariantDescription").unwrap())),
+        ("peculiar", Type::Ref(Header::new("QSCookVariantDescription").unwrap())),
+        ("unique", Type::Ref(Header::new("QSCookVariantDescription").unwrap())),
         ("unknown_data_2", Type::X(48)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("QSFish"), [
@@ -828,4 +828,4 @@
         ("unknown_data", Type::X(12)),
         ("unknown_string", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-].into_iter().collect()
+].into_iter().map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema)).collect()

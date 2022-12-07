@@ -5,7 +5,6 @@ pub mod value_conversion;
 
 use indexmap::IndexMap;
 use smallvec::SmallVec;
-use smol_str::SmolStr;
 
 use itertools::Itertools as _;
 
@@ -13,7 +12,7 @@ use schema::SmallBuf;
 
 use crate::io::{read_byte, read_bytes};
 
-pub use schema::{get_nf1_for_all, AtomicAttributeValues, AtomicType, AtomicValue, Type, Value};
+pub use schema::{get_nf1_for_all, AtomicAttributeValues, AtomicSchema, AtomicSchemas, AtomicType, AtomicValue, Attribute, Header, Schema, Schemas, Type, Value};
 pub use ser::{serialize_tbl_v1, serialize_tbl_v2, SerializeError};
 pub use value_conversion::try_atomic_value_from_str;
 
@@ -110,9 +109,9 @@ pub enum DeserializeErrorDetail {
     IO(std::io::Error),
     UTF8(std::str::Utf8Error, String),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
-    DuplicateHeader(SmolStr),
-    EntryHeaderNotInTblHeader { missing: SmolStr },
-    EntryCountDoesNotMatchHeaderEntry { header: SmolStr, expected: u32, actual: usize },
+    DuplicateHeader(Header),
+    EntryHeaderNotInTblHeader { missing: Header },
+    EntryCountDoesNotMatchHeaderEntry { header: Header, expected: u32, actual: usize },
     EntryDataLengthMismatch { expected: u16, actual: Option<u16> },
     TrailingData,
 }
@@ -127,7 +126,7 @@ pub enum DeserializeErrorPosition {
     EntryHeader,
     EntryData,
     Value(AtomicType),
-    Attribute(SmolStr),
+    Attribute(Attribute),
     End,
 }
 
@@ -216,7 +215,8 @@ impl std::fmt::Display for DeserializeError {
     }
 }
 
-fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>) -> Result<SmolStr, DeserializeError> {
+fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>) -> Result<smol_str::SmolStr, DeserializeError> {
+    // TODO: remove this, use io::PaddedUtf8String
     let mut buf: smallvec::SmallVec<[u8; 256]> = smallvec::SmallVec::new();
     loop {
         let x = read_byte(f).map_err(|e| DeserializeError {
@@ -231,7 +231,7 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, cons
         }
     }
     match std::str::from_utf8(buf.as_ref()) {
-        Ok(s) => Ok(SmolStr::from(s)),
+        Ok(s) => Ok(s.into()),
         Err(utf8err) => {
             let s = String::from_utf8_lossy(buf.as_ref());
             let position = (|| {
@@ -255,7 +255,7 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, cons
                     log::warn!("{}", e.detail);
                     warnings.log(e);
                 }
-                Ok(SmolStr::from(s))
+                Ok(s.into())
             }
         }
     }
@@ -304,7 +304,7 @@ fn deserialize_header_v1<F: std::io::Read + std::io::Seek>(f: &mut F) -> Result<
 fn deserialize_header_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
-) -> Result<(u16, IndexMap<SmolStr, u32>), DeserializeError> {
+) -> Result<(u16, IndexMap<Header, u32>), DeserializeError> {
     let warnings_before = log.len();
     let number_of_entries = read_bytes(f).map(u16::from_le_bytes).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
@@ -344,7 +344,7 @@ fn deserialize_header_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, c
 fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
-) -> Result<IndexMap<SmolStr, u32>, DeserializeError> {
+) -> Result<IndexMap<Header, u32>, DeserializeError> {
     let warnings_before = log.len();
     let number_of_headers = u32::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
@@ -357,10 +357,12 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
 
     let mut header_counts = IndexMap::new();
     for i in 0..number_of_headers {
-        let hdr = deserialize_c_utf8::<_, STRICT, LOG>(f, log).map_err(|mut e| {
-            e.context.push(DeserializeErrorPosition::TblHeaderEntry { entry_number: i });
-            e
-        })?;
+        let hdr = deserialize_c_utf8::<_, STRICT, LOG>(f, log)
+            .map_err(|mut e| {
+                e.context.push(DeserializeErrorPosition::TblHeaderEntry { entry_number: i });
+                e
+            })
+            .map(|s| Header::new(&s).unwrap())?; // TODO
         let count = u32::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
             detail: DeserializeErrorDetail::IO(e),
             position: f.stream_position().ok(),
@@ -404,8 +406,8 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
 pub fn deserialize_entry_data<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
-    schema: &IndexMap<SmolStr, AtomicType>,
-) -> Result<IndexMap<SmolStr, AtomicValue>, DeserializeError> {
+    schema: &AtomicSchema,
+) -> Result<AtomicAttributeValues, DeserializeError> {
     let mut values = IndexMap::new();
     for (attr, ty) in schema.iter() {
         let warnings_before = log.len();
@@ -422,14 +424,18 @@ pub fn deserialize_entry_data<F: std::io::Read + std::io::Seek, const STRICT: bo
 fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
-    header_counts: Option<&IndexMap<SmolStr, u32>>,
-    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<(SmolStr, IndexMap<SmolStr, AtomicValue>), DeserializeError> {
+    header_counts: Option<&IndexMap<Header, u32>>,
+    schemas: &AtomicSchemas,
+) -> Result<(Header, AtomicAttributeValues), DeserializeError> {
+    // TODO: return Entry
+
     // read header name and check that it's ok (if necessary)
     let warnings_before_header = log.len();
-    let hdr = deserialize_c_utf8::<_, STRICT, LOG>(f, log).map_err(|e| e.with_context(DeserializeErrorPosition::EntryHeader))?;
+    let hdr = deserialize_c_utf8::<_, STRICT, LOG>(f, log)
+        .map_err(|e| e.with_context(DeserializeErrorPosition::EntryHeader))
+        .map(|s| Header::new(&s).unwrap())?; // TODO
     if let Some(allowed) = header_counts {
-        if !allowed.contains_key(&hdr as &str) {
+        if !allowed.contains_key(&hdr) {
             let e = DeserializeError {
                 detail: DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing: hdr.clone() },
                 position: f.stream_position().ok(),
@@ -461,7 +467,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
     if LOG {
         log::trace!("entry data length: {}", len);
     }
-    let (hdr, data) = if let Some((hdr, schema)) = schemas.get_key_value(&hdr as &str) {
+    let (hdr, data) = if let Some((hdr, schema)) = schemas.get_key_value(&hdr) {
         if LOG {
             log::debug!("parsing data according to schema");
         }
@@ -471,11 +477,9 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
         if LOG {
             log::debug!("parsing data with general parser");
         }
-        let x = deserialize_atomic_value::<_, STRICT, LOG>(f, log, &AtomicType::X(len.into())).map_err(|e| {
-            e.with_context(DeserializeErrorPosition::Attribute(SmolStr::new("data")))
-                .with_context(DeserializeErrorPosition::EntryData)
-        })?;
-        (hdr, [(SmolStr::new("data"), x)].into_iter().collect())
+        let x = deserialize_atomic_value::<_, STRICT, LOG>(f, log, &AtomicType::X(len.into()))
+            .map_err(|e| e.with_context(DeserializeErrorPosition::Attribute("data".into())).with_context(DeserializeErrorPosition::EntryData))?;
+        (hdr, [("data".into(), x)].into_iter().collect())
     };
     let actual_len = ser::atomic_attributes_serialization_length(&data);
     if actual_len != Some(len) {
@@ -505,9 +509,11 @@ fn deserialize_all_entries<F: std::io::Read + std::io::Seek, const STRICT: bool,
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
     number_of_entries: u16,
-    header_counts: Option<&IndexMap<SmolStr, u32>>,
-    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>, DeserializeError> {
+    header_counts: Option<&IndexMap<Header, u32>>,
+    schemas: &AtomicSchemas,
+) -> Result<std::vec::Vec<(Header, AtomicAttributeValues)>, DeserializeError> {
+    // TODO: return vec of Entry
+
     let mut entries = std::vec::Vec::new();
 
     // parse number of entries equal to tbl header
@@ -572,8 +578,10 @@ fn deserialize_all_entries<F: std::io::Read + std::io::Seek, const STRICT: bool,
 pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
-    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>, DeserializeError> {
+    schemas: &AtomicSchemas,
+) -> Result<std::vec::Vec<(Header, AtomicAttributeValues)>, DeserializeError> {
+    // TODO: return vec of Entry
+
     if LOG {
         log::debug!("parsing tbl");
     }
@@ -584,8 +592,10 @@ pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek, const STRICT: bool, 
 pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
-    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<(IndexMap<SmolStr, u32>, std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>), DeserializeError> {
+    schemas: &AtomicSchemas,
+) -> Result<(IndexMap<Header, u32>, std::vec::Vec<(Header, AtomicAttributeValues)>), DeserializeError> {
+    // TODO: return vec of Entry
+
     if LOG {
         log::debug!("parsing tbl");
     }
@@ -597,8 +607,8 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, 
 pub fn load_file_v1<P: AsRef<std::path::Path>, const STRICT: bool, const LOG: bool>(
     path: P,
     log: &mut WarningLogger<DeserializeError>,
-    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>, DeserializeError> {
+    schemas: &AtomicSchemas,
+) -> Result<std::vec::Vec<(Header, AtomicAttributeValues)>, DeserializeError> {
     let mut f = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: None,
@@ -610,8 +620,8 @@ pub fn load_file_v1<P: AsRef<std::path::Path>, const STRICT: bool, const LOG: bo
 pub fn load_file_v2<P: AsRef<std::path::Path>, const STRICT: bool, const LOG: bool>(
     path: P,
     log: &mut WarningLogger<DeserializeError>,
-    schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>,
-) -> Result<(IndexMap<SmolStr, u32>, std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>), DeserializeError> {
+    schemas: &AtomicSchemas,
+) -> Result<(IndexMap<Header, u32>, std::vec::Vec<(Header, AtomicAttributeValues)>), DeserializeError> {
     let mut f = std::fs::File::open(path).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::IO(e),
         position: None,
@@ -634,8 +644,8 @@ pub enum Version<'a> {
     CS2En,
     CS3,
     CS4,
-    V1(&'a IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>), // generic version with custom schema (no header counts / CS1 version)
-    V2(&'a IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>), // generic version with custom schema (with header counts / CS2 onward)
+    V1(&'a AtomicSchemas), // generic version with custom schema (no header counts / CS1 version)
+    V2(&'a AtomicSchemas), // generic version with custom schema (with header counts / CS2 onward)
 }
 
 impl std::str::FromStr for Version<'static> {
@@ -669,7 +679,7 @@ impl<'a> Version<'a> {
         }
     }
 
-    pub fn schemas(&self) -> &'a IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>> {
+    pub fn schemas(&self) -> &'a AtomicSchemas {
         match self {
             Version::CS1En => &schemas::CS1_ATOMIC,
             Version::CS2En => &schemas::CS2_ATOMIC,
@@ -684,12 +694,12 @@ impl<'a> Version<'a> {
 #[derive(Clone, Debug)]
 pub struct Tbl {
     version: VersionWithoutSchema,
-    headers: SmallVec<[SmolStr; 6]>,
-    entries: std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)>,
+    headers: SmallVec<[Header; 6]>,
+    entries: std::vec::Vec<(Header, AtomicAttributeValues)>, // TODO: vec<Entry>
 }
 
 impl Tbl {
-    pub fn new<I: IntoIterator<Item = SmolStr>, J: IntoIterator<Item = (SmolStr, IndexMap<SmolStr, AtomicValue>)>>(version: Version, headers: I, entries: J) -> Self {
+    pub fn new<I: IntoIterator<Item = Header>, J: IntoIterator<Item = (Header, AtomicAttributeValues)>>(version: Version, headers: I, entries: J) -> Self {
         Self {
             version: version.without_schema(),
             headers: headers.into_iter().collect(),
@@ -697,20 +707,19 @@ impl Tbl {
         }
     }
 
-    pub fn headers(&self) -> impl AsRef<[&str]> {
-        let hdr: SmallVec<[&str; 6]> = self.headers.iter().map(|s| s.as_ref()).collect();
-        hdr
+    pub fn headers(&self) -> impl Iterator<Item = &Header> {
+        self.headers.iter()
     }
 
-    pub fn get_entries(&self) -> &[(SmolStr, IndexMap<SmolStr, AtomicValue>)] {
+    pub fn get_entries(&self) -> &[(Header, AtomicAttributeValues)] {
         &self.entries
     }
 
-    pub fn get_mut_entries(&mut self) -> &mut std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)> {
+    pub fn get_mut_entries(&mut self) -> &mut std::vec::Vec<(Header, AtomicAttributeValues)> {
         &mut self.entries
     }
 
-    pub fn into_entries(self) -> std::vec::Vec<(SmolStr, IndexMap<SmolStr, AtomicValue>)> {
+    pub fn into_entries(self) -> std::vec::Vec<(Header, AtomicAttributeValues)> {
         self.entries
     }
 }
@@ -739,7 +748,7 @@ fn try_read<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: boo
     }
 }
 
-fn warnings_are_likely_fine(tbl: &Tbl, schemas: &IndexMap<SmolStr, IndexMap<SmolStr, AtomicType>>, warnings: &[DeserializeError]) -> bool {
+fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[DeserializeError]) -> bool {
     let mut utf8errors = 0;
     // For errors that appear while parsing an entry, check that the schema for the entry is known.
     // For other errors, check that they are probably minor.
@@ -757,7 +766,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &IndexMap<SmolStr, IndexMap<Smol
                 DeserializeErrorPosition::Entry { number } => {
                     let entries = tbl.get_entries();
                     let number: usize = (*number).try_into().unwrap();
-                    let header: SmolStr = entries[number].0.clone();
+                    let header: Header = entries[number].0.clone();
                     if !schemas.contains_key(&header) {
                         return false;
                     } else {
@@ -866,11 +875,11 @@ pub fn write_file<P: AsRef<std::path::Path>>(path: P, tbl: &Tbl) -> Result<usize
 }
 
 pub struct Entry {
-    header: SmolStr,
+    header: Header,
     values: AtomicAttributeValues,
 }
 
-pub fn tbl_entries_legacy_convert(entries: &[(SmolStr, AtomicAttributeValues)]) -> std::vec::Vec<Entry> {
+pub fn tbl_entries_legacy_convert(entries: &[(Header, AtomicAttributeValues)]) -> std::vec::Vec<Entry> {
     // TODO: remove
     entries
         .iter()
@@ -889,9 +898,6 @@ mod test {
     use super::{
         deserialize_tbl_v1, deserialize_tbl_v2, read, schemas, serialize_tbl_v1, serialize_tbl_v2, tbl_entries_legacy_convert, write, DeserializeError, ReadTblResult, Version, WarningLogger,
     };
-
-    use indexmap::IndexMap;
-    use smol_str::SmolStr;
 
     static INIT_LOG: std::sync::Once = std::sync::Once::new();
 
@@ -999,7 +1005,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
+                    let e: &[_] = &entries;
                     let _ = serialize_tbl_v1(&mut serialized, &tbl_entries_legacy_convert(e)).unwrap();
                     serialized.into_inner()
                 };
@@ -1031,7 +1037,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
+                    let e: &[_] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                     let _ = serialize_tbl_v2(&mut serialized, &headers, &tbl_entries_legacy_convert(&e)).unwrap();
                     serialized.into_inner()
@@ -1059,7 +1065,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
+                    let e: &[_] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                     let _ = serialize_tbl_v2(&mut serialized, &headers, &tbl_entries_legacy_convert(&e)).unwrap();
                     serialized.into_inner()
@@ -1087,7 +1093,7 @@ mod test {
                 assert!(!logger.has_warnings());
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
-                    let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
+                    let e: &[_] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
                     let _ = serialize_tbl_v2(&mut serialized, &headers, &tbl_entries_legacy_convert(&e)).unwrap();
                     serialized.into_inner()

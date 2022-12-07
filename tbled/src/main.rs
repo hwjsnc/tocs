@@ -11,14 +11,14 @@ use fltk::prelude::WidgetExt as _;
 use clap::Parser;
 
 use indexmap::IndexMap;
-use smol_str::SmolStr;
 
-type Attributes = IndexMap<SmolStr, tocs::tbl::AtomicType>;
-type AttributeValues = IndexMap<SmolStr, tocs::tbl::AtomicValue>;
+use tocs::tbl::AtomicAttributeValues as AttributeValues;
+use tocs::tbl::AtomicSchema as Schema;
+use tocs::tbl::Header;
 
 // Given rows in any order, collect all rows with the same header together
-fn partition_entries_with_headers(headers: std::vec::Vec<SmolStr>, entries: std::vec::Vec<(SmolStr, AttributeValues)>) -> IndexMap<SmolStr, std::vec::Vec<AttributeValues>> {
-    let mut entries_for_header: IndexMap<SmolStr, std::vec::Vec<AttributeValues>> = headers.into_iter().map(|hdr| (hdr, vec![])).collect();
+fn partition_entries_with_headers(headers: std::vec::Vec<Header>, entries: std::vec::Vec<(Header, AttributeValues)>) -> IndexMap<Header, std::vec::Vec<AttributeValues>> {
+    let mut entries_for_header: IndexMap<Header, std::vec::Vec<AttributeValues>> = headers.into_iter().map(|hdr| (hdr, vec![])).collect();
     for (hdr, data) in entries.into_iter() {
         match entries_for_header.entry(hdr) {
             indexmap::map::Entry::Occupied(mut e) => {
@@ -63,10 +63,10 @@ struct Widgets {
 }
 
 pub struct AppData {
-    entries: IndexMap<SmolStr, std::vec::Vec<AttributeValues>>,
+    entries: IndexMap<Header, std::vec::Vec<AttributeValues>>,
     tbl_version: tocs::tbl::Version<'static>,
     path: std::path::PathBuf,
-    active_entry_type: Option<SmolStr>,
+    active_entry_type: Option<Header>,
     warnings: std::vec::Vec<tocs::tbl::DeserializeError>,
     //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
 }
@@ -311,12 +311,12 @@ impl App {
                     // try loading data from file
                     match tocs::tbl::read_file(&path, *version) {
                         tocs::tbl::ReadTblResult::Ok(tbl) => {
-                            let headers = tbl.headers().as_ref().iter().map(SmolStr::from).collect();
+                            let headers = tbl.headers().cloned().collect();
                             state.entries = partition_entries_with_headers(headers, tbl.into_entries());
                             state.path = path;
                         }
                         tocs::tbl::ReadTblResult::Warn { tbl, warnings } => {
-                            let headers = tbl.headers().as_ref().iter().map(SmolStr::from).collect();
+                            let headers = tbl.headers().cloned().collect();
                             state.warnings = warnings;
                             state.entries = partition_entries_with_headers(headers, tbl.into_entries());
                             state.path = path;
@@ -407,13 +407,20 @@ impl App {
                         self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap().activate();
                     }
                     // reset header selector
-                    *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
+                    *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
+                        let hdr = Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
+                        if entries.contains_key(&hdr) {
+                            Some(hdr)
+                        } else {
+                            None
+                        }
+                    });
                     self.widgets.header_selector.clear();
                     for hdr in state.entries.keys() {
-                        self.widgets.header_selector.add(hdr);
+                        self.widgets.header_selector.add(hdr.as_str());
                     }
                     if let Some((hdr, _)) = state.entries.iter().next() {
-                        self.widgets.header_selector.set_value(hdr);
+                        self.widgets.header_selector.set_value(hdr.as_str());
                         state.active_entry_type = Some(hdr.clone());
                     }
                 }
@@ -423,12 +430,20 @@ impl App {
             Some(Msg::UpdateTable) => {
                 let mut state = self.state.lock().unwrap();
                 log::trace!("boop");
-                state.active_entry_type = self.widgets.header_selector.value().and_then(|hdr| state.entries.get(&hdr as &str).map(|_| SmolStr::new(hdr)));
+                // reset header selector
+                state.active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
+                    let hdr = Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
+                    if state.entries.contains_key(&hdr) {
+                        Some(hdr)
+                    } else {
+                        None
+                    }
+                });
                 if let Some(hdr) = &state.active_entry_type {
                     log::trace!("beep");
                     // width of each column = max(header width, width of each entry in that column)
                     // width of each row = max(width of all entries in all rows)
-                    let attrs = schema_for_header(hdr, state.tbl_version.schemas());
+                    let attrs = schema_for_header(&hdr, state.tbl_version.schemas());
                     let mut column_widths: std::vec::Vec<i32> = attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect();
                     let entries = state.entries.get(hdr).unwrap();
                     let nrows = entries.len().try_into().unwrap();
@@ -549,10 +564,10 @@ fn get_cell_value(state: &mut AppData, row: i32, col: i32) -> Option<&mut tocs::
         .map(|(_, val)| val)
 }
 
-fn schema_for_header<'a>(header: &str, schemas: &'a IndexMap<SmolStr, Attributes>) -> &'a Attributes {
+fn schema_for_header<'a>(header: &Header, schemas: &'a IndexMap<Header, Schema>) -> &'a Schema {
     lazy_static::lazy_static! {
-        pub static ref GENERIC : Attributes = [
-            (SmolStr::from("data"), tocs::tbl::AtomicType::X(0))
+        pub static ref GENERIC : Schema = [
+            ("data".into(), tocs::tbl::AtomicType::X(0))
         ].into_iter().collect();
     };
     schemas.get(header).unwrap_or(&GENERIC)
@@ -583,9 +598,9 @@ fn export_csv(path: &std::path::Path, data: &[AttributeValues]) -> std::io::Resu
     Ok(())
 }
 
-fn save_tbl_file(path: &std::path::Path, version: tocs::tbl::Version, entries: &IndexMap<SmolStr, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
-    let headers: std::vec::Vec<SmolStr> = entries.keys().cloned().collect();
-    let entries: std::vec::Vec<(SmolStr, AttributeValues)> = entries.iter().flat_map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).collect();
+fn save_tbl_file(path: &std::path::Path, version: tocs::tbl::Version, entries: &IndexMap<Header, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
+    let headers: std::vec::Vec<Header> = entries.keys().cloned().collect();
+    let entries: std::vec::Vec<(Header, AttributeValues)> = entries.iter().flat_map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).collect();
     let tbl = tocs::tbl::Tbl::new(version, headers, entries);
     tocs::tbl::write_file(path, &tbl)
 }
@@ -601,7 +616,7 @@ fn main() {
             // try loading data from file
             match tocs::tbl::read_file(&path, version) {
                 tocs::tbl::ReadTblResult::Ok(tbl) => {
-                    let headers = tbl.headers().as_ref().iter().map(SmolStr::from).collect();
+                    let headers = tbl.headers().cloned().collect();
                     AppData {
                         active_entry_type: None,
                         tbl_version: version,
@@ -611,7 +626,7 @@ fn main() {
                     }
                 }
                 tocs::tbl::ReadTblResult::Warn { tbl, warnings } => {
-                    let headers = tbl.headers().as_ref().iter().map(SmolStr::from).collect();
+                    let headers = tbl.headers().cloned().collect();
                     AppData {
                         active_entry_type: None,
                         tbl_version: version,

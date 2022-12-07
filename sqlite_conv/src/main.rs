@@ -121,7 +121,7 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
             .collect();
         sqlite_recreate_table_destroy_if_exists_unsafe(&tx, "generic", &generic_schema)?;
         for (table, schema) in schemas.iter() {
-            sqlite_recreate_table_destroy_if_exists_unsafe(&tx, table, schema)?;
+            sqlite_recreate_table_destroy_if_exists_unsafe(&tx, table.as_str(), schema)?;
         }
         Ok(())
     };
@@ -167,10 +167,10 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
             };
             for (n, (header, values)) in entries.iter().enumerate() {
                 let insert_result = if schemas.contains_key(header) {
-                    sqlite_insert_unsafe(&tx, header.as_ref(), &path_for_db, values)
+                    sqlite_insert_unsafe(&tx, header.as_str(), &path_for_db, values)
                 } else {
                     let mut values_with_header = IndexMap::new();
-                    values_with_header.insert(SmolStr::from("header"), tocs::tbl::AtomicValue::CUtf8(header.clone()));
+                    values_with_header.insert(SmolStr::from("header"), tocs::tbl::AtomicValue::CUtf8(header.as_str().into()));
                     for (attr, val) in values {
                         values_with_header.insert(attr.clone(), val.clone());
                     }

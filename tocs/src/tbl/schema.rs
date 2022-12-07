@@ -23,7 +23,7 @@ pub enum Type {
     //C_SJIS, // null terminated Shift-JIS string
     X(usize),
     Repeat(usize, Box<Type>),
-    Ref(SmolStr),
+    Ref(Header),
 }
 
 /// Values corresponding to the types available in the schema
@@ -71,8 +71,8 @@ pub enum AtomicValue {
 }
 
 // useful type definitions
-pub type Header = SmolStr; // TODO: PaddedAsciiString<1>
-pub type Attribute = SmolStr;
+pub type Header = crate::io::PaddedAsciiString<1>;
+pub type Attribute = SmolStr; // attributes do not need to be serialized or deserialized
 
 pub type Schema = IndexMap<Attribute, Type>;
 pub type Schemas = IndexMap<Header, Schema>;
@@ -86,14 +86,14 @@ pub type AtomicAttributeValues = IndexMap<Attribute, AtomicValue>;
 
 #[derive(Clone, Debug)]
 pub enum NF1ErrorDetail {
-    NoSuchSchema(SmolStr),
-    Duplicate(SmolStr),
+    NoSuchSchema(Header),
+    Duplicate(Header),
 }
 
 #[derive(Clone, Debug)]
 pub enum NF1ErrorPosition {
     SchemaLookup,
-    Deref(SmolStr),
+    Deref(Header),
 }
 
 #[derive(Clone, Debug)]
@@ -203,7 +203,7 @@ impl AtomicValue {
 }
 
 // "Flatten" the schema by unrolling sequences and dereferencing references
-pub fn get_nf1(schema_name: &SmolStr, schemas: &Schemas) -> Result<AtomicSchema, NF1Error> {
+pub fn get_nf1(schema_name: &Header, schemas: &Schemas) -> Result<AtomicSchema, NF1Error> {
     // TODO: check duplicates
     let schema = schemas.get(schema_name).ok_or_else(|| NF1Error {
         detail: NF1ErrorDetail::NoSuchSchema(schema_name.clone()),

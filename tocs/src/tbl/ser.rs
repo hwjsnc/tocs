@@ -2,7 +2,7 @@
 
 use std::io::Write as _;
 
-use super::schema::{AtomicAttributeValues, AtomicSchema, AtomicSchemas, AtomicValue, Header};
+use super::schema::{AtomicAttributeValues, AtomicValue, Header};
 use super::Entry;
 
 pub fn atomic_attributes_serialization_length(schema: &AtomicAttributeValues) -> Option<u16> {
@@ -70,11 +70,10 @@ impl AtomicValue {
     }
 }
 
-pub fn nf1_schema_serialize<F: std::io::Write>(f: &mut F, header: &str, attributes: &AtomicAttributeValues) -> Result<usize, SerializeError> {
+pub fn nf1_schema_serialize<F: std::io::Write>(f: &mut F, header: &Header, attributes: &AtomicAttributeValues) -> Result<usize, SerializeError> {
     let mut written = 0;
-    written += f.write(header.as_bytes()).map_err(SerializeError::IOError)?;
-    written += f.write(&[0]).map_err(SerializeError::IOError)?;
-    let length = atomic_attributes_serialization_length(attributes).ok_or_else(|| SerializeError::EntryDataTooLong)?;
+    written += header.write_to(f).map_err(SerializeError::IOError)?;
+    let length = atomic_attributes_serialization_length(attributes).ok_or(SerializeError::EntryDataTooLong)?;
     written += f.write(&length.to_le_bytes()).map_err(SerializeError::IOError)?;
     for (_, v) in attributes.iter() {
         written += v.write(f).map_err(SerializeError::IOError)?;
@@ -120,8 +119,7 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[Header], entrie
     });
     for (h, n) in header_counts {
         // TODO
-        written += f.write(h.as_bytes()).map_err(SerializeError::IOError)?;
-        written += f.write(&[0]).map_err(SerializeError::IOError)?;
+        written += h.write_to(f).map_err(SerializeError::IOError)?;
         written += f.write(&n.to_le_bytes()).map_err(SerializeError::IOError)?;
     }
     for entry in entries {
