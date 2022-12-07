@@ -111,8 +111,8 @@ impl<P: Clone, W: ErrorWithContext<Position = P>> WarningLogger<W> {
 
 #[derive(Debug)]
 pub enum DeserializeErrorDetail {
-    IO(std::io::Error),
-    UTF8(std::str::Utf8Error, String),
+    Io(std::io::Error),
+    Utf8(std::str::Utf8Error, String),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
     DuplicateHeader(Header),
     EntryHeaderNotInTblHeader { missing: Header },
@@ -153,8 +153,8 @@ impl detail::ErrorWithContext for DeserializeError {
 impl std::fmt::Display for DeserializeErrorDetail {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match self {
-            DeserializeErrorDetail::IO(e) => write!(f, "{}", e),
-            DeserializeErrorDetail::UTF8(e, s) => write!(f, "{} for string '{}'", e, s.escape_debug()),
+            DeserializeErrorDetail::Io(e) => write!(f, "{}", e),
+            DeserializeErrorDetail::Utf8(e, s) => write!(f, "{} for string '{}'", e, s.escape_debug()),
             DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum } => {
                 write!(f, "sum of entry numbers ")?;
                 if let Some(n) = sum {
@@ -225,7 +225,7 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, cons
     let mut buf: smallvec::SmallVec<[u8; 256]> = smallvec::SmallVec::new();
     loop {
         let x = read_byte(f).map_err(|e| DeserializeError {
-            detail: DeserializeErrorDetail::IO(e),
+            detail: DeserializeErrorDetail::Io(e),
             position: f.stream_position().ok(),
             context: vec![DeserializeErrorPosition::Value(AtomicType::CUtf8)],
         })?;
@@ -246,7 +246,7 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, cons
                 pos.try_into().ok()
             })();
             let e = DeserializeError {
-                detail: DeserializeErrorDetail::UTF8(utf8err, s.to_string()),
+                detail: DeserializeErrorDetail::Utf8(utf8err, s.to_string()),
                 position,
                 context: vec![DeserializeErrorPosition::Value(AtomicType::CUtf8)],
             };
@@ -272,7 +272,7 @@ pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek, const STRICT: 
     t: &AtomicType,
 ) -> Result<AtomicValue, DeserializeError> {
     let wrap_err = |e: std::io::Error, f: &mut F| DeserializeError {
-        detail: DeserializeErrorDetail::IO(e),
+        detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::Value(*t)],
     };
@@ -299,7 +299,7 @@ pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek, const STRICT: 
 /// deserialize tbl header for trails of cold steel (no list of headers at the start)
 fn deserialize_header_v1<F: std::io::Read + std::io::Seek>(f: &mut F) -> Result<u16, DeserializeError> {
     read_bytes(f).map(u16::from_le_bytes).map_err(|e| DeserializeError {
-        detail: DeserializeErrorDetail::IO(e),
+        detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::TblHeader],
     })
@@ -312,7 +312,7 @@ fn deserialize_header_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, c
 ) -> Result<(u16, IndexMap<Header, u32>), DeserializeError> {
     let warnings_before = log.len();
     let number_of_entries = read_bytes(f).map(u16::from_le_bytes).map_err(|e| DeserializeError {
-        detail: DeserializeErrorDetail::IO(e),
+        detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::TblHeader],
     })?;
@@ -352,7 +352,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
 ) -> Result<IndexMap<Header, u32>, DeserializeError> {
     let warnings_before = log.len();
     let number_of_headers = u32::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
-        detail: DeserializeErrorDetail::IO(e),
+        detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::TblHeader],
     })?);
@@ -369,7 +369,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
             })
             .map(|s| Header::new(&s).unwrap())?; // TODO
         let count = u32::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
-            detail: DeserializeErrorDetail::IO(e),
+            detail: DeserializeErrorDetail::Io(e),
             position: f.stream_position().ok(),
             context: vec![DeserializeErrorPosition::TblHeaderEntry { entry_number: i }],
         })?);
@@ -465,7 +465,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
     let warnings_before_data = log.len();
     // read data length
     let len = u16::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
-        detail: DeserializeErrorDetail::IO(e),
+        detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::EntryHeader],
     })?);
@@ -534,7 +534,7 @@ fn deserialize_all_entries<F: std::io::Read + std::io::Seek, const STRICT: bool,
     // parse the rest of the files
     let getpos = |f: &mut F| {
         f.stream_position().map_err(|e| DeserializeError {
-            detail: DeserializeErrorDetail::IO(e),
+            detail: DeserializeErrorDetail::Io(e),
             position: None,
             context: vec![DeserializeErrorPosition::End],
         })
@@ -546,7 +546,7 @@ fn deserialize_all_entries<F: std::io::Read + std::io::Seek, const STRICT: bool,
         Ok(len)
     };
     let file_len = getlen(f).map_err(|e| DeserializeError {
-        detail: DeserializeErrorDetail::IO(e),
+        detail: DeserializeErrorDetail::Io(e),
         position: None,
         context: vec![DeserializeErrorPosition::End],
     })?;
@@ -615,7 +615,7 @@ pub fn load_file_v1<P: AsRef<std::path::Path>, const STRICT: bool, const LOG: bo
     schemas: &AtomicSchemas,
 ) -> Result<std::vec::Vec<(Header, AtomicAttributeValues)>, DeserializeError> {
     let mut f = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| DeserializeError {
-        detail: DeserializeErrorDetail::IO(e),
+        detail: DeserializeErrorDetail::Io(e),
         position: None,
         context: vec![DeserializeErrorPosition::Start],
     })?);
@@ -628,7 +628,7 @@ pub fn load_file_v2<P: AsRef<std::path::Path>, const STRICT: bool, const LOG: bo
     schemas: &AtomicSchemas,
 ) -> Result<(IndexMap<Header, u32>, std::vec::Vec<(Header, AtomicAttributeValues)>), DeserializeError> {
     let mut f = std::fs::File::open(path).map_err(|e| DeserializeError {
-        detail: DeserializeErrorDetail::IO(e),
+        detail: DeserializeErrorDetail::Io(e),
         position: None,
         context: vec![DeserializeErrorPosition::Start],
     })?;
@@ -759,7 +759,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
     // For other errors, check that they are probably minor.
     // While we're at it, also count the number of UTF8 errors.
     for w in warnings.iter() {
-        if matches!(w.detail, DeserializeErrorDetail::UTF8(_, _)) {
+        if matches!(w.detail, DeserializeErrorDetail::Utf8(_, _)) {
             utf8errors += 1;
         }
         let mut is_entry_error = false;
@@ -787,8 +787,8 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
         }
         if !is_entry_error {
             match &w.detail {
-                DeserializeErrorDetail::IO(_) => unreachable!(),
-                DeserializeErrorDetail::UTF8(_, _) => return false,
+                DeserializeErrorDetail::Io(_) => unreachable!(),
+                DeserializeErrorDetail::Utf8(_, _) => return false,
                 DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { .. } => {} // it's probably fine
                 DeserializeErrorDetail::DuplicateHeader(_) => {}
                 DeserializeErrorDetail::EntryHeaderNotInTblHeader { .. } => {}
@@ -831,7 +831,7 @@ pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> Re
     if let Err(e) = f.rewind() {
         log::warn!("Tried to reread the table non-strict but rewinding failed");
         return ReadTblResult::Err(DeserializeError {
-            detail: DeserializeErrorDetail::IO(e),
+            detail: DeserializeErrorDetail::Io(e),
             position: f.stream_position().ok(),
             context: vec![], // TODO: new ErrorPosition just for this?
         });
@@ -855,7 +855,7 @@ pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, Serialize
         VersionWithoutSchema::V1 => serialize_tbl_v1(f, &tbl_entries_legacy_convert(&tbl.entries))?,
         VersionWithoutSchema::V2 => serialize_tbl_v2(f, &tbl.headers, &tbl_entries_legacy_convert(&tbl.entries))?,
     };
-    f.flush().map_err(SerializeError::IOError)?;
+    f.flush().map_err(SerializeError::IoError)?;
     Ok(written)
 }
 
@@ -863,7 +863,7 @@ pub fn read_file<P: AsRef<std::path::Path>>(path: P, version: Version) -> ReadTb
     match std::fs::File::open(path.as_ref()) {
         Ok(f) => read(&mut std::io::BufReader::new(f), version),
         Err(e) => ReadTblResult::Err(DeserializeError {
-            detail: DeserializeErrorDetail::IO(e),
+            detail: DeserializeErrorDetail::Io(e),
             position: None,
             context: vec![DeserializeErrorPosition::Start],
         }),
@@ -874,7 +874,7 @@ pub fn write_file<P: AsRef<std::path::Path>>(path: P, tbl: &Tbl) -> Result<usize
     std::fs::File::options()
         .write(true)
         .open(path.as_ref())
-        .map_err(SerializeError::IOError)
+        .map_err(SerializeError::IoError)
         .and_then(|f| write(&mut std::io::BufWriter::new(f), tbl))
 }
 
