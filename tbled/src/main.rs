@@ -435,7 +435,7 @@ impl App {
                     let mut row_height = 1;
                     for row in entries {
                         for (i, (_, val)) in row.iter().enumerate() {
-                            let (w, h) = fltk::draw::measure(tocs::tbl::atomic_value_to_string(val).as_ref(), false);
+                            let (w, h) = fltk::draw::measure(&val.to_string(), false);
                             column_widths[i] = std::cmp::max(column_widths[i], w);
                             row_height = std::cmp::max(row_height, h);
                         }
@@ -488,7 +488,7 @@ impl App {
                             // copy table value to input
                             log::debug!("double click on cell");
                             let mut state = self.state.lock().unwrap();
-                            self.widgets.input.set_value(tocs::tbl::atomic_value_to_string(get_cell_value(&mut *state, row, col).unwrap()).as_ref());
+                            self.widgets.input.set_value(&get_cell_value(&mut *state, row, col).unwrap().to_string());
                             self.widgets.input.take_focus().unwrap();
                             self.widgets.input.redraw();
                         }
@@ -506,11 +506,11 @@ impl App {
                         let mut state = self.state.lock().unwrap();
                         let text = input.value();
                         let cell_value = get_cell_value(&mut *state, row, col).unwrap();
-                        let ty = tocs::tbl::atomic_type(cell_value);
-                        if let Ok(value) = tocs::tbl::try_atomic_value_from_str(&ty, &text) {
+                        let ty = cell_value.r#type();
+                        if let Ok(value) = tocs::tbl::AtomicValue::from_str(&ty, &text) {
                             *cell_value = value;
                         } else {
-                            fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", tocs::tbl::atomic_type_describe(&ty)));
+                            fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", ty.describe()));
                         }
                     }
                     table.redraw();
@@ -574,7 +574,7 @@ fn export_csv(path: &std::path::Path, data: &[AttributeValues]) -> std::io::Resu
     for entry in data {
         // one field for each attribute value
         for val in entry.values() {
-            csv.write_field(tocs::tbl::atomic_value_to_string(val).as_ref().as_bytes())?;
+            csv.write_field(val.to_string().as_bytes())?;
         }
         // end of record
         let eor: [&str; 0] = [];
@@ -689,7 +689,7 @@ fn draw_data(value: &tocs::tbl::AtomicValue, x: i32, y: i32, w: i32, h: i32, cel
     fltk::draw::draw_rectf(x, y, w, h);
     fltk::draw::set_draw_color(fltk::enums::Color::Gray0);
     //fltk::draw::set_font(enums::Font::Helvetica, 14);
-    let text_alignment = match tocs::tbl::atomic_type(value) {
+    let text_alignment = match value.r#type() {
         tocs::tbl::AtomicType::I8
         | tocs::tbl::AtomicType::I16
         | tocs::tbl::AtomicType::I32
@@ -705,6 +705,6 @@ fn draw_data(value: &tocs::tbl::AtomicValue, x: i32, y: i32, w: i32, h: i32, cel
 
     let (x, w) = if w > 5 { (x + 2, w - 4) } else { (x, w) };
     let (y, h) = if h > 5 { (y + 2, h - 4) } else { (y, h) };
-    fltk::draw::draw_text2(tocs::tbl::atomic_value_to_string(value).as_ref(), x, y, w, h, text_alignment);
+    fltk::draw::draw_text2(&value.to_string(), x, y, w, h, text_alignment);
     fltk::draw::pop_clip();
 }
