@@ -842,7 +842,6 @@ pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> Re
         let warnings = logger.into_warnings();
         // do all entries in the file for which there are warnings have known schemas?
         if warnings_are_likely_fine(&tbl, version.schemas(), &warnings) {
-            // TODO: check that there are not too many UTF-8 errors?
             log::debug!("Reread the tbl non-strictly, seems fine.");
             return ReadTblResult::Warn { tbl, warnings };
         }
