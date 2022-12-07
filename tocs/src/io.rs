@@ -77,7 +77,6 @@ impl<const PADDING: usize> PaddedByteString<PADDING> {
 
     pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
         let mut n = f.write(&self.bytes)?;
-        n += f.write(&[0])?;
         loop {
             n += f.write(&[0])?;
             if n % PADDING == 0 {
