@@ -1,8 +1,7 @@
 pub mod schema;
 pub mod schemas;
+pub mod ser;
 pub mod value_conversion;
-
-use std::io::Write as _;
 
 use indexmap::IndexMap;
 use smallvec::SmallVec;
@@ -14,7 +13,8 @@ use schema::SmallBuf;
 
 use crate::io::{read_byte, read_bytes};
 
-pub use schema::{get_nf1_for_all, AtomicType, AtomicValue, Type, Value};
+pub use schema::{get_nf1_for_all, AtomicAttributeValues, AtomicType, AtomicValue, Type, Value};
+pub use ser::{serialize_tbl_v1, serialize_tbl_v2, SerializeError};
 pub use value_conversion::try_atomic_value_from_str;
 
 // Generic helpers
@@ -101,141 +101,6 @@ impl<P: Clone, W: ErrorWithContext<Position = P>> WarningLogger<W> {
             w.add_context(context.clone());
         }
     }
-}
-
-// Serialize, i.e. generate tbl data
-
-pub fn atomic_schema_serialization_length(schema: &IndexMap<SmolStr, AtomicValue>) -> Result<u16, ()> {
-    schema.iter().map(|(_, v)| atomic_value_serialization_length(v)).fold(Ok(0), |a, b| {
-        let x = a?;
-        let y = b?;
-        x.checked_add(y).ok_or(())
-    })
-}
-
-pub fn atomic_value_serialization_length(v: &AtomicValue) -> Result<u16, ()> {
-    match v {
-        AtomicValue::I8(_) => Ok(1),
-        AtomicValue::I16(_) => Ok(2),
-        AtomicValue::I32(_) => Ok(4),
-        AtomicValue::U8(_) => Ok(1),
-        AtomicValue::U16(_) => Ok(2),
-        AtomicValue::U32(_) => Ok(4),
-        AtomicValue::F32(_) => Ok(4),
-        AtomicValue::CUtf8(s) => (s.len() + 1).try_into().map_err(|_| ()),
-        AtomicValue::X(data) => data.len().try_into().map_err(|_| ()),
-    }
-}
-
-#[derive(Debug)]
-pub enum SerializeError {
-    IOError(std::io::Error),
-    TooManyHeaders,
-    TooManyEntries,
-    EntryDataTooLong,
-}
-
-impl std::fmt::Display for SerializeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            SerializeError::IOError(e) => write!(f, "{}", e),
-            SerializeError::TooManyHeaders => write!(f, "too many headers in tbl (max 4294967295)"),
-            SerializeError::TooManyEntries => write!(f, "too many entries in tbl (max 65535)"),
-            SerializeError::EntryDataTooLong => write!(f, "entry data too long (max 65535bytes))"),
-        }
-    }
-}
-
-pub fn serialize_c_utf8<F: std::io::Write>(f: &mut F, s: &str) -> Result<usize, std::io::Error> {
-    let mut written = f.write(s.as_bytes())?;
-    assert!(!s.as_bytes().iter().any(|x| *x == 0));
-    written += f.write(&[0])?;
-    Ok(written)
-}
-
-pub fn serialize_atomic_value<F: std::io::Write>(f: &mut F, v: &AtomicValue) -> Result<usize, std::io::Error> {
-    match v {
-        AtomicValue::I8(x) => f.write(&x.to_le_bytes()),
-        AtomicValue::I16(x) => f.write(&x.to_le_bytes()),
-        AtomicValue::I32(x) => f.write(&x.to_le_bytes()),
-        AtomicValue::U8(x) => f.write(&x.to_le_bytes()),
-        AtomicValue::U16(x) => f.write(&x.to_le_bytes()),
-        AtomicValue::U32(x) => f.write(&x.to_le_bytes()),
-        AtomicValue::F32(x) => f.write(&x.to_le_bytes()),
-        AtomicValue::CUtf8(s) => serialize_c_utf8(f, s.as_ref()),
-        AtomicValue::X(data) => f.write(data),
-    }
-}
-
-pub fn nf1_schema_serialize<F: std::io::Write>(f: &mut F, header: &str, attributes: &IndexMap<SmolStr, AtomicValue>) -> Result<usize, SerializeError> {
-    let mut written = 0;
-    written += serialize_c_utf8(f, header).map_err(SerializeError::IOError)?;
-    let length = atomic_schema_serialization_length(attributes).map_err(|()| SerializeError::EntryDataTooLong)?;
-    written += f.write(&length.to_le_bytes()).map_err(SerializeError::IOError)?;
-    for (_, v) in attributes.iter() {
-        written += serialize_atomic_value(f, v).map_err(SerializeError::IOError)?;
-    }
-    Ok(written)
-}
-
-pub fn serialize_tbl_v1<F: std::io::Write>(f: &mut F, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue>)]) -> Result<usize, SerializeError> {
-    let mut written = 0;
-    let number_of_entries: Result<u16, _> = entries.len().try_into();
-    match number_of_entries {
-        Ok(n) => {
-            written += f.write(&n.to_le_bytes()).map_err(SerializeError::IOError)?;
-        }
-        Err(_) => {
-            log::error!("too many entries in file ({})", entries.len());
-            return Err(SerializeError::TooManyEntries);
-        }
-    }
-    for (header, attrs) in entries {
-        written += nf1_schema_serialize(f, header, attrs)?;
-    }
-    Ok(written)
-}
-
-pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[SmolStr], entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue>)]) -> Result<usize, SerializeError> {
-    let mut written = 0;
-    let number_of_entries: Result<u16, _> = entries.len().try_into();
-    match number_of_entries {
-        Ok(n) => {
-            written += f.write(&n.to_le_bytes()).map_err(SerializeError::IOError)?;
-        }
-        Err(_) => {
-            log::error!("too many entries in file ({})", entries.len());
-            return Err(SerializeError::TooManyEntries);
-        }
-    }
-    let number_of_headers: u32 = headers.len().try_into().map_err(|_| SerializeError::TooManyHeaders)?;
-    written += f.write(&number_of_headers.to_le_bytes()).map_err(SerializeError::IOError)?;
-    let header_counts = headers.iter().map(|hdr| {
-        let n: u32 = entries.iter().filter(|(s, _)| s == hdr).count().try_into().expect("total number of entries fits in a u16");
-        (hdr, n)
-    });
-    for (h, n) in header_counts {
-        written += serialize_c_utf8(f, h.as_ref()).map_err(SerializeError::IOError)?;
-        written += f.write(&n.to_le_bytes()).map_err(SerializeError::IOError)?;
-    }
-    for (header, attrs) in entries {
-        written += nf1_schema_serialize(f, header, attrs)?;
-    }
-    Ok(written)
-}
-
-pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue>)]) -> Result<usize, SerializeError> {
-    let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
-    let written = serialize_tbl_v1(&mut f, entries)?;
-    f.flush().map_err(SerializeError::IOError)?;
-    Ok(written)
-}
-
-pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[SmolStr], entries: &[(SmolStr, IndexMap<SmolStr, AtomicValue>)]) -> Result<usize, SerializeError> {
-    let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IOError)?);
-    let written = serialize_tbl_v2(&mut f, headers, entries)?;
-    f.flush().map_err(SerializeError::IOError)?;
-    Ok(written)
 }
 
 // Deserialize, i.e. read tbl
@@ -612,7 +477,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
         })?;
         (hdr, [(SmolStr::new("data"), x)].into_iter().collect())
     };
-    let actual_len = atomic_schema_serialization_length(&data).ok();
+    let actual_len = ser::atomic_attributes_serialization_length(&data);
     if actual_len != Some(len) {
         let e = DeserializeError {
             detail: DeserializeErrorDetail::EntryDataLengthMismatch { expected: len, actual: actual_len },
@@ -974,8 +839,8 @@ pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> Re
 
 pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, SerializeError> {
     let written = match tbl.version {
-        VersionWithoutSchema::V1 => serialize_tbl_v1(f, tbl.entries.as_ref())?,
-        VersionWithoutSchema::V2 => serialize_tbl_v2(f, &tbl.headers, tbl.entries.as_ref())?,
+        VersionWithoutSchema::V1 => serialize_tbl_v1(f, &tbl_entries_legacy_convert(&tbl.entries))?,
+        VersionWithoutSchema::V2 => serialize_tbl_v2(f, &tbl.headers, &tbl_entries_legacy_convert(&tbl.entries))?,
     };
     f.flush().map_err(SerializeError::IOError)?;
     Ok(written)
@@ -1000,12 +865,30 @@ pub fn write_file<P: AsRef<std::path::Path>>(path: P, tbl: &Tbl) -> Result<usize
         .and_then(|f| write(&mut std::io::BufWriter::new(f), tbl))
 }
 
+pub struct Entry {
+    header: SmolStr,
+    values: AtomicAttributeValues,
+}
+
+pub fn tbl_entries_legacy_convert(entries: &[(SmolStr, AtomicAttributeValues)]) -> std::vec::Vec<Entry> {
+    // TODO: remove
+    entries
+        .iter()
+        .map(|x| Entry {
+            header: x.0.clone(),
+            values: x.1.clone(),
+        })
+        .collect()
+}
+
 // tests
 
 #[cfg(feature = "private-tests")]
 #[cfg(test)]
 mod test {
-    use super::{deserialize_tbl_v1, deserialize_tbl_v2, read, schemas, serialize_tbl_v1, serialize_tbl_v2, write, DeserializeError, ReadTblResult, Version, WarningLogger};
+    use super::{
+        deserialize_tbl_v1, deserialize_tbl_v2, read, schemas, serialize_tbl_v1, serialize_tbl_v2, tbl_entries_legacy_convert, write, DeserializeError, ReadTblResult, Version, WarningLogger,
+    };
 
     use indexmap::IndexMap;
     use smol_str::SmolStr;
@@ -1117,7 +1000,7 @@ mod test {
                 let serialized = {
                     let mut serialized = std::io::Cursor::new(vec![]);
                     let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
-                    let _ = serialize_tbl_v1(&mut serialized, &e).unwrap();
+                    let _ = serialize_tbl_v1(&mut serialized, &tbl_entries_legacy_convert(e)).unwrap();
                     serialized.into_inner()
                 };
                 compare_data(&fixed, &serialized);
@@ -1150,7 +1033,7 @@ mod test {
                     let mut serialized = std::io::Cursor::new(vec![]);
                     let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                    let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
+                    let _ = serialize_tbl_v2(&mut serialized, &headers, &tbl_entries_legacy_convert(&e)).unwrap();
                     serialized.into_inner()
                 };
                 compare_data(&fixed, &serialized);
@@ -1178,7 +1061,7 @@ mod test {
                     let mut serialized = std::io::Cursor::new(vec![]);
                     let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                    let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
+                    let _ = serialize_tbl_v2(&mut serialized, &headers, &tbl_entries_legacy_convert(&e)).unwrap();
                     serialized.into_inner()
                 };
                 compare_data(&fixed, &serialized);
@@ -1206,7 +1089,7 @@ mod test {
                     let mut serialized = std::io::Cursor::new(vec![]);
                     let e: &[(SmolStr, IndexMap<SmolStr, super::AtomicValue>)] = &entries;
                     let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                    let _ = serialize_tbl_v2(&mut serialized, &headers, &e).unwrap();
+                    let _ = serialize_tbl_v2(&mut serialized, &headers, &tbl_entries_legacy_convert(&e)).unwrap();
                     serialized.into_inner()
                 };
                 compare_data(&fixed, &serialized);
