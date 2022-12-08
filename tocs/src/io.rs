@@ -179,6 +179,17 @@ impl<const PADDING: usize> std::fmt::Display for PaddedAsciiString<PADDING> {
     }
 }
 
+impl<const PADDING: usize> TryFrom<PaddedByteString<PADDING>> for PaddedAsciiString<PADDING> {
+    type Error = PaddedStringError;
+
+    fn try_from(bytes: PaddedByteString<PADDING>) -> Result<Self, Self::Error> {
+        if !bytes.as_bytes_excluding_terminator_and_padding().iter().copied().all(|b| b < 128) {
+            return Err(PaddedStringError::Ascii);
+        }
+        Ok(Self { bytes })
+    }
+}
+
 /// A null-terminated UTF-8 string, padded to a multiple of a certain length with null bytes
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PaddedUtf8String<const PADDING: usize> {
@@ -213,12 +224,6 @@ impl<const PADDING: usize> PaddedUtf8String<PADDING> {
             // creation is only possible with valid UTF-8
             std::str::from_utf8_unchecked(self.as_bytes_excluding_terminator_and_padding())
         }
-    }
-
-    pub fn read<F: std::io::Read>(f: &mut F) -> Result<Self, PaddedStringReadError> {
-        let bytes = PaddedByteString::<PADDING>::read(f)?;
-        let _ = std::str::from_utf8(bytes.as_bytes_excluding_terminator_and_padding()).map_err(PaddedStringReadError::Utf8)?;
-        Ok(Self { bytes })
     }
 }
 

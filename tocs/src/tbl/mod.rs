@@ -10,7 +10,7 @@ use itertools::Itertools as _;
 
 use schema::SmallBuf;
 
-use crate::io::{read_byte, read_bytes};
+use crate::io::{read_bytes, PaddedByteString};
 
 pub use schema::{get_nf1_for_all, AtomicAttributeValues, AtomicSchema, AtomicSchemas, AtomicType, AtomicValue, Attribute, Header, Schema, Schemas, Type, Value};
 pub use ser::{serialize_tbl_v1, serialize_tbl_v2, SerializeError};
@@ -112,6 +112,7 @@ impl<P: Clone, W: ErrorWithContext<Position = P>> WarningLogger<W> {
 #[derive(Debug)]
 pub enum DeserializeErrorDetail {
     Io(std::io::Error),
+    Ascii,
     Utf8(std::str::Utf8Error, String),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
     DuplicateHeader(Header),
@@ -130,6 +131,7 @@ pub enum DeserializeErrorPosition {
     Entry { number: u16 },
     EntryHeader,
     EntryData,
+    HeaderName,
     Value(AtomicType),
     Attribute(Attribute),
     End,
@@ -154,6 +156,7 @@ impl std::fmt::Display for DeserializeErrorDetail {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match self {
             DeserializeErrorDetail::Io(e) => write!(f, "{}", e),
+            DeserializeErrorDetail::Ascii => write!(f, "invalid ASCII string"),
             DeserializeErrorDetail::Utf8(e, s) => write!(f, "{} for string '{}'", e, s.escape_debug()),
             DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum } => {
                 write!(f, "sum of entry numbers ")?;
@@ -194,6 +197,7 @@ impl std::fmt::Display for DeserializeErrorPosition {
             DeserializeErrorPosition::Entry { number } => write!(f, "while parsing header of entry number {}", number + 1),
             DeserializeErrorPosition::EntryHeader => write!(f, "while parsing entry header name"),
             DeserializeErrorPosition::EntryData => write!(f, "while parsing entry data"),
+            DeserializeErrorPosition::HeaderName => write!(f, "while parsing name of a header"),
             DeserializeErrorPosition::Value(ty) => write!(f, "while parsing a {}", ty.describe()),
             DeserializeErrorPosition::Attribute(name) => write!(f, "while parsing attribute '{}'", name),
             DeserializeErrorPosition::End => write!(f, "after parsing"),
@@ -221,24 +225,19 @@ impl std::fmt::Display for DeserializeError {
 }
 
 fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>) -> Result<smol_str::SmolStr, DeserializeError> {
-    // TODO: remove this, use io::PaddedUtf8String
-    let mut buf: smallvec::SmallVec<[u8; 256]> = smallvec::SmallVec::new();
-    loop {
-        let x = read_byte(f).map_err(|e| DeserializeError {
+    let bytes = PaddedByteString::<1>::read(f).map_err(|e| match e {
+        crate::io::PaddedStringReadError::Io(e) => DeserializeError {
             detail: DeserializeErrorDetail::Io(e),
             position: f.stream_position().ok(),
             context: vec![DeserializeErrorPosition::Value(AtomicType::CUtf8)],
-        })?;
-        if x != 0 {
-            buf.push(x);
-        } else {
-            break;
-        }
-    }
-    match std::str::from_utf8(buf.as_ref()) {
+        },
+        _ => unreachable!(),
+    })?;
+    let buf: &[u8] = bytes.as_bytes_excluding_terminator_and_padding();
+    match std::str::from_utf8(buf) {
         Ok(s) => Ok(s.into()),
         Err(utf8err) => {
-            let s = String::from_utf8_lossy(buf.as_ref());
+            let s = String::from_utf8_lossy(buf);
             let position = (|| {
                 let pos: u64 = f.stream_position().ok()?;
                 let pos: usize = pos.try_into().ok()?;
@@ -264,6 +263,26 @@ fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, cons
             }
         }
     }
+}
+
+fn deserialize_header_name<F: std::io::Read + std::io::Seek, const LOG: bool>(f: &mut F) -> Result<Header, DeserializeError> {
+    let bytes = PaddedByteString::<1>::read(f).map_err(|e| match e {
+        crate::io::PaddedStringReadError::Io(e) => DeserializeError {
+            detail: DeserializeErrorDetail::Io(e),
+            position: f.stream_position().ok(),
+            context: vec![DeserializeErrorPosition::HeaderName],
+        },
+        _ => unreachable!(),
+    })?;
+    let len = bytes.as_bytes_excluding_terminator_and_padding().len();
+    Header::try_from(bytes).map_err(|e| match e {
+        crate::io::PaddedStringError::Ascii => DeserializeError {
+            detail: DeserializeErrorDetail::Ascii,
+            position: f.stream_position().ok().map(|pos| pos - len as u64),
+            context: vec![DeserializeErrorPosition::HeaderName],
+        },
+        _ => unreachable!(),
+    })
 }
 
 pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
@@ -362,12 +381,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
 
     let mut header_counts = IndexMap::new();
     for i in 0..number_of_headers {
-        let hdr = deserialize_c_utf8::<_, STRICT, LOG>(f, log)
-            .map_err(|mut e| {
-                e.context.push(DeserializeErrorPosition::TblHeaderEntry { entry_number: i });
-                e
-            })
-            .map(|s| Header::new(&s).unwrap())?; // TODO
+        let hdr = deserialize_header_name::<_, STRICT>(f)?;
         let count = u32::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
             detail: DeserializeErrorDetail::Io(e),
             position: f.stream_position().ok(),
@@ -436,9 +450,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
 
     // read header name and check that it's ok (if necessary)
     let warnings_before_header = log.len();
-    let hdr = deserialize_c_utf8::<_, STRICT, LOG>(f, log)
-        .map_err(|e| e.with_context(DeserializeErrorPosition::EntryHeader))
-        .map(|s| Header::new(&s).unwrap())?; // TODO
+    let hdr = deserialize_header_name::<_, STRICT>(f)?;
     if let Some(allowed) = header_counts {
         if !allowed.contains_key(&hdr) {
             let e = DeserializeError {
@@ -780,6 +792,9 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
                 }
                 DeserializeErrorPosition::EntryHeader => {}
                 DeserializeErrorPosition::EntryData => {}
+                DeserializeErrorPosition::HeaderName => {
+                    return false;
+                }
                 DeserializeErrorPosition::Value(_) => {}
                 DeserializeErrorPosition::Attribute(_) => {}
                 DeserializeErrorPosition::End => {}
@@ -788,6 +803,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
         if !is_entry_error {
             match &w.detail {
                 DeserializeErrorDetail::Io(_) => unreachable!(),
+                DeserializeErrorDetail::Ascii => return false,
                 DeserializeErrorDetail::Utf8(_, _) => return false,
                 DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { .. } => {} // it's probably fine
                 DeserializeErrorDetail::DuplicateHeader(_) => {}
