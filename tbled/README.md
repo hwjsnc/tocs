@@ -36,15 +36,23 @@ These files are located in the `data\text` folders relative to the installation 
 Make sure to choose the correct game version, or loading the data will likely fail.
 If loading was successful, choose an entry type on the right to see all entries of that type in the loaded file.
 
-Editing works via the edit field.
-Clicking on a cell in the table selects that cell and deselects all other cells.
-Double clicking a cell copies the content of that cell into the edit field.
-To edit the text in the edit field, make sure that it is active (e.g. by clicking on it).
-Once you're done editing, press Enter to copy the content of the edit field into the currently selected cell.
+Editing works via the edit field:
+
+- Clicking on a cell in the table selects that cell and deselects all other cells.
+- Double clicking a cell copies the content of that cell into the edit field.
+- To edit the text in the edit field, make sure that it is active (e.g. by clicking on it).
+- Once you're done editing, press Enter to copy the content of the edit field into the currently selected cell.
 
 If you want to save your changes, select "Save" to overwrite the current file or "Save as" to write to a different file.
 
 ![A screenshot of `tbled` in action. Some UI elements are labeled](screenshot.png)
+
+You can also use the CSV import/export function for editing:
+
+- Load a .tbl, export a table (all entries with a given header) to CSV
+- Edit the CSV in your favourite spreadsheet editor
+- Import the updated CSV
+- Save the updated .tbl file
 
 Warnings
 --------
@@ -63,6 +71,7 @@ Releases (downloads & changelogs)
 ### [v0.4 (in development)]
 
 - cleanup of code used to read/write and related code
+- CSV import
 
 ### [v0.3.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.3.1/tbled-v0.3.1.exe)
 

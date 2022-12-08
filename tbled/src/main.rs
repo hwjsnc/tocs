@@ -46,6 +46,7 @@ enum Msg {
     SaveFile,                                       // user wants to save to the same file
     SelectAndSaveFile,                              // user wants to save a file
     ExportCSV,                                      // user wants to export file to csv
+    ImportCSV,                                      // user wants to import table from csv
     ShowWarnings,                                   // user wants to see warnings
     FileReloaded,                                   // user loaded a different tbl file and we have to update all widgets accordingly
     UpdateTable,                                    // user selected a different header; update the table widget
@@ -154,6 +155,14 @@ impl App {
         );
 
         menu.add_emit("&Export/Export to csv...\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Normal, sender.clone(), Msg::ExportCSV);
+
+        menu.add_emit(
+            "&Import/Import from csv...\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ImportCSV,
+        );
 
         menu.add_emit(
             "&Edit/Duplicate currently selected row\t",
@@ -390,6 +399,33 @@ impl App {
                     fltk::dialog::alert_default("no entry type selected, can't export");
                 }
             }
+            Some(Msg::ImportCSV) => {
+                let mut state = self.state.lock().unwrap();
+                if let Some(hdr) = state.active_entry_type.as_ref().cloned() {
+                    // open a file browser dialog to select the file
+                    let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
+                    diag.set_title("Select .csv file to import...");
+                    //diag.set_preset_file(&format!("{}.csv", hdr)); // freezes if this file doesn't exist
+                    diag.show();
+                    let path = diag.filename();
+                    if path.as_os_str().is_empty() {
+                        return;
+                    }
+                    match import_csv(&path, schema_for_header(&hdr, state.tbl_version.schemas())) {
+                        Ok(entries) => {
+                            state.entries.insert(hdr, entries);
+                        }
+                        Err(e) => {
+                            fltk::dialog::alert_default(&format!("error importing data from csv: {:?}", e));
+                        }
+                    }
+                } else {
+                    fltk::dialog::alert_default("no entry type selected, can't import");
+                }
+                drop(state);
+                // Note: mutex must be free for this function because it triggers table redraws:
+                self.update(&Some(Msg::UpdateTable));
+            }
             Some(Msg::FileReloaded) => {
                 {
                     let mut state = self.state.lock().unwrap();
@@ -596,6 +632,57 @@ fn export_csv(path: &std::path::Path, data: &[AttributeValues]) -> std::io::Resu
         csv.write_record(&eor)?;
     }
     Ok(())
+}
+
+fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::Vec<AttributeValues>, String> {
+    let mut csv = csv::ReaderBuilder::new().has_headers(true).from_path(path).map_err(|e| e.to_string())?;
+
+    // read headers and compare to the expected schema
+    // note that the order of columns does not matter
+    let expected_headers: std::collections::BTreeSet<_> = schema.keys().map(|s| s.as_ref()).collect();
+    let csv_headers = csv.headers().map_err(|e| e.to_string())?;
+    let actual_headers: std::collections::BTreeSet<_> = csv_headers.iter().collect();
+    for h in expected_headers.difference(&actual_headers) {
+        return Err(format!("expected header '{}' is missing from CSV", h));
+    }
+    for h in actual_headers.difference(&expected_headers) {
+        return Err(format!("unexpected header '{}' present in CSV", h));
+    }
+    if actual_headers.len() != csv_headers.len() {
+        return Err("CSV file has duplicate column header".to_string()); // TODO: should probably list which ones they are
+    }
+    let csv_column_index: std::collections::HashMap<_, usize> = csv_headers
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            (
+                // we need to drop csv_headers, so we reference the schema string instead of the csv header one
+                schema.get_key_value(s).expect("csv headers should equal schema headers").0,
+                i,
+            )
+        })
+        .collect();
+    drop(expected_headers);
+
+    // read rows
+    let mut result = vec![];
+    for row in csv.records() {
+        let row = row.map_err(|e| format!("error reading row: {}", e))?;
+        if row.len() != schema.len() {
+            return Err(format!("row has {} entries instead of the expected {}", row.len(), schema.len()));
+        }
+        let mut entry = AttributeValues::new();
+        for (name, r#type) in schema.iter() {
+            let s = row
+                .get(*csv_column_index.get(name).expect("csv headers should equal schema attributes"))
+                .expect("number of columns should match");
+            let v = tocs::tbl::try_atomic_value_from_str(r#type, s).map_err(|_| format!("invalid value '{}' for attribute '{}' (expected {})", s, name, r#type.describe()))?;
+            entry.insert(name.clone(), v);
+        }
+        result.push(entry);
+    }
+
+    Ok(result)
 }
 
 fn save_tbl_file(path: &std::path::Path, version: tocs::tbl::Version, entries: &IndexMap<Header, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
