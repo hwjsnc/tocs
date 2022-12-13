@@ -33,6 +33,10 @@ enum Subcommand {
     ///
     /// For now, only prints the file list
     Pka { path: std::path::PathBuf },
+    /// Try to parse a dds file
+    ///
+    /// For now, only prints metadata
+    Dds { path: std::path::PathBuf },
 }
 
 // TODO: use generic parser in tocs?
@@ -90,6 +94,7 @@ pub fn main() {
         },
         Subcommand::Pkg { path } => parse_pkg(&path),
         Subcommand::Pka { path } => parse_pka(&path),
+        Subcommand::Dds { path } => parse_dds(&path),
     }
 }
 
@@ -351,4 +356,65 @@ pub fn parse_pka(path: &std::path::Path) {
             hash.compression
         );
     }
+}
+
+pub fn parse_dds(path: &std::path::Path) {
+    let data = std::fs::read(&path).unwrap();
+    let tex = tocs::dds::load_texture(&data).unwrap();
+    match tex.header {
+        tocs::dds::Header::Base(h) => {
+            print_dds_base_header(&h);
+        },
+        tocs::dds::Header::WithDxt10(base, ext) => {
+            print_dds_base_header(&base);
+            print_dds_dx10_ext_header(&ext);
+        }
+    }
+}
+
+fn print_dds_base_header(h: &tocs::dds::BaseHeader) {
+    let tocs::dds::BaseHeader {
+        size, flags, height, width, pitch_or_linear_size, depth, mip_map_count, reserved_1, dds_pixel_format, caps, reserved_2
+    } = h;
+    log::info!("DDS Base header:");
+    log::info!(" - size: {size}");
+    log::info!(" - flags: {flags} (0x{flags:x}, 0b{flags:b})");
+    log::info!(" - height: {height}");
+    log::info!(" - width: {width}");
+    log::info!(" - pitch_or_linear_size: {pitch_or_linear_size}");
+    log::info!(" - depth: {depth}");
+    log::info!(" - mip_map_count: {mip_map_count}");
+    for (i, x) in reserved_1.iter().enumerate() {
+        log::info!(" - reserved_1[{i}]: {x}");
+    }
+    {
+        let tocs::dds::PixelFormat {
+            size, flags, id, rgb_bit_count, r_bit_mask, g_bit_mask, b_bit_mask, a_bit_mask,
+        } = dds_pixel_format;
+        log::info!(" - pixel format:");
+        log::info!("   - size: {size}");
+        log::info!("   - flags: {flags} (0x{flags:x}, 0b{flags:b})");
+        log::info!("   - id: {:?} ('{}')", id, String::from_utf8_lossy(id.as_slice()));
+        log::info!("   - rgb bit count: {rgb_bit_count}");
+        log::info!("   - r bitmask: {r_bit_mask} (0x{r_bit_mask:x}, 0b{r_bit_mask:b})");
+        log::info!("   - g bitmask: {g_bit_mask} (0x{g_bit_mask:x}, 0b{g_bit_mask:b})");
+        log::info!("   - b bitmask: {b_bit_mask} (0x{b_bit_mask:x}, 0b{b_bit_mask:b})");
+        log::info!("   - a bitmask: {a_bit_mask} (0x{a_bit_mask:x}, 0b{a_bit_mask:b})");
+    }
+    for (i, x) in caps.iter().enumerate() {
+        log::info!(" - caps[{i}]: {x}");
+    }
+    log::info!(" - reserved_2: {reserved_2}");
+}
+
+fn print_dds_dx10_ext_header(h: &tocs::dds::Dxt10ExtensionHeader) {
+    let tocs::dds::Dxt10ExtensionHeader {
+        dxgi_format, resource_dimension, misc_flag, array_size, reserved
+    } = h;
+    log::info!("DDS DX10 extension header:");
+    log::info!(" - dxgi format: {dxgi_format}");
+    log::info!(" - resource_dimension: {resource_dimension}");
+    log::info!(" - misc_flag: {misc_flag}");
+    log::info!(" - array_size: {array_size} (0x{array_size:x})");
+    log::info!(" - reserved: {reserved}");
 }
