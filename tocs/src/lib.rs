@@ -7,6 +7,7 @@ mod io;
 #[cfg(feature = "compression")]
 pub mod compression;
 
+pub mod bc7;
 pub mod dds;
 
 #[cfg(feature = "pkg")]

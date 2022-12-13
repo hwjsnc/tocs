@@ -368,6 +368,32 @@ pub fn parse_dds(path: &std::path::Path) {
         tocs::dds::Header::WithDxt10(base, ext) => {
             print_dds_base_header(&base);
             print_dds_dx10_ext_header(&ext);
+            let mut block_counts : [u64; 9] = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+            for i in 0..(base.width * base.height) / 16 {
+                let x : u8 = tex.raw_data[16 * i as usize];
+                if x & 1 != 0 {
+                    block_counts[0] += 1;
+                } else if x & 2 != 0 {
+                    block_counts[1] += 1;
+                } else if x & 4 != 0 {
+                    block_counts[2] += 1;
+                } else if x & 8 != 0 {
+                    block_counts[3] += 1;
+                } else if x & 16 != 0 {
+                    block_counts[4] += 1;
+                } else if x & 32 != 0 {
+                    block_counts[5] += 1;
+                } else if x & 64 != 0 {
+                    block_counts[6] += 1;
+                } else if x & 128 != 0 {
+                    block_counts[7] += 1;
+                } else {
+                    block_counts[8] += 1;
+                }
+            }
+            for (i, n) in block_counts.iter().enumerate() {
+                println!(" - blocks with mode {i}: {n}");
+            }
         }
     }
 }
