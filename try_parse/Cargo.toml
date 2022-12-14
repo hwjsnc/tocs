@@ -9,6 +9,6 @@ edition = "2021"
 clap = { version = "4.0.26", features = ["derive"] }
 hex = "0.4.3"
 log = { version = "0.4.17" }
-simple_logger = { version = "4", default-features = false, features = ["stderr"] }
+simple_logger = { version = "4", default-features = false, features = [] }
 tocs = { path = "../tocs" }
 walkdir = "2.3.2"

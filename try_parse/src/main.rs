@@ -364,13 +364,13 @@ pub fn parse_dds(path: &std::path::Path) {
     match tex.header {
         tocs::dds::Header::Base(h) => {
             print_dds_base_header(&h);
-        },
+        }
         tocs::dds::Header::WithDxt10(base, ext) => {
             print_dds_base_header(&base);
             print_dds_dx10_ext_header(&ext);
-            let mut block_counts : [u64; 9] = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+            let mut block_counts: [u64; 9] = [0, 0, 0, 0, 0, 0, 0, 0, 0];
             for i in 0..(base.width * base.height) / 16 {
-                let x : u8 = tex.raw_data[16 * i as usize];
+                let x: u8 = tex.raw_data[16 * i as usize];
                 if x & 1 != 0 {
                     block_counts[0] += 1;
                 } else if x & 2 != 0 {
@@ -391,8 +391,9 @@ pub fn parse_dds(path: &std::path::Path) {
                     block_counts[8] += 1;
                 }
             }
+            log::info!("BC7 block stats:");
             for (i, n) in block_counts.iter().enumerate() {
-                println!(" - blocks with mode {i}: {n}");
+                log::info!(" - blocks with mode {i}: {n}");
             }
         }
     }
@@ -400,7 +401,17 @@ pub fn parse_dds(path: &std::path::Path) {
 
 fn print_dds_base_header(h: &tocs::dds::BaseHeader) {
     let tocs::dds::BaseHeader {
-        size, flags, height, width, pitch_or_linear_size, depth, mip_map_count, reserved_1, dds_pixel_format, caps, reserved_2
+        size,
+        flags,
+        height,
+        width,
+        pitch_or_linear_size,
+        depth,
+        mip_map_count,
+        reserved_1,
+        dds_pixel_format,
+        caps,
+        reserved_2,
     } = h;
     log::info!("DDS Base header:");
     log::info!(" - size: {size}");
@@ -415,7 +426,14 @@ fn print_dds_base_header(h: &tocs::dds::BaseHeader) {
     }
     {
         let tocs::dds::PixelFormat {
-            size, flags, id, rgb_bit_count, r_bit_mask, g_bit_mask, b_bit_mask, a_bit_mask,
+            size,
+            flags,
+            id,
+            rgb_bit_count,
+            r_bit_mask,
+            g_bit_mask,
+            b_bit_mask,
+            a_bit_mask,
         } = dds_pixel_format;
         log::info!(" - pixel format:");
         log::info!("   - size: {size}");
@@ -435,7 +453,11 @@ fn print_dds_base_header(h: &tocs::dds::BaseHeader) {
 
 fn print_dds_dx10_ext_header(h: &tocs::dds::Dxt10ExtensionHeader) {
     let tocs::dds::Dxt10ExtensionHeader {
-        dxgi_format, resource_dimension, misc_flag, array_size, reserved
+        dxgi_format,
+        resource_dimension,
+        misc_flag,
+        array_size,
+        reserved,
     } = h;
     log::info!("DDS DX10 extension header:");
     log::info!(" - dxgi format: {dxgi_format}");
