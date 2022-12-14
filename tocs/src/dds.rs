@@ -5,7 +5,8 @@ resources:
 - texconv, a DX texture conversion tool: https://github.com/microsoft/DirectXTex/wiki/Texconv
 - C++ code for bare-bones DDS texture loader https://learn.microsoft.com/en-us/windows/uwp/gaming/complete-code-for-ddstextureloader
 - texture block compression: https://learn.microsoft.com/en-us/windows/uwp/graphics-concepts/texture-block-compression
-- BC7 texture format: https://learn.microsoft.com/en-us/windows/uwp/graphics-concepts/bc7-format
+- BC6/BC7 (aka BPTC_FLOAT/BPTC) texture compression format: https://registry.khronos.org/OpenGL/extensions/ARB/ARB_texture_compression_bptc.txt
+- BC7 texture format (but incomplete): https://learn.microsoft.com/en-us/windows/uwp/graphics-concepts/bc7-format
 */
 
 #[derive(Clone, Copy, Debug)]
