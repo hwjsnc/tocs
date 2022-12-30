@@ -20,7 +20,7 @@ Therefore it is highly recommended to BACK UP ALL DATA FREQUENTLY.
 The following versions are untested but likely work:
 
 - Trails of Cold Steel III (NISA Switch version)
-- Trails of Cold Steel III (NISA PC version)
+- Trails of Cold Steel IV (NISA PC version)
 
 The following versions are explicitely not supported at this time:
 - Trails of Cold Steel (XSeed PC version, Japanese language)
