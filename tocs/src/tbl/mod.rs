@@ -894,9 +894,10 @@ pub fn write_file<P: AsRef<std::path::Path>>(path: P, tbl: &Tbl) -> Result<usize
         .and_then(|f| write(&mut std::io::BufWriter::new(f), tbl))
 }
 
+#[derive(Clone, Debug)]
 pub struct Entry {
-    header: Header,
-    values: AtomicAttributeValues,
+    pub header: Header,
+    pub values: AtomicAttributeValues,
 }
 
 pub fn tbl_entries_legacy_convert(entries: &[(Header, AtomicAttributeValues)]) -> std::vec::Vec<Entry> {
