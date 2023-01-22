@@ -316,10 +316,17 @@ impl App {
                             *warnings = w;
                             *tbl_history = TblStateHistory::new(tbl);
                             *path = new_path;
-                            // TODO: if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
-                            fltk::dialog::alert_default(
-                                "Warning: Some errors/inconsistencies in the file were detected. Please look at them under the Warnings menu option and ensure that they are harmless",
-                            );
+                            // if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
+                            let schemas = tbl_version.schemas();
+                            if tbl_history.all_current_rows().all(|entry| schemas.contains_key(&entry.header))
+                                && warnings.iter().all(|w| matches!(w.detail, tocs::tbl::DeserializeErrorDetail::EntryDataLengthMismatch { .. }))
+                            {
+                                // it's fine
+                            } else {
+                                fltk::dialog::alert_default(
+                                    "Warning: Some errors/inconsistencies in the file were detected. Please look at them under the Warnings menu option and ensure that they are harmless",
+                                );
+                            }
                         }
                         tocs::tbl::ReadTblResult::Err(e) => {
                             fltk::dialog::alert_default(&format!("error loading file: {}", e));

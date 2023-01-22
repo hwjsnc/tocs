@@ -68,6 +68,7 @@ Releases (downloads & changelogs)
 
 ### v0.4 (in development)
 
+- warning popup will not be shown anymore in cases where the warnings are very minor
 - fixed a bug where "Save As" would overwrite the wrong file
 - undo/redo changes
 - preserve row order (except when importing from CSV)
