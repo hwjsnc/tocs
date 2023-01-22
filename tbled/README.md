@@ -66,6 +66,7 @@ Releases (downloads & changelogs)
 
 ### [v0.4 (in development)]
 
+- fixed a bug where "Save As" would overwrite the wrong file
 - undo/redo changes (TODO: expose this in the GUI)
 - preserve row order
 - cleanup of code used to read/write and related code

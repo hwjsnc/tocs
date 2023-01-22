@@ -352,7 +352,7 @@ impl App {
                     state.tbl_history.headers().iter().cloned(),
                     state.tbl_history.all_current_rows().cloned().map(|entry| (entry.header, entry.values)),
                 ); // TODO: Entry
-                let result = tocs::tbl::write_file(&state.path, &tbl);
+                let result = tocs::tbl::write_file(&path, &tbl);
                 match result {
                     Ok(_) => {
                         // TODO: clear changed cell flags
