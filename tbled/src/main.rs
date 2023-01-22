@@ -37,6 +37,8 @@ enum Msg {
     ShowWarnings,                                   // user wants to see warnings
     FileReloaded,                                   // user loaded a different tbl file and we have to update all widgets accordingly
     UpdateTable,                                    // user selected a different header; update the table widget
+    Undo,                                           // user wants to undo last action
+    Redo,                                           // user wants to redo last action
     DuplicateEntry,                                 // user wants to duplicate the current row
     DeleteEntry,                                    // user wants to delete the current row
     TableEvent,                                     // an arbitrary event on the table
@@ -149,6 +151,16 @@ impl App {
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
             Msg::ImportCSV,
+        );
+
+        menu.add_emit("&Edit/Undo\t", fltk::enums::Shortcut::Ctrl | 'z', fltk::menu::MenuFlag::Inactive, sender.clone(), Msg::Undo);
+
+        menu.add_emit(
+            "&Edit/Redo\t",
+            fltk::enums::Shortcut::Ctrl | fltk::enums::Shortcut::Shift | 'z',
+            fltk::menu::MenuFlag::Inactive,
+            sender.clone(),
+            Msg::Redo,
         );
 
         menu.add_emit(
@@ -492,6 +504,7 @@ impl App {
                     drop(state);
                     // Note: mutex must be free for this function because it triggers table redraws:
                     self.update_table(&column_widths, nrows, row_height);
+                    self.update_undo_redo_menu();
                 }
             }
             Some(Msg::DuplicateEntry) => {
@@ -525,6 +538,20 @@ impl App {
                     fltk::dialog::alert_default("please select exactly one row");
                     // TODO: allow multiple
                 }
+            }
+            Some(Msg::Undo) => {
+                let mut state = self.state.lock().unwrap();
+                state.tbl_history.undo();
+                drop(state);
+                // Note: mutex must be free for this function because it triggers table redraws:
+                self.update(&Some(Msg::UpdateTable));
+            }
+            Some(Msg::Redo) => {
+                let mut state = self.state.lock().unwrap();
+                state.tbl_history.redo();
+                drop(state);
+                // Note: mutex must be free for this function because it triggers table redraws:
+                self.update(&Some(Msg::UpdateTable));
             }
             Some(Msg::TableEvent) => {
                 match fltk::app::event() {
@@ -565,6 +592,7 @@ impl App {
                     }
                     table.redraw();
                 }
+                self.update_undo_redo_menu();
             }
             Some(Msg::ShowWarnings) => {
                 let mut state = self.state.lock().unwrap();
@@ -584,6 +612,33 @@ impl App {
             table.set_col_width(i, w + 4);
         }
         table.set_row_height_all(row_height + 4);
+    }
+
+    fn update_undo_redo_menu(&mut self) {
+        let edit_menu = self.widgets.menu.find_item("&Edit").unwrap();
+        assert!(edit_menu.is_submenu());
+        let mut undo_item = edit_menu.at(1).unwrap();
+        let mut redo_item = edit_menu.at(2).unwrap();
+        assert!(undo_item.label().unwrap().starts_with("Undo"));
+        assert!(redo_item.label().unwrap().starts_with("Redo"));
+
+        let state = self.state.lock().unwrap();
+
+        if let Some(change) = state.tbl_history.next_undo() {
+            undo_item.set_label(&format!("Undo: {}\t", change.describe()));
+            undo_item.activate();
+        } else {
+            undo_item.set_label("Undo\t");
+            undo_item.deactivate();
+        }
+
+        if let Some(change) = state.tbl_history.next_redo() {
+            redo_item.set_label(&format!("Redo: {}\t", change.describe()));
+            redo_item.activate();
+        } else {
+            redo_item.set_label("Redo\t");
+            redo_item.deactivate();
+        }
     }
 }
 

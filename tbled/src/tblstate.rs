@@ -113,6 +113,27 @@ impl Change {
             Change::ImportTable { header, .. } => header,
         }
     }
+
+    pub fn describe(&self) -> String {
+        match self {
+            Change::DuplicateRow { header, row } => format!("duplicate row #{row} in table {header}"),
+            Change::RemoveRow { header, row } => format!("remove row #{row} in table {header}"),
+            Change::UpdateCell { header, row, column, value } => {
+                let mut s = value.to_string();
+                // we don't want to show the full string if it's very long, so we truncate it
+                match s.char_indices().nth(15) {
+                    None => {}
+                    Some((idx, _)) => {
+                        s.truncate(idx);
+                        s.push_str("...");
+                    }
+                };
+                format!("set value ({row}, {column}) in table {header} to '{}'", s)
+                // TODO: attribute name?
+            }
+            Change::ImportTable { header, rows } => format!("import {} rows into table {}", rows.len(), header),
+        }
+    }
 }
 
 impl TblStateHistory {

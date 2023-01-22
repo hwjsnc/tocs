@@ -66,10 +66,10 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
-### [v0.4 (in development)]
+### v0.4 (in development)
 
 - fixed a bug where "Save As" would overwrite the wrong file
-- undo/redo changes (TODO: expose this in the GUI)
+- undo/redo changes
 - preserve row order (except when importing from CSV)
 - cleanup of code used to read/write and related code
 - CSV import
