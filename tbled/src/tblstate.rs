@@ -53,6 +53,10 @@ pub enum Change {
         column: usize,
         value: Value, // TODO: string?
     },
+    ImportTable {
+        header: Header,
+        rows: im::Vector<std::rc::Rc<tocs::tbl::Entry>>,
+    },
 }
 
 pub struct TblStateHistory {
@@ -106,6 +110,7 @@ impl Change {
             Change::DuplicateRow { header, .. } => header,
             Change::RemoveRow { header, .. } => header,
             Change::UpdateCell { header, .. } => header,
+            Change::ImportTable { header, .. } => header,
         }
     }
 }
@@ -157,10 +162,6 @@ impl TblStateHistory {
         row.values.get_index(colid)
     }
 
-    pub fn get_cell_value<'a>(&'a mut self, header: &Header, rowid: usize, colid: usize) -> Option<&'a Value> {
-        self.get_cell_contents(header, rowid, colid).map(|(_, value)| value)
-    }
-
     pub fn next_undo(&self) -> Option<&Change> {
         self.undo.last().map(|(_, change)| change)
     }
@@ -191,12 +192,40 @@ impl TblStateHistory {
             Change::DuplicateRow { row, .. } => self.current.duplicate_row(*row),
             Change::RemoveRow { row, .. } => self.current.remove_row(self.rows_for_current_header[*row]),
             Change::UpdateCell { row, column, value, .. } => self.current.update_cell(self.rows_for_current_header[*row], *column, value.clone()),
+            Change::ImportTable { header, rows: new_rows_for_header } => {
+                // There's not really a good solution here for how to order the rows when the table is split
+                // We could probably use a diffing algorithm to find an approximate solution for the fewest rows assigned to an incorrect chunk.
+                // The benefit doesn't nearly justify the required effort though.
+                let mut got_first_row_for_header = false;
+                let mut all_rows_new = im::Vector::new();
+                for row in self.current.all_rows.iter() {
+                    if &row.header == header {
+                        if got_first_row_for_header {
+                            continue;
+                        } else {
+                            got_first_row_for_header = true;
+                            for row in new_rows_for_header {
+                                all_rows_new.push_back(row.clone())
+                            }
+                        }
+                    } else {
+                        all_rows_new.push_back(row.clone())
+                    }
+                }
+                if !got_first_row_for_header {
+                    for row in new_rows_for_header {
+                        all_rows_new.push_back(row.clone())
+                    }
+                }
+                TblStateWithoutHistory { all_rows: all_rows_new }
+            }
         };
 
         let number_of_rows_changed = match &change {
             Change::DuplicateRow { .. } => true,
             Change::RemoveRow { .. } => true,
             Change::UpdateCell { .. } => false,
+            Change::ImportTable { .. } => true,
         };
 
         self.redo.clear();

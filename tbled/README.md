@@ -2,7 +2,6 @@ tbled
 =====
 
 `tbled` is an editor for `.tbl` files for the Trails of Cold Steel games.
-It is quite limited and obtuse, but I hope it is better than viewing or editing the files in a general purpose hex editor.
 
 I try very hard to make sure `tbled` doesn't silently corrupt data but I obviously can make mistakes, so I recommend to BACK UP ALL DATA FREQUENTLY.
 
@@ -50,6 +49,9 @@ You can also use the CSV import/export function for editing:
 - Import the updated CSV
 - Save the updated .tbl file
 
+However, when importing a CSV, under certain circumstances the order of .tbl entries may change relative to the entries that have a different header.
+It's unlikely that this would cause any problems, but I cannot fully exclude the possibility.
+
 Warnings
 --------
 
@@ -68,9 +70,9 @@ Releases (downloads & changelogs)
 
 - fixed a bug where "Save As" would overwrite the wrong file
 - undo/redo changes (TODO: expose this in the GUI)
-- preserve row order
+- preserve row order (except when importing from CSV)
 - cleanup of code used to read/write and related code
-- CSV import (TODO: currently broken)
+- CSV import
 
 ### [v0.3.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.3.1/tbled-v0.3.1.exe)
 

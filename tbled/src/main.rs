@@ -403,17 +403,15 @@ impl App {
                     if path.as_os_str().is_empty() {
                         return;
                     }
-                    todo!(); // TODO
-                             /*
-                                                 match import_csv(&path, schema_for_header(&hdr, state.tbl_version.schemas())) {
-                                                     Ok(entries) => {
-                                                         //state.entries.insert(hdr, entries);
-                                                     }
-                                                     Err(e) => {
-                                                         fltk::dialog::alert_default(&format!("error importing data from csv: {:?}", e));
-                                                     }
-                                                 }
-                             */
+                    match import_csv(&path, schema_for_header(&hdr, state.tbl_version.schemas())) {
+                        Ok(entries) => {
+                            let rows = entries.into_iter().map(|values| std::rc::Rc::new(tocs::tbl::Entry { header: hdr.clone(), values })).collect();
+                            state.tbl_history.change(Change::ImportTable { header: hdr.clone(), rows });
+                        }
+                        Err(e) => {
+                            fltk::dialog::alert_default(&format!("error importing data from csv: {:?}", e));
+                        }
+                    }
                 } else {
                     fltk::dialog::alert_default("no entry type selected, can't import");
                 }
