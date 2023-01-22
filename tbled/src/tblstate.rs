@@ -57,6 +57,9 @@ pub enum Change {
 pub struct TblStateHistory {
     current: TblStateWithoutHistory,
 
+    /// All (unique) headers with corresponding rows
+    headers: std::vec::Vec<Header>,
+
     // We save the "current" header (i.e. the header of the row that was last accessed) with the expectation that many more operations on the rows with the same header will follow
     current_header: Option<Header>,
     rows_for_current_header: std::vec::Vec<usize>,
@@ -107,15 +110,24 @@ impl Change {
 }
 
 impl TblStateHistory {
-    pub fn new<I: IntoIterator<Item = tocs::tbl::Entry>>(entries: I) -> Self {
-        let current = TblStateWithoutHistory::from_iter(entries);
+    pub fn new(tbl: tocs::tbl::Tbl) -> Self {
+        let headers: indexmap::IndexSet<&Header> = tbl.headers().chain(tbl.get_entries().iter().map(|(h, _)| h)).collect(); // TODO: Entry
+        let headers: std::vec::Vec<Header> = headers.into_iter().cloned().collect();
+
+        let entries = tocs::tbl::tbl_entries_legacy_convert(&tbl.into_entries()); // TODO: Entry
+        let current = TblStateWithoutHistory::from_iter(entries.into_iter());
         Self {
             current,
+            headers,
             current_header: None,
             rows_for_current_header: vec![],
             undo: vec![],
             redo: vec![],
         }
+    }
+
+    pub fn headers(&self) -> &[Header] {
+        &self.headers
     }
 
     fn set_header(&mut self, header: &Header) {
