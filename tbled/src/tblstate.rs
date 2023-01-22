@@ -19,6 +19,7 @@ We also store the change itself so we can provide this information to the user (
 */
 
 use tocs::tbl::schema::AtomicValue as Value;
+use tocs::tbl::schema::Attribute;
 use tocs::tbl::Header;
 
 use std::borrow::Borrow as _;
@@ -46,7 +47,7 @@ pub enum Change {
         header: Header,
         row: usize,
     },
-    ChangeCell {
+    UpdateCell {
         header: Header,
         row: usize,
         column: usize,
@@ -58,7 +59,7 @@ pub struct TblStateHistory {
     current: TblStateWithoutHistory,
 
     /// All (unique) headers with corresponding rows
-    headers: std::vec::Vec<Header>,
+    headers: indexmap::IndexSet<Header>,
 
     // We save the "current" header (i.e. the header of the row that was last accessed) with the expectation that many more operations on the rows with the same header will follow
     current_header: Option<Header>,
@@ -104,16 +105,14 @@ impl Change {
         match self {
             Change::DuplicateRow { header, .. } => header,
             Change::RemoveRow { header, .. } => header,
-            Change::ChangeCell { header, .. } => header,
+            Change::UpdateCell { header, .. } => header,
         }
     }
 }
 
 impl TblStateHistory {
     pub fn new(tbl: tocs::tbl::Tbl) -> Self {
-        let headers: indexmap::IndexSet<&Header> = tbl.headers().chain(tbl.get_entries().iter().map(|(h, _)| h)).collect(); // TODO: Entry
-        let headers: std::vec::Vec<Header> = headers.into_iter().cloned().collect();
-
+        let headers = tbl.headers().chain(tbl.get_entries().iter().map(|(h, _)| h)).cloned().collect(); // TODO: Entry
         let entries = tocs::tbl::tbl_entries_legacy_convert(&tbl.into_entries()); // TODO: Entry
         let current = TblStateWithoutHistory::from_iter(entries.into_iter());
         Self {
@@ -126,8 +125,12 @@ impl TblStateHistory {
         }
     }
 
-    pub fn headers(&self) -> &[Header] {
+    pub fn headers(&self) -> &indexmap::IndexSet<Header> {
         &self.headers
+    }
+
+    pub fn has_header(&self, header: &Header) -> bool {
+        self.headers.contains(header)
     }
 
     fn set_header(&mut self, header: &Header) {
@@ -139,34 +142,37 @@ impl TblStateHistory {
     fn force_set_header(&mut self, header: Header) {
         self.rows_for_current_header.clear();
         for (i, row) in self.current.all_rows.iter().enumerate() {
-            if &row.header == &header {
+            if row.header == header {
                 self.rows_for_current_header.push(i);
             }
         }
         self.current_header = Some(header);
     }
 
-    pub fn get_cell_value<'a>(&'a mut self, header: &Header, rowid: usize, colid: usize) -> &'a Value {
+    pub fn get_cell_contents<'a>(&'a mut self, header: &Header, rowid: usize, colid: usize) -> Option<(&'a Attribute, &'a Value)> {
         self.set_header(header);
-        let idx = self.rows_for_current_header[rowid];
-        let row = &self.current.all_rows[idx];
+        let idx = self.rows_for_current_header.get(rowid).copied()?;
+        let row = self.current.all_rows.get(idx)?;
         assert_eq!(&row.header, header);
-        row.values.get_index(colid).expect("column index should exist").1
+        row.values.get_index(colid)
+    }
+
+    pub fn get_cell_value<'a>(&'a mut self, header: &Header, rowid: usize, colid: usize) -> Option<&'a Value> {
+        self.get_cell_contents(header, rowid, colid).map(|(_, value)| value)
     }
 
     pub fn next_undo(&self) -> Option<&Change> {
-        self.undo.last().map(|(state, change)| change)
+        self.undo.last().map(|(_, change)| change)
     }
 
     pub fn next_redo(&self) -> Option<&Change> {
-        self.redo.last().map(|(change, state)| change)
+        self.redo.last().map(|(change, _)| change)
     }
 
     pub fn undo(&mut self) -> Option<()> {
         self.undo.pop().map(|(state, change)| {
             let oldcurrent = std::mem::replace(&mut self.current, state);
             self.redo.push((change, oldcurrent));
-            ()
         })
     }
 
@@ -174,24 +180,23 @@ impl TblStateHistory {
         self.redo.pop().map(|(change, state)| {
             let oldcurrent = std::mem::replace(&mut self.current, state);
             self.undo.push((oldcurrent, change));
-            ()
         })
     }
 
     pub fn change(&mut self, change: Change) {
         let header = change.header().clone();
-        self.set_header(&change.header());
+        self.set_header(change.header());
 
         let newstate = match &change {
             Change::DuplicateRow { row, .. } => self.current.duplicate_row(*row),
             Change::RemoveRow { row, .. } => self.current.remove_row(self.rows_for_current_header[*row]),
-            Change::ChangeCell { row, column, value, .. } => self.current.update_cell(self.rows_for_current_header[*row], *column, value.clone()),
+            Change::UpdateCell { row, column, value, .. } => self.current.update_cell(self.rows_for_current_header[*row], *column, value.clone()),
         };
 
         let number_of_rows_changed = match &change {
             Change::DuplicateRow { .. } => true,
             Change::RemoveRow { .. } => true,
-            Change::ChangeCell { .. } => false,
+            Change::UpdateCell { .. } => false,
         };
 
         self.redo.clear();
@@ -206,7 +211,35 @@ impl TblStateHistory {
         }
     }
 
-    pub fn all_current_all_rows(&self) -> impl Iterator<Item = &tocs::tbl::Entry> {
+    pub fn all_current_rows(&self) -> impl Iterator<Item = &tocs::tbl::Entry> {
         self.current.all_rows.iter().map(|rc| rc.borrow())
+    }
+
+    pub fn number_of_rows_for_header(&mut self, header: &Header) -> usize {
+        self.set_header(header);
+        self.rows_for_current_header.len()
+    }
+
+    pub fn rows_for_header(&mut self, header: &Header) -> impl Iterator<Item = &tocs::tbl::Entry> {
+        self.set_header(header);
+        self.rows_for_current_header.iter().copied().map(|i| self.current.all_rows[i].borrow())
+    }
+
+    pub fn row_for_header(&mut self, header: &Header, i: usize) -> Option<&tocs::tbl::Entry> {
+        self.set_header(header);
+        self.rows_for_current_header.get(i).cloned().and_then(|i| self.current.all_rows.get(i)).map(|rc| rc.borrow())
+    }
+}
+
+impl Default for TblStateHistory {
+    fn default() -> Self {
+        Self {
+            current: TblStateWithoutHistory::from_iter([]),
+            headers: indexmap::IndexSet::new(),
+            current_header: None,
+            rows_for_current_header: vec![],
+            undo: vec![],
+            redo: vec![],
+        }
     }
 }

@@ -17,21 +17,7 @@ use tocs::tbl::AtomicAttributeValues as AttributeValues;
 use tocs::tbl::AtomicSchema as Schema;
 use tocs::tbl::Header;
 
-// Given rows in any order, collect all rows with the same header together
-fn partition_entries_with_headers(headers: std::vec::Vec<Header>, entries: std::vec::Vec<(Header, AttributeValues)>) -> IndexMap<Header, std::vec::Vec<AttributeValues>> {
-    let mut entries_for_header: IndexMap<Header, std::vec::Vec<AttributeValues>> = headers.into_iter().map(|hdr| (hdr, vec![])).collect();
-    for (hdr, data) in entries.into_iter() {
-        match entries_for_header.entry(hdr) {
-            indexmap::map::Entry::Occupied(mut e) => {
-                e.get_mut().push(data);
-            }
-            indexmap::map::Entry::Vacant(e) => {
-                e.insert(vec![data]);
-            }
-        }
-    }
-    entries_for_header
-}
+use tblstate::{Change, TblStateHistory};
 
 #[derive(Debug, Parser)]
 struct CliArgs {
@@ -65,7 +51,7 @@ struct Widgets {
 }
 
 pub struct AppData {
-    entries: IndexMap<Header, std::vec::Vec<AttributeValues>>,
+    tbl_history: TblStateHistory,
     tbl_version: tocs::tbl::Version<'static>,
     path: std::path::PathBuf,
     active_entry_type: Option<Header>,
@@ -211,14 +197,10 @@ impl App {
         table.draw_cell(move |table, ctx, row, col, x, y, w, h| {
             log::trace!("table draw");
             // called when the table is drawn (both the first time and due to events)
-            let state = state_clone.lock().unwrap();
-            let header = if let Some(hdr) = state.active_entry_type.as_ref() {
+            let mut state = state_clone.lock().unwrap();
+            let AppData { tbl_history, active_entry_type, .. } = &mut *state;
+            let header = if let Some(hdr) = active_entry_type.as_ref() {
                 hdr
-            } else {
-                return;
-            };
-            let rows = if let Some(rows) = state.entries.get(header) {
-                rows
             } else {
                 return;
             };
@@ -232,12 +214,7 @@ impl App {
             } else {
                 return;
             };
-            let row_values: &AttributeValues = if let Some(row) = rows.get(row_idx) {
-                row
-            } else {
-                return;
-            };
-            let (attribute, value) = if let Some(tup) = row_values.get_index(col_idx) {
+            let (attribute, value) = if let Some(tup) = tbl_history.get_cell_contents(header, row_idx, col_idx) {
                 tup
             } else {
                 return;
@@ -300,36 +277,33 @@ impl App {
                 let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
                 diag.set_title("Select .tbl file to load ...");
                 diag.show();
-                let path = diag.filename();
-                if path.as_os_str().is_empty() {
+                let new_path = diag.filename();
+                if new_path.as_os_str().is_empty() {
                     return;
                 }
                 {
                     // reset state related to tbl data
                     let mut state = self.state.lock().unwrap();
                     let AppData {
+                        tbl_history,
                         active_entry_type,
                         tbl_version,
-                        path: _,
-                        entries,
+                        path,
                         warnings,
                     } = &mut *state;
                     *active_entry_type = None;
                     *tbl_version = *version;
-                    entries.clear();
                     warnings.clear();
                     // try loading data from file
-                    match tocs::tbl::read_file(&path, *version) {
+                    match tocs::tbl::read_file(&new_path, *version) {
                         tocs::tbl::ReadTblResult::Ok(tbl) => {
-                            let headers = tbl.headers().cloned().collect();
-                            state.entries = partition_entries_with_headers(headers, tbl.into_entries());
-                            state.path = path;
+                            *tbl_history = TblStateHistory::new(tbl);
+                            *path = new_path;
                         }
-                        tocs::tbl::ReadTblResult::Warn { tbl, warnings } => {
-                            let headers = tbl.headers().cloned().collect();
-                            state.warnings = warnings;
-                            state.entries = partition_entries_with_headers(headers, tbl.into_entries());
-                            state.path = path;
+                        tocs::tbl::ReadTblResult::Warn { tbl, warnings: w } => {
+                            *warnings = w;
+                            *tbl_history = TblStateHistory::new(tbl);
+                            *path = new_path;
                             // TODO: if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
                             fltk::dialog::alert_default(
                                 "Warning: Some errors/inconsistencies in the file were detected. Please look at them under the Warnings menu option and ensure that they are harmless",
@@ -337,7 +311,7 @@ impl App {
                         }
                         tocs::tbl::ReadTblResult::Err(e) => {
                             fltk::dialog::alert_default(&format!("error loading file: {}", e));
-                            state.path = std::path::PathBuf::new();
+                            *path = std::path::PathBuf::new();
                         }
                     }
                 }
@@ -347,7 +321,12 @@ impl App {
             Some(Msg::SaveFile) => {
                 // try saving data to file
                 let state = self.state.lock().unwrap();
-                let result = save_tbl_file(&state.path, state.tbl_version, &state.entries);
+                let tbl = tocs::tbl::Tbl::new(
+                    state.tbl_version,
+                    state.tbl_history.headers().iter().cloned(),
+                    state.tbl_history.all_current_rows().cloned().map(|entry| (entry.header, entry.values)),
+                ); // TODO: Entry
+                let result = tocs::tbl::write_file(&state.path, &tbl);
                 match result {
                     Ok(_) => {
                         // TODO: clear changed cell flags
@@ -368,7 +347,12 @@ impl App {
                 }
                 // try saving data to file
                 let state = self.state.lock().unwrap();
-                let result = save_tbl_file(&path, state.tbl_version, &state.entries);
+                let tbl = tocs::tbl::Tbl::new(
+                    state.tbl_version,
+                    state.tbl_history.headers().iter().cloned(),
+                    state.tbl_history.all_current_rows().cloned().map(|entry| (entry.header, entry.values)),
+                ); // TODO: Entry
+                let result = tocs::tbl::write_file(&state.path, &tbl);
                 match result {
                     Ok(_) => {
                         // TODO: clear changed cell flags
@@ -379,8 +363,14 @@ impl App {
                 }
             }
             Some(Msg::ExportCSV) => {
-                let state = self.state.lock().unwrap();
-                if let Some(hdr) = state.active_entry_type.as_ref() {
+                let mut state = self.state.lock().unwrap();
+                let AppData {
+                    tbl_history,
+                    tbl_version,
+                    active_entry_type,
+                    ..
+                } = &mut *state;
+                if let Some(hdr) = active_entry_type.as_ref() {
                     // open a file browser dialog to select the file
                     let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseSaveFile);
                     diag.set_title("Select .tbl file to save to ...");
@@ -390,7 +380,8 @@ impl App {
                     if path.as_os_str().is_empty() {
                         return;
                     }
-                    match export_csv(&path, state.entries.get(hdr).unwrap()) {
+                    let entries: std::vec::Vec<_> = tbl_history.rows_for_header(hdr).map(|entry| &entry.values).cloned().collect();
+                    match export_csv(&path, schema_for_header(hdr, tbl_version.schemas()), &entries) {
                         Ok(_) => {}
                         Err(e) => {
                             fltk::dialog::alert_default(&format!("error exporting to csv: {:?}", e));
@@ -412,14 +403,17 @@ impl App {
                     if path.as_os_str().is_empty() {
                         return;
                     }
-                    match import_csv(&path, schema_for_header(&hdr, state.tbl_version.schemas())) {
-                        Ok(entries) => {
-                            state.entries.insert(hdr, entries);
-                        }
-                        Err(e) => {
-                            fltk::dialog::alert_default(&format!("error importing data from csv: {:?}", e));
-                        }
-                    }
+                    todo!(); // TODO
+                             /*
+                                                 match import_csv(&path, schema_for_header(&hdr, state.tbl_version.schemas())) {
+                                                     Ok(entries) => {
+                                                         //state.entries.insert(hdr, entries);
+                                                     }
+                                                     Err(e) => {
+                                                         fltk::dialog::alert_default(&format!("error importing data from csv: {:?}", e));
+                                                     }
+                                                 }
+                             */
                 } else {
                     fltk::dialog::alert_default("no entry type selected, can't import");
                 }
@@ -434,7 +428,7 @@ impl App {
                         active_entry_type,
                         tbl_version: _,
                         path: _,
-                        entries,
+                        tbl_history,
                         warnings,
                     } = &mut *state;
                     // if there are warnings, show button to display them
@@ -446,17 +440,17 @@ impl App {
                     // reset header selector
                     *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
                         let hdr = Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
-                        if entries.contains_key(&hdr) {
+                        if tbl_history.has_header(&hdr) {
                             Some(hdr)
                         } else {
                             None
                         }
                     });
                     self.widgets.header_selector.clear();
-                    for hdr in state.entries.keys() {
+                    for hdr in tbl_history.headers() {
                         self.widgets.header_selector.add(hdr.as_str());
                     }
-                    if let Some((hdr, _)) = state.entries.iter().next() {
+                    if let Some(hdr) = tbl_history.headers().iter().next() {
                         self.widgets.header_selector.set_value(hdr.as_str());
                         state.active_entry_type = Some(hdr.clone());
                     }
@@ -466,27 +460,31 @@ impl App {
             }
             Some(Msg::UpdateTable) => {
                 let mut state = self.state.lock().unwrap();
-                log::trace!("boop");
+                let AppData {
+                    active_entry_type,
+                    tbl_history,
+                    tbl_version,
+                    ..
+                } = &mut *state;
                 // reset header selector
-                state.active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
+                *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
                     let hdr = Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
-                    if state.entries.contains_key(&hdr) {
+                    if tbl_history.has_header(&hdr) {
                         Some(hdr)
                     } else {
                         None
                     }
                 });
-                if let Some(hdr) = &state.active_entry_type {
+                if let Some(hdr) = active_entry_type {
                     log::trace!("beep");
                     // width of each column = max(header width, width of each entry in that column)
                     // width of each row = max(width of all entries in all rows)
-                    let attrs = schema_for_header(&hdr, state.tbl_version.schemas());
+                    let attrs = schema_for_header(hdr, tbl_version.schemas());
                     let mut column_widths: std::vec::Vec<i32> = attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect();
-                    let entries = state.entries.get(hdr).unwrap();
-                    let nrows = entries.len().try_into().unwrap();
+                    let nrows: i32 = tbl_history.number_of_rows_for_header(hdr).try_into().unwrap();
                     let mut row_height = 1;
-                    for row in entries {
-                        for (i, (_, val)) in row.iter().enumerate() {
+                    for row in tbl_history.rows_for_header(hdr) {
+                        for (i, (_, val)) in row.values.iter().enumerate() {
                             let (w, h) = fltk::draw::measure(&val.to_string(), false);
                             column_widths[i] = std::cmp::max(column_widths[i], w);
                             row_height = std::cmp::max(row_height, h);
@@ -502,32 +500,32 @@ impl App {
                 if let Some(row) = try_get_selected_row(&self.widgets.table) {
                     let row: usize = row.try_into().unwrap();
                     let mut state = self.state.lock().unwrap();
-                    let AppData { active_entry_type, entries, .. } = &mut *state;
+                    let AppData { active_entry_type, tbl_history, .. } = &mut *state;
                     if let Some(hdr) = active_entry_type {
-                        let active_entries = entries.get_mut(hdr).unwrap();
-                        active_entries.insert(row, active_entries[row].clone());
+                        tbl_history.change(Change::DuplicateRow { header: hdr.clone(), row })
                     }
                     drop(state);
                     // Note: mutex must be free for this function because it triggers table redraws:
                     self.update(&Some(Msg::UpdateTable));
                 } else {
                     fltk::dialog::alert_default("please select exactly one row");
+                    // TODO: allow multiple? spliced or blockwise?
                 }
             }
             Some(Msg::DeleteEntry) => {
                 if let Some(row) = try_get_selected_row(&self.widgets.table) {
                     let row: usize = row.try_into().unwrap();
                     let mut state = self.state.lock().unwrap();
-                    let AppData { active_entry_type, entries, .. } = &mut *state;
+                    let AppData { active_entry_type, tbl_history, .. } = &mut *state;
                     if let Some(hdr) = active_entry_type {
-                        let active_entries = entries.get_mut(hdr).unwrap();
-                        active_entries.remove(row);
+                        tbl_history.change(Change::RemoveRow { header: hdr.clone(), row })
                     }
                     drop(state);
                     // Note: mutex must be free for this function because it triggers table redraws:
                     self.update(&Some(Msg::UpdateTable));
                 } else {
                     fltk::dialog::alert_default("please select exactly one row");
+                    // TODO: allow multiple
                 }
             }
             Some(Msg::TableEvent) => {
@@ -555,12 +553,14 @@ impl App {
                 if let Some((row, col)) = try_get_selected_cell(table) {
                     // copy text input to selected cell
                     {
+                        let row: usize = row.try_into().unwrap();
+                        let column: usize = col.try_into().unwrap();
                         let mut state = self.state.lock().unwrap();
                         let text = input.value();
-                        let cell_value = get_cell_value(&mut *state, row, col).unwrap();
-                        let ty = cell_value.r#type();
-                        if let Ok(value) = tocs::tbl::AtomicValue::from_str(&ty, &text) {
-                            *cell_value = value;
+                        let header = state.active_entry_type.clone().unwrap();
+                        let ty = schema_for_header(&header, state.tbl_version.schemas()).get_index(column).unwrap().1;
+                        if let Ok(value) = tocs::tbl::AtomicValue::from_str(ty, &text) {
+                            state.tbl_history.change(Change::UpdateCell { header, row, column, value });
                         } else {
                             fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", ty.describe()));
                         }
@@ -589,16 +589,16 @@ impl App {
     }
 }
 
-fn get_cell_value(state: &mut AppData, row: i32, col: i32) -> Option<&mut tocs::tbl::AtomicValue> {
+fn get_cell_value(state: &mut AppData, row: i32, col: i32) -> Option<&tocs::tbl::AtomicValue> {
     let row: usize = row.try_into().unwrap();
     let col: usize = col.try_into().unwrap();
-    let AppData { active_entry_type, entries, .. } = state;
+    let AppData { active_entry_type, tbl_history, .. } = state;
+
     active_entry_type
         .as_ref()
-        .and_then(|hdr| entries.get_mut(hdr))
-        .and_then(|rows| rows.get_mut(row))
-        .and_then(|row| row.get_index_mut(col))
-        .map(|(_, val)| val)
+        .and_then(|hdr| tbl_history.row_for_header(hdr, row))
+        .and_then(|entry| entry.values.get_index(col))
+        .map(|(_, value)| value)
 }
 
 fn schema_for_header<'a>(header: &Header, schemas: &'a IndexMap<Header, Schema>) -> &'a Schema {
@@ -610,18 +610,18 @@ fn schema_for_header<'a>(header: &Header, schemas: &'a IndexMap<Header, Schema>)
     schemas.get(header).unwrap_or(&GENERIC)
 }
 
-fn export_csv(path: &std::path::Path, data: &[AttributeValues]) -> std::io::Result<()> {
+fn export_csv(path: &std::path::Path, schema: &Schema, data: &[AttributeValues]) -> std::io::Result<()> {
     log::debug!("export data as CSV to '{}'", path.display());
     let mut csv = csv::WriterBuilder::new().quote_style(csv::QuoteStyle::Always).from_path(path)?;
+
     log::debug!("writing csv header");
-    if let Some(entry) = data.get(0) {
-        for attr in entry.keys() {
-            csv.write_field(attr.as_bytes())?;
-        }
-        // end of record
-        let eor: [&str; 0] = [];
-        csv.write_record(&eor)?;
+    for attr in schema.keys() {
+        csv.write_field(attr.as_bytes())?;
     }
+    // end of record
+    let eor: [&str; 0] = [];
+    csv.write_record(&eor)?;
+
     log::debug!("writing csv records");
     for entry in data {
         // one field for each attribute value
@@ -643,10 +643,10 @@ fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::Vec<A
     let expected_headers: std::collections::BTreeSet<_> = schema.keys().map(|s| s.as_ref()).collect();
     let csv_headers = csv.headers().map_err(|e| e.to_string())?;
     let actual_headers: std::collections::BTreeSet<_> = csv_headers.iter().collect();
-    for h in expected_headers.difference(&actual_headers) {
+    if let Some(h) = expected_headers.difference(&actual_headers).next() {
         return Err(format!("expected header '{}' is missing from CSV", h));
     }
-    for h in actual_headers.difference(&expected_headers) {
+    if let Some(h) = actual_headers.difference(&expected_headers).next() {
         return Err(format!("unexpected header '{}' present in CSV", h));
     }
     if actual_headers.len() != csv_headers.len() {
@@ -686,13 +686,6 @@ fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::Vec<A
     Ok(result)
 }
 
-fn save_tbl_file(path: &std::path::Path, version: tocs::tbl::Version, entries: &IndexMap<Header, std::vec::Vec<AttributeValues>>) -> Result<usize, tocs::tbl::SerializeError> {
-    let headers: std::vec::Vec<Header> = entries.keys().cloned().collect();
-    let entries: std::vec::Vec<(Header, AttributeValues)> = entries.iter().flat_map(|(hdr, entries)| entries.iter().map(|e| (hdr.clone(), e.clone()))).collect();
-    let tbl = tocs::tbl::Tbl::new(version, headers, entries);
-    tocs::tbl::write_file(path, &tbl)
-}
-
 fn main() {
     simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
 
@@ -703,23 +696,19 @@ fn main() {
             log::debug!("parsing {} as a {:?} file", path.display(), version);
             // try loading data from file
             match tocs::tbl::read_file(&path, version) {
-                tocs::tbl::ReadTblResult::Ok(tbl) => {
-                    let headers = tbl.headers().cloned().collect();
-                    AppData {
-                        active_entry_type: None,
-                        tbl_version: version,
-                        path,
-                        entries: partition_entries_with_headers(headers, tbl.into_entries()),
-                        warnings: vec![],
-                    }
-                }
+                tocs::tbl::ReadTblResult::Ok(tbl) => AppData {
+                    tbl_history: TblStateHistory::new(tbl),
+                    active_entry_type: None,
+                    tbl_version: version,
+                    path,
+                    warnings: vec![],
+                },
                 tocs::tbl::ReadTblResult::Warn { tbl, warnings } => {
-                    let headers = tbl.headers().cloned().collect();
                     AppData {
+                        tbl_history: TblStateHistory::new(tbl),
                         active_entry_type: None,
                         tbl_version: version,
                         path,
-                        entries: partition_entries_with_headers(headers, tbl.into_entries()),
                         warnings,
                     }
                     // TODO: if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
@@ -735,10 +724,10 @@ fn main() {
             return;
         }
         (None, None) => AppData {
+            tbl_history: TblStateHistory::default(),
             active_entry_type: None,
             tbl_version: tocs::tbl::Version::CS1En,
             path: std::path::PathBuf::new(),
-            entries: IndexMap::new(),
             warnings: vec![],
         },
     };

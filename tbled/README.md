@@ -4,16 +4,12 @@ tbled
 `tbled` is an editor for `.tbl` files for the Trails of Cold Steel games.
 It is quite limited and obtuse, but I hope it is better than viewing or editing the files in a general purpose hex editor.
 
-I try very hard to make sure this tool doesn't silently corrupt data.
-However, there are two important possibilities for why this still may happen:
-1\) I make mistakes sometimes.
-2\) The tool does not necessarily preserve the order of entries within a .tbl file; while I have never noticed a problem with this I can't exclude that it might become one.
-Therefore it is highly recommended to BACK UP ALL DATA FREQUENTLY.
+I try very hard to make sure `tbled` doesn't silently corrupt data but I obviously can make mistakes, so I recommend to BACK UP ALL DATA FREQUENTLY.
 
 `tbled` currently supports the following versions of the games:
 
-- Trails of Cold Steel (XSeed PC version, english language only)
-- Trails of Cold Steel II (XSeed PC version, english language only)
+- Trails of Cold Steel (XSeed PC version, English language only)
+- Trails of Cold Steel II (XSeed PC version, English language only)
 - Trails of Cold Steel III (NISA PC version)
 - Trails of Cold Steel IV (NISA Switch version)
 
@@ -63,15 +59,17 @@ Files with known schemas can be read under certain circumstances even when these
 For those cases, a list of warnings will be available under the "Warnings" menu option.
 If there are warnings, it is your responsibility to check every warning and decide whether or not to fix the detected problem, as well as how to fix it.
 
-If there are warnings for files that have previously been written with this tool, that's a bug.
+If there are warnings when loading files that have previously been written with this tool, that's a bug.
 
 Releases (downloads & changelogs)
 ---------------------------------
 
 ### [v0.4 (in development)]
 
+- undo/redo changes (TODO: expose this in the GUI)
+- preserve row order
 - cleanup of code used to read/write and related code
-- CSV import
+- CSV import (TODO: currently broken)
 
 ### [v0.3.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.3.1/tbled-v0.3.1.exe)
 
