@@ -445,9 +445,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
     log: &mut WarningLogger<DeserializeError>,
     header_counts: Option<&IndexMap<Header, u32>>,
     schemas: &AtomicSchemas,
-) -> Result<(Header, AtomicAttributeValues), DeserializeError> {
-    // TODO: return Entry
-
+) -> Result<Entry, DeserializeError> {
     // read header name and check that it's ok (if necessary)
     let warnings_before_header = log.len();
     let hdr = deserialize_header_name::<_, STRICT>(f)?;
@@ -519,7 +517,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
     if LOG {
         log.add_context_for_all_since(warnings_before_data, DeserializeErrorPosition::EntryData);
     }
-    Ok((hdr, data))
+    Ok(Entry { header: hdr, values: data })
 }
 
 fn deserialize_all_entries<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
@@ -528,9 +526,7 @@ fn deserialize_all_entries<F: std::io::Read + std::io::Seek, const STRICT: bool,
     number_of_entries: u16,
     header_counts: Option<&IndexMap<Header, u32>>,
     schemas: &AtomicSchemas,
-) -> Result<std::vec::Vec<(Header, AtomicAttributeValues)>, DeserializeError> {
-    // TODO: return vec of Entry
-
+) -> Result<std::vec::Vec<Entry>, DeserializeError> {
     let mut entries = std::vec::Vec::new();
 
     // parse number of entries equal to tbl header
@@ -596,9 +592,7 @@ pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek, const STRICT: bool, 
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
     schemas: &AtomicSchemas,
-) -> Result<std::vec::Vec<(Header, AtomicAttributeValues)>, DeserializeError> {
-    // TODO: return vec of Entry
-
+) -> Result<std::vec::Vec<Entry>, DeserializeError> {
     if LOG {
         log::debug!("parsing tbl");
     }
@@ -610,9 +604,7 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, 
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
     schemas: &AtomicSchemas,
-) -> Result<(IndexMap<Header, u32>, std::vec::Vec<(Header, AtomicAttributeValues)>), DeserializeError> {
-    // TODO: return vec of Entry
-
+) -> Result<(IndexMap<Header, u32>, std::vec::Vec<Entry>), DeserializeError> {
     if LOG {
         log::debug!("parsing tbl");
     }
@@ -625,7 +617,7 @@ pub fn load_file_v1<P: AsRef<std::path::Path>, const STRICT: bool, const LOG: bo
     path: P,
     log: &mut WarningLogger<DeserializeError>,
     schemas: &AtomicSchemas,
-) -> Result<std::vec::Vec<(Header, AtomicAttributeValues)>, DeserializeError> {
+) -> Result<std::vec::Vec<Entry>, DeserializeError> {
     let mut f = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::Io(e),
         position: None,
@@ -638,7 +630,7 @@ pub fn load_file_v2<P: AsRef<std::path::Path>, const STRICT: bool, const LOG: bo
     path: P,
     log: &mut WarningLogger<DeserializeError>,
     schemas: &AtomicSchemas,
-) -> Result<(IndexMap<Header, u32>, std::vec::Vec<(Header, AtomicAttributeValues)>), DeserializeError> {
+) -> Result<(IndexMap<Header, u32>, std::vec::Vec<Entry>), DeserializeError> {
     let mut f = std::fs::File::open(path).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::Io(e),
         position: None,
@@ -712,11 +704,11 @@ impl<'a> Version<'a> {
 pub struct Tbl {
     version: VersionWithoutSchema,
     headers: SmallVec<[Header; 6]>,
-    entries: std::vec::Vec<(Header, AtomicAttributeValues)>, // TODO: vec<Entry>
+    entries: std::vec::Vec<Entry>,
 }
 
 impl Tbl {
-    pub fn new<I: IntoIterator<Item = Header>, J: IntoIterator<Item = (Header, AtomicAttributeValues)>>(version: Version, headers: I, entries: J) -> Self {
+    pub fn new<I: IntoIterator<Item = Header>, J: IntoIterator<Item = Entry>>(version: Version, headers: I, entries: J) -> Self {
         Self {
             version: version.without_schema(),
             headers: headers.into_iter().collect(),
@@ -728,20 +720,20 @@ impl Tbl {
         self.headers.iter()
     }
 
-    pub fn get_entries(&self) -> &[(Header, AtomicAttributeValues)] {
+    pub fn get_entries(&self) -> &[Entry] {
         &self.entries
     }
 
-    pub fn get_mut_entries(&mut self) -> &mut std::vec::Vec<(Header, AtomicAttributeValues)> {
+    pub fn get_mut_entries(&mut self) -> &mut std::vec::Vec<Entry> {
         &mut self.entries
     }
 
-    pub fn into_entries(self) -> std::vec::Vec<(Header, AtomicAttributeValues)> {
+    pub fn into_entries(self) -> std::vec::Vec<Entry> {
         self.entries
     }
 }
 
-// TODO: load/store Tbl from file/data, including fixes (for the correct versions)
+// TODO: load/store Tbl from file/data, including fixes (for specific versions)
 // TODO: update downstream programs to use the new generic interface
 
 pub enum ReadTblResult {
@@ -754,7 +746,7 @@ fn try_read<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: boo
     match version.without_schema() {
         VersionWithoutSchema::V1 => deserialize_tbl_v1::<_, STRICT, LOG>(f, logger, version.schemas()).map(|entries| Tbl {
             version: version.without_schema(),
-            headers: entries.iter().map(|(h, _)| h).unique().cloned().collect(),
+            headers: entries.iter().map(|entry| &entry.header).unique().cloned().collect(),
             entries,
         }),
         VersionWithoutSchema::V2 => deserialize_tbl_v2::<_, STRICT, LOG>(f, logger, version.schemas()).map(|(headers_with_counts, entries)| Tbl {
@@ -783,7 +775,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
                 DeserializeErrorPosition::Entry { number } => {
                     let entries = tbl.get_entries();
                     let number: usize = (*number).try_into().unwrap();
-                    let header: Header = entries[number].0.clone();
+                    let header: Header = entries[number].header.clone();
                     if !schemas.contains_key(&header) {
                         return false;
                     } else {
@@ -836,7 +828,6 @@ pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> Re
     log::debug!("Generic tbl read");
     let mut logger = WarningLogger::new();
     let first_error = match try_read::<_, /*STRICT =*/ true, /*LOG=*/ false>(f, &mut logger, version) {
-        // TODO: supress logs here?
         Ok(tbl) => {
             return ReadTblResult::Ok(tbl);
         }
@@ -868,8 +859,8 @@ pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> Re
 
 pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, SerializeError> {
     let written = match tbl.version {
-        VersionWithoutSchema::V1 => serialize_tbl_v1(f, &tbl_entries_legacy_convert(&tbl.entries))?,
-        VersionWithoutSchema::V2 => serialize_tbl_v2(f, &tbl.headers, &tbl_entries_legacy_convert(&tbl.entries))?,
+        VersionWithoutSchema::V1 => serialize_tbl_v1(f, &tbl.entries)?,
+        VersionWithoutSchema::V2 => serialize_tbl_v2(f, &tbl.headers, &tbl.entries)?,
     };
     f.flush().map_err(SerializeError::IoError)?;
     Ok(written)
@@ -900,15 +891,4 @@ pub fn write_file<P: AsRef<std::path::Path>>(path: P, tbl: &Tbl) -> Result<usize
 pub struct Entry {
     pub header: Header,
     pub values: AtomicAttributeValues,
-}
-
-pub fn tbl_entries_legacy_convert(entries: &[(Header, AtomicAttributeValues)]) -> std::vec::Vec<Entry> {
-    // TODO: remove
-    entries
-        .iter()
-        .map(|x| Entry {
-            header: x.0.clone(),
-            values: x.1.clone(),
-        })
-        .collect()
 }

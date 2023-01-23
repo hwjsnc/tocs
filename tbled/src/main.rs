@@ -340,11 +340,7 @@ impl App {
             Some(Msg::SaveFile) => {
                 // try saving data to file
                 let state = self.state.lock().unwrap();
-                let tbl = tocs::tbl::Tbl::new(
-                    state.tbl_version,
-                    state.tbl_history.headers().iter().cloned(),
-                    state.tbl_history.all_current_rows().cloned().map(|entry| (entry.header, entry.values)),
-                ); // TODO: Entry
+                let tbl = tocs::tbl::Tbl::new(state.tbl_version, state.tbl_history.headers().iter().cloned(), state.tbl_history.all_current_rows().cloned()); // TODO: Entry
                 let result = tocs::tbl::write_file(&state.path, &tbl);
                 match result {
                     Ok(_) => {
@@ -366,11 +362,7 @@ impl App {
                 }
                 // try saving data to file
                 let state = self.state.lock().unwrap();
-                let tbl = tocs::tbl::Tbl::new(
-                    state.tbl_version,
-                    state.tbl_history.headers().iter().cloned(),
-                    state.tbl_history.all_current_rows().cloned().map(|entry| (entry.header, entry.values)),
-                ); // TODO: Entry
+                let tbl = tocs::tbl::Tbl::new(state.tbl_version, state.tbl_history.headers().iter().cloned(), state.tbl_history.all_current_rows().cloned()); // TODO: Entry
                 let result = tocs::tbl::write_file(&path, &tbl);
                 match result {
                     Ok(_) => {

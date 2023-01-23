@@ -1,8 +1,6 @@
 extern crate clap;
 extern crate tocs;
 
-use tocs::tbl::tbl_entries_legacy_convert;
-
 use clap::Parser;
 
 #[derive(Debug, Parser)]
@@ -166,7 +164,7 @@ pub fn roundtrip_cs1(path: &std::path::Path, fix_data: bool) {
     match tocs::tbl::deserialize_tbl_v1::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS1_ATOMIC) {
         Ok(entries) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
-            match tocs::tbl::serialize_tbl_v1(&mut std::io::Cursor::new(&mut serialized), &tbl_entries_legacy_convert(&entries)) {
+            match tocs::tbl::serialize_tbl_v1(&mut std::io::Cursor::new(&mut serialized), &entries) {
                 Ok(_written) => compare(&original, &serialized, path),
                 Err(err) => log::error!("serialize failed: {err}"),
             }
@@ -184,7 +182,7 @@ pub fn roundtrip_cs2(path: &std::path::Path, _fix_data: bool) {
         Ok((header_counts, entries)) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
-            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &tbl_entries_legacy_convert(&entries)) {
+            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
                 Ok(_written) => compare(&original, &serialized, path),
                 Err(err) => log::error!("serialize failed: {err}"),
             }
@@ -206,7 +204,7 @@ pub fn roundtrip_cs3(path: &std::path::Path, fix_data: bool) {
         Ok((header_counts, entries)) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
-            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &tbl_entries_legacy_convert(&entries)) {
+            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
                 Ok(_written) => compare(&original, &serialized, path),
                 Err(err) => log::error!("serialize failed: {err}"),
             }
@@ -224,7 +222,7 @@ pub fn roundtrip_cs4(path: &std::path::Path, _fix_data: bool) {
         Ok((header_counts, entries)) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
-            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &tbl_entries_legacy_convert(&entries)) {
+            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
                 Ok(_written) => compare(&original, &serialized, path),
                 Err(err) => log::error!("serialize failed: {err}"),
             }
@@ -242,7 +240,7 @@ pub fn roundtrip_cs5(path: &std::path::Path, _fix_data: bool) {
         Ok((header_counts, entries)) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
-            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &tbl_entries_legacy_convert(&entries)) {
+            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
                 Ok(_written) => compare(&original, &serialized, path),
                 Err(err) => log::error!("serialize failed: {err}"),
             }

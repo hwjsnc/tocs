@@ -138,9 +138,8 @@ impl Change {
 
 impl TblStateHistory {
     pub fn new(tbl: tocs::tbl::Tbl) -> Self {
-        let headers = tbl.headers().chain(tbl.get_entries().iter().map(|(h, _)| h)).cloned().collect(); // TODO: Entry
-        let entries = tocs::tbl::tbl_entries_legacy_convert(&tbl.into_entries()); // TODO: Entry
-        let current = TblStateWithoutHistory::from_iter(entries.into_iter());
+        let headers = tbl.headers().chain(tbl.get_entries().iter().map(|entry| &entry.header)).cloned().collect(); // TODO: Entry
+        let current = TblStateWithoutHistory::from_iter(tbl.into_entries());
         Self {
             current,
             headers,

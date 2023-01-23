@@ -165,13 +165,13 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
                         .1
                 }
             };
-            for (n, (header, values)) in entries.iter().enumerate() {
-                let insert_result = if schemas.contains_key(header) {
-                    sqlite_insert_unsafe(&tx, header.as_str(), &path_for_db, values)
+            for (n, entry) in entries.iter().enumerate() {
+                let insert_result = if schemas.contains_key(&entry.header) {
+                    sqlite_insert_unsafe(&tx, entry.header.as_str(), &path_for_db, &entry.values)
                 } else {
                     let mut values_with_header = IndexMap::new();
-                    values_with_header.insert(SmolStr::from("header"), tocs::tbl::AtomicValue::CUtf8(header.as_str().into()));
-                    for (attr, val) in values {
+                    values_with_header.insert(SmolStr::from("header"), tocs::tbl::AtomicValue::CUtf8(entry.header.as_str().into()));
+                    for (attr, val) in entry.values.iter() {
                         values_with_header.insert(attr.clone(), val.clone());
                     }
                     sqlite_insert_unsafe(&tx, "generic", &path_for_db, &values_with_header)

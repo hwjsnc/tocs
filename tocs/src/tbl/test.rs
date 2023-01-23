@@ -1,4 +1,4 @@
-use super::{deserialize_tbl_v1, deserialize_tbl_v2, read, schemas, serialize_tbl_v1, serialize_tbl_v2, tbl_entries_legacy_convert, write, DeserializeError, ReadTblResult, Version, WarningLogger};
+use super::{deserialize_tbl_v1, deserialize_tbl_v2, read, schemas, serialize_tbl_v1, serialize_tbl_v2, write, DeserializeError, ReadTblResult, Version, WarningLogger};
 
 static INIT_LOG: std::sync::Once = std::sync::Once::new();
 
@@ -66,8 +66,8 @@ fn test_read_all() {
                     compare_data(&original, &serialized);
                 }
                 // mark all entry headers as seen
-                for (hdr, _) in tbl.get_entries() {
-                    seen_headers.insert(hdr.clone());
+                for entry in tbl.get_entries() {
+                    seen_headers.insert(entry.header.clone());
                 }
             }
         }
@@ -106,8 +106,7 @@ fn test_roundtrip_cs1_strict() {
             assert!(!logger.has_warnings());
             let serialized = {
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[_] = &entries;
-                let _ = serialize_tbl_v1(&mut serialized, &tbl_entries_legacy_convert(e)).unwrap();
+                let _ = serialize_tbl_v1(&mut serialized, &entries).unwrap();
                 serialized.into_inner()
             };
             compare_data(&fixed, &serialized);
@@ -138,9 +137,8 @@ fn test_roundtrip_cs2_strict() {
             assert!(!logger.has_warnings());
             let serialized = {
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[_] = &entries;
                 let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, &tbl_entries_legacy_convert(&e)).unwrap();
+                let _ = serialize_tbl_v2(&mut serialized, &headers, &entries).unwrap();
                 serialized.into_inner()
             };
             compare_data(&fixed, &serialized);
@@ -166,9 +164,8 @@ fn test_roundtrip_cs3_strict() {
             assert!(!logger.has_warnings());
             let serialized = {
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[_] = &entries;
                 let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, &tbl_entries_legacy_convert(&e)).unwrap();
+                let _ = serialize_tbl_v2(&mut serialized, &headers, &entries).unwrap();
                 serialized.into_inner()
             };
             compare_data(&fixed, &serialized);
@@ -194,9 +191,8 @@ fn test_roundtrip_cs4_strict() {
             assert!(!logger.has_warnings());
             let serialized = {
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let e: &[_] = &entries;
                 let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, &tbl_entries_legacy_convert(&e)).unwrap();
+                let _ = serialize_tbl_v2(&mut serialized, &headers, &entries).unwrap();
                 serialized.into_inner()
             };
             compare_data(&fixed, &serialized);
