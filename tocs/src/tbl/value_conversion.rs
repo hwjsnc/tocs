@@ -10,10 +10,22 @@ use rusqlite::types::FromSql as _;
 
 use super::schema::{AtomicType, AtomicValue};
 
+#[derive(Debug)]
 pub enum AtomicValueFromStringError {
     Generic,
     LengthMismatch { expected: usize, actual: usize },
 }
+
+impl std::fmt::Display for AtomicValueFromStringError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            AtomicValueFromStringError::Generic => write!(f, "generic string to value conversion error"),
+            AtomicValueFromStringError::LengthMismatch { expected, actual } => write!(f, "length error: expected {expected} bytes, got {actual} bytes."),
+        }
+    }
+}
+
+impl std::error::Error for AtomicValueFromStringError {}
 
 // conversion to/from strings
 

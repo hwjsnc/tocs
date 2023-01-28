@@ -340,7 +340,7 @@ impl App {
             Some(Msg::SaveFile) => {
                 // try saving data to file
                 let state = self.state.lock().unwrap();
-                let tbl = tocs::tbl::Tbl::new(state.tbl_version, state.tbl_history.headers().iter().cloned(), state.tbl_history.all_current_rows().cloned()); // TODO: Entry
+                let tbl = tocs::tbl::Tbl::new(state.tbl_version, state.tbl_history.headers().iter().cloned(), state.tbl_history.all_current_rows().cloned());
                 let result = tocs::tbl::write_file(&state.path, &tbl);
                 match result {
                     Ok(_) => {
@@ -362,7 +362,7 @@ impl App {
                 }
                 // try saving data to file
                 let state = self.state.lock().unwrap();
-                let tbl = tocs::tbl::Tbl::new(state.tbl_version, state.tbl_history.headers().iter().cloned(), state.tbl_history.all_current_rows().cloned()); // TODO: Entry
+                let tbl = tocs::tbl::Tbl::new(state.tbl_version, state.tbl_history.headers().iter().cloned(), state.tbl_history.all_current_rows().cloned());
                 let result = tocs::tbl::write_file(&path, &tbl);
                 match result {
                     Ok(_) => {
@@ -562,7 +562,7 @@ impl App {
                             // copy table value to input
                             log::debug!("double click on cell");
                             let mut state = self.state.lock().unwrap();
-                            self.widgets.input.set_value(&get_cell_value(&mut *state, row, col).unwrap().to_string());
+                            self.widgets.input.set_value(&get_cell_value(&mut state, row, col).unwrap().to_string());
                             self.widgets.input.take_focus().unwrap();
                             self.widgets.input.redraw();
                         }
@@ -672,7 +672,7 @@ fn export_csv(path: &std::path::Path, schema: &Schema, data: &[AttributeValues])
     }
     // end of record
     let eor: [&str; 0] = [];
-    csv.write_record(&eor)?;
+    csv.write_record(eor)?;
 
     log::debug!("writing csv records");
     for entry in data {
@@ -682,7 +682,7 @@ fn export_csv(path: &std::path::Path, schema: &Schema, data: &[AttributeValues])
         }
         // end of record
         let eor: [&str; 0] = [];
-        csv.write_record(&eor)?;
+        csv.write_record(eor)?;
     }
     Ok(())
 }

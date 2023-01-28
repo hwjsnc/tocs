@@ -49,8 +49,8 @@ You can also use the CSV import/export function for editing:
 - Import the updated CSV
 - Save the updated .tbl file
 
-However, when importing a CSV, under certain circumstances the order of .tbl entries may change relative to the entries that have a different header.
-It's unlikely that this would cause any problems, but I cannot fully exclude the possibility.
+When importing a CSV, under certain circumstances the order of .tbl entries may change relative to the entries that have a different header.
+It's unlikely that this would cause any problems, but I cannot fully exclude the possibility so just be aware of that.
 
 Warnings
 --------

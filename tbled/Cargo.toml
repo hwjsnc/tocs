@@ -17,3 +17,6 @@ native-dialog="0.6.3"
 simple_logger = { version = "4", default-features = false, features = ["stderr"] }
 smol_str = { version = "0.1.23", default-features = false }
 tocs = { path = "../tocs" }
+
+[dev-dependencies]
+hex = "0.4.3"
