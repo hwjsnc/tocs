@@ -583,7 +583,7 @@ impl App {
                         let text = input.value();
                         let header = state.active_entry_type.clone().unwrap();
                         let ty = schema_for_header(&header, state.tbl_version.schemas()).get_index(column).unwrap().1;
-                        if let Ok(value) = tocs::tbl::AtomicValue::from_str(ty, &text) {
+                        if let Ok(value) = tocs::tbl::AtomicValue::from_str_nonstrict(ty, &text) {
                             state.tbl_history.change(Change::UpdateCell { header, row, column, value });
                         } else {
                             fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", ty.describe()));
@@ -729,7 +729,7 @@ fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::Vec<A
             let s = row
                 .get(*csv_column_index.get(name).expect("csv headers should equal schema attributes"))
                 .expect("number of columns should match");
-            let v = tocs::tbl::try_atomic_value_from_str(r#type, s).map_err(|_| format!("invalid value '{}' for attribute '{}' (expected {})", s, name, r#type.describe()))?;
+            let v = tocs::tbl::AtomicValue::from_str_nonstrict(r#type, s).map_err(|_| format!("invalid value '{}' for attribute '{}' (expected {})", s, name, r#type.describe()))?;
             entry.insert(name.clone(), v);
         }
         result.push(entry);

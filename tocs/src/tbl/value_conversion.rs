@@ -29,7 +29,7 @@ impl std::error::Error for AtomicValueFromStringError {}
 
 // conversion to/from strings
 
-pub fn try_atomic_value_from_str(t: &AtomicType, s: &str) -> Result<AtomicValue, AtomicValueFromStringError> {
+pub fn try_atomic_value_from_str(t: &AtomicType, s: &str, strict: bool) -> Result<AtomicValue, AtomicValueFromStringError> {
     match t {
         AtomicType::I8 => Ok(AtomicValue::I8(i8::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
         AtomicType::I16 => Ok(AtomicValue::I16(i16::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
@@ -41,7 +41,7 @@ pub fn try_atomic_value_from_str(t: &AtomicType, s: &str) -> Result<AtomicValue,
         AtomicType::CUtf8 => Ok(AtomicValue::CUtf8(SmolStr::from(s))),
         AtomicType::X(n) => {
             let data = std::vec::Vec::<u8>::from_hex(s).map_err(|_| AtomicValueFromStringError::Generic)?; // TODO: SmallVec<_> from hex
-            if data.len() != *n {
+            if strict && data.len() != *n {
                 Err(AtomicValueFromStringError::LengthMismatch { expected: *n, actual: data.len() })
             } else {
                 Ok(AtomicValue::X(data.into()))
@@ -52,7 +52,11 @@ pub fn try_atomic_value_from_str(t: &AtomicType, s: &str) -> Result<AtomicValue,
 
 impl AtomicValue {
     pub fn from_str(ty: &AtomicType, text: &str) -> Result<AtomicValue, AtomicValueFromStringError> {
-        try_atomic_value_from_str(ty, text)
+        try_atomic_value_from_str(ty, text, true)
+    }
+
+    pub fn from_str_nonstrict(ty: &AtomicType, text: &str) -> Result<AtomicValue, AtomicValueFromStringError> {
+        try_atomic_value_from_str(ty, text, false)
     }
 }
 
