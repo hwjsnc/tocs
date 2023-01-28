@@ -480,6 +480,44 @@ mod test {
 
     #[test]
     fn test_max_undo() {
-        todo!()
+        let mut tbl_history = TblStateHistory::default();
+        let initial_row = tocs::tbl::Entry {
+            header: Header::new("foo").unwrap(),
+            values: [
+                (Attribute::new("id"), AtomicValue::I16(0)),
+                (Attribute::new("x"), AtomicValue::U32(3892)),
+                (Attribute::new("y"), AtomicValue::CUtf8("lorem ipsum".into())),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        tbl_history.change(Change::ImportTable {
+            header: Header::new("foo").unwrap(),
+            rows: vec![std::rc::Rc::new(initial_row)],
+        });
+
+        for i in 1..5_000 {
+            tbl_history.change(Change::DuplicateRow {
+                header: Header::new("foo").unwrap(),
+                row: 0,
+            });
+            tbl_history.change(Change::UpdateCell {
+                header: Header::new("foo").unwrap(),
+                row: i,
+                column: 0,
+                value: AtomicValue::I16(i as i16),
+            });
+            assert_eq!(tbl_history.undo.len(), std::cmp::min(1 + 2 * i, super::MAX_UNDO));
+        }
+
+        for i in 0..1_000 {
+            assert!(tbl_history.undo().is_some());
+        }
+
+        assert!(tbl_history.undo().is_none());
+        assert_eq!(tbl_history.undo.len(), 0);
+        assert_eq!(tbl_history.redo.len(), 1000);
+
+        assert_eq!(tbl_history.all_current_rows().count(), 4500);
     }
 }
