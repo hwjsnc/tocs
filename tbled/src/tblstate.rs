@@ -1,21 +1,20 @@
 /*
 Tbl entries aren't necessarily sorted in any obvious or logical order, probably because these files are compiled line by line from handwritten source files.
 I would be pretty surprised if the order of entries was important, but I don't know for sure, so I think it's a good idea to preserve the order wherever possible.
-Since we want to view and edit the lines by header name (aka entry type, basically one table inside the tbl file), this requires a somewhat complicated data structure, which I will attempt to explain in this comment.
 It is important to note that entries of the same type are not necessarily in one contiguous chunk; different entry types can alternate between each other.
 
 Another complication is that we want to preserve edit history to enable the user to undo and redo changes.
 Though the tbl files aren't too big, it's a bad idea to independently store the full state of the tbl after each edit.
 
-Hence, we store the rows in the tbl as an immutable vector, which can look up, insert, delete, and update entries in O(log(n)).
-When changing a vector, only the changed part is actually stored and the unchanged part isn't copied but only referenced.
-(The real story is more complicated, but that shouldn't matter here.)
+We store the rows for every edit state as a vector of refcounted pointers to the actual rows.
+That means on every edit, we clone the complete vector of pointers, clone one row, and edit that cloned row.
 
-To get fast lookups for all entries with a given header name, we then store a vector of all row indices that have this header name.
-These shouldn't be directly accessed and must be properly updated whenever a row is inserted or deleted.
+That is really inefficient in theory (it's possible to do better with immutable data structures, but that's complicated), but it should be efficient enough in practice:
+The biggest table, t_vctiming.tbl, has ~30k entries.
+Cloning a 30k vector of entries shouldn't be too much of an issue as long as we don't have a huge undo stack.
+For that reason, we set an upper bound of 1000 edits on the undo stack.
 
-To get undo/redo functionality, we also store two stacks of previous and later states that we update whenever a change is made.
-We also store the change itself so we can provide this information to the user (e.g. show "undo (duplicate row 42 in 'magic')" in the menu).
+The above is not necessarily true if we also consider data imports, but worrying about a user importing a CSV 1000 times for the same file is a waste of time.
 */
 
 use tocs::tbl::schema::AtomicValue as Value;
@@ -24,10 +23,11 @@ use tocs::tbl::Header;
 
 use std::borrow::Borrow as _;
 
+const MAX_UNDO: usize = 1000;
+
 struct TblStateWithoutHistory {
     /// All tbl rows in their original order (or the user-desired order if there have been changes)
-    //all_rows: im::Vector<std::rc::Rc<tocs::tbl::Entry>>, // we use refcounting because cloning a row is somewhat expensive and it needs to be done for im-Vector changes - not all entries are cloned, but up to 256 (?)
-    all_rows: im::Vector<std::rc::Rc<tocs::tbl::Entry>>, // we use refcounting because cloning a row is somewhat expensive and it needs to be done for im-Vector changes - not all entries are cloned, but up to 256 (?)
+    all_rows: std::vec::Vec<std::rc::Rc<tocs::tbl::Entry>>, // we use refcounting because cloning all rows is rather expensive
 }
 
 impl FromIterator<tocs::tbl::Entry> for TblStateWithoutHistory {
@@ -56,7 +56,7 @@ pub enum Change {
     },
     ImportTable {
         header: Header,
-        rows: im::Vector<std::rc::Rc<tocs::tbl::Entry>>,
+        rows: std::vec::Vec<std::rc::Rc<tocs::tbl::Entry>>,
     },
 }
 
@@ -66,14 +66,10 @@ pub struct TblStateHistory {
     /// All (unique) headers with corresponding rows
     headers: indexmap::IndexSet<Header>,
 
-    // We save the "current" header (i.e. the header of the row that was last accessed) with the expectation that many more operations on the rows with the same header will follow
-    current_header: Option<Header>,
-    rows_for_current_header: std::vec::Vec<usize>,
-
     /// undo stack
     ///
     /// Stores older states and the change that brings us to the NEXT state
-    undo: std::vec::Vec<(TblStateWithoutHistory, Change)>,
+    undo: std::collections::VecDeque<(TblStateWithoutHistory, Change)>,
 
     /// undo stack
     ///
@@ -106,15 +102,6 @@ impl TblStateWithoutHistory {
 }
 
 impl Change {
-    fn header(&self) -> &Header {
-        match self {
-            Change::DuplicateRow { header, .. } => header,
-            Change::RemoveRow { header, .. } => header,
-            Change::UpdateCell { header, .. } => header,
-            Change::ImportTable { header, .. } => header,
-        }
-    }
-
     pub fn describe(&self) -> String {
         match self {
             Change::DuplicateRow { header, row } => format!("duplicate row #{row} in table {header}"),
@@ -144,9 +131,7 @@ impl TblStateHistory {
         Self {
             current,
             headers,
-            current_header: None,
-            rows_for_current_header: vec![],
-            undo: vec![],
+            undo: std::collections::VecDeque::new(),
             redo: vec![],
         }
     }
@@ -159,32 +144,15 @@ impl TblStateHistory {
         self.headers.contains(header)
     }
 
-    fn set_header(&mut self, header: &Header) {
-        if self.current_header.as_ref() != Some(header) {
-            self.force_set_header(header.clone());
-        }
-    }
-
-    fn force_set_header(&mut self, header: Header) {
-        self.rows_for_current_header.clear();
-        for (i, row) in self.current.all_rows.iter().enumerate() {
-            if row.header == header {
-                self.rows_for_current_header.push(i);
-            }
-        }
-        self.current_header = Some(header);
-    }
-
     pub fn get_cell_contents<'a>(&'a mut self, header: &Header, rowid: usize, colid: usize) -> Option<(&'a Attribute, &'a Value)> {
-        self.set_header(header);
-        let idx = self.rows_for_current_header.get(rowid).copied()?;
+        let idx = self.row_indices_for_header(header).nth(rowid)?;
         let row = self.current.all_rows.get(idx)?;
         assert_eq!(&row.header, header);
         row.values.get_index(colid)
     }
 
     pub fn next_undo(&self) -> Option<&Change> {
-        self.undo.last().map(|(_, change)| change)
+        self.undo.back().map(|(_, change)| change)
     }
 
     pub fn next_redo(&self) -> Option<&Change> {
@@ -192,7 +160,7 @@ impl TblStateHistory {
     }
 
     pub fn undo(&mut self) -> Option<()> {
-        self.undo.pop().map(|(state, change)| {
+        self.undo.pop_back().map(|(state, change)| {
             let oldcurrent = std::mem::replace(&mut self.current, state);
             self.redo.push((change, oldcurrent));
         })
@@ -201,24 +169,21 @@ impl TblStateHistory {
     pub fn redo(&mut self) -> Option<()> {
         self.redo.pop().map(|(change, state)| {
             let oldcurrent = std::mem::replace(&mut self.current, state);
-            self.undo.push((oldcurrent, change));
+            self.undo.push_back((oldcurrent, change));
         })
     }
 
     pub fn change(&mut self, change: Change) {
-        let header = change.header().clone();
-        self.set_header(change.header());
-
         let newstate = match &change {
-            Change::DuplicateRow { row, .. } => self.current.duplicate_row(self.rows_for_current_header[*row]),
-            Change::RemoveRow { row, .. } => self.current.remove_row(self.rows_for_current_header[*row]),
-            Change::UpdateCell { row, column, value, .. } => self.current.update_cell(self.rows_for_current_header[*row], *column, value.clone()),
+            Change::DuplicateRow { header, row } => self.current.duplicate_row(self.row_indices_for_header(header).nth(*row).unwrap()),
+            Change::RemoveRow { header, row } => self.current.remove_row(self.row_indices_for_header(header).nth(*row).unwrap()),
+            Change::UpdateCell { header, row, column, value } => self.current.update_cell(self.row_indices_for_header(header).nth(*row).unwrap(), *column, value.clone()),
             Change::ImportTable { header, rows: new_rows_for_header } => {
                 // There's not really a good solution here for how to order the rows when the table is split
                 // We could probably use a diffing algorithm to find an approximate solution for the fewest rows assigned to an incorrect chunk.
                 // The benefit doesn't nearly justify the required effort though.
                 let mut got_first_row_for_header = false;
-                let mut all_rows_new = im::Vector::new();
+                let mut all_rows_new = std::vec::Vec::new();
                 for row in self.current.all_rows.iter() {
                     if &row.header == header {
                         if got_first_row_for_header {
@@ -226,38 +191,27 @@ impl TblStateHistory {
                         } else {
                             got_first_row_for_header = true;
                             for row in new_rows_for_header {
-                                all_rows_new.push_back(row.clone())
+                                all_rows_new.push(row.clone())
                             }
                         }
                     } else {
-                        all_rows_new.push_back(row.clone())
+                        all_rows_new.push(row.clone())
                     }
                 }
                 if !got_first_row_for_header {
                     for row in new_rows_for_header {
-                        all_rows_new.push_back(row.clone())
+                        all_rows_new.push(row.clone())
                     }
                 }
                 TblStateWithoutHistory { all_rows: all_rows_new }
             }
         };
 
-        let number_of_rows_changed = match &change {
-            Change::DuplicateRow { .. } => true,
-            Change::RemoveRow { .. } => true,
-            Change::UpdateCell { .. } => false,
-            Change::ImportTable { .. } => true,
-        };
-
         self.redo.clear();
         let oldstate = std::mem::replace(&mut self.current, newstate);
-        self.undo.push((oldstate, change));
-
-        // If row number changed, update the cache of rows for the current header!
-        // It would be possible to do this a bit more efficiently, but getting it right would be difficult, so we're doing the simple thing instead.
-        // This shouldn't be a huge problem unless the user adds and removes rows a lot, which seems unlikely given the current state of modding.
-        if number_of_rows_changed {
-            self.force_set_header(header);
+        self.undo.push_back((oldstate, change));
+        if self.undo.len() > MAX_UNDO {
+            let _ = self.undo.pop_front();
         }
     }
 
@@ -265,20 +219,24 @@ impl TblStateHistory {
         self.current.all_rows.iter().map(|rc| rc.borrow())
     }
 
-    pub fn number_of_rows_for_header(&mut self, header: &Header) -> usize {
-        //self.set_header(header);
-        //self.rows_for_current_header.len()
-        self.all_current_rows().filter(|entry| &entry.header == header).count()
+    pub fn number_of_rows_for_header(&self, header: &Header) -> usize {
+        self.rows_for_header(header).count()
     }
 
-    pub fn rows_for_header(&mut self, header: &Header) -> impl Iterator<Item = &tocs::tbl::Entry> {
-        self.set_header(header);
-        self.rows_for_current_header.iter().copied().map(|i| self.current.all_rows[i].borrow())
+    pub fn rows_for_header<'a>(&'a self, header: &'a Header) -> impl Iterator<Item = &tocs::tbl::Entry> + 'a {
+        // this is not very efficient, but it's simple.
+        // we could cache the rows for each header, but getting the cache right is hard, and as it turns out this isn't noticeably slower.
+        self.all_current_rows().filter(move |entry| &entry.header == header)
     }
 
-    pub fn row_for_header(&mut self, header: &Header, i: usize) -> Option<&tocs::tbl::Entry> {
-        self.set_header(header);
-        self.rows_for_current_header.get(i).cloned().and_then(|i| self.current.all_rows.get(i)).map(|rc| rc.borrow())
+    pub fn row_for_header<'a>(&'a self, header: &'a Header, i: usize) -> Option<&'a tocs::tbl::Entry> {
+        self.rows_for_header(header).nth(i)
+    }
+
+    fn row_indices_for_header<'a>(&'a self, header: &'a Header) -> impl Iterator<Item = usize> + 'a {
+        // this is not very efficient, but it's simple.
+        // we could cache the rows for each header, but getting the cache right is hard, and as it turns out this isn't noticeably slower.
+        self.all_current_rows().enumerate().filter(move |(_, entry)| &entry.header == header).map(|(i, _)| i)
     }
 }
 
@@ -287,9 +245,7 @@ impl Default for TblStateHistory {
         Self {
             current: TblStateWithoutHistory::from_iter([]),
             headers: indexmap::IndexSet::new(),
-            current_header: None,
-            rows_for_current_header: vec![],
-            undo: vec![],
+            undo: std::collections::VecDeque::new(),
             redo: vec![],
         }
     }
@@ -427,7 +383,7 @@ mod test {
             row: 3,
         });
         // completely replace MasterQuartzBase table
-        let new_base_rows: im::Vector<std::rc::Rc<tocs::tbl::Entry>> = [
+        let new_base_rows: std::vec::Vec<std::rc::Rc<tocs::tbl::Entry>> = [
             ("MasterQuartzBase", vec![("item_id", "10"), ("mq_id", "0"), ("hp_pattern", "0")]),
             ("MasterQuartzBase", vec![("item_id", "11"), ("mq_id", "1"), ("hp_pattern", "1")]),
             ("MasterQuartzBase", vec![("item_id", "12"), ("mq_id", "2"), ("hp_pattern", "2")]),
@@ -519,6 +475,11 @@ mod test {
 
     #[test]
     fn test_undo_redo() {
+        todo!()
+    }
+
+    #[test]
+    fn test_max_undo() {
         todo!()
     }
 }
