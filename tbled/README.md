@@ -66,7 +66,7 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
-### v0.4 (in development)
+### [v0.4](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.4/tbled-v0.4.exe)
 
 - warning popup will not be shown anymore in cases where the warnings are very minor
 - fixed a bug where "Save As" would overwrite the wrong file
