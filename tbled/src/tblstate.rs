@@ -256,10 +256,25 @@ mod test {
     use super::{Change, TblStateHistory};
     use tocs::tbl::schema::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Header};
 
-    #[test]
-    fn test_order() {
-        // we simulate a simplified mstqrt table with rows in some arbitrary order (but not all entries of the same type in one block because then the test would be pointless).
-        let schemas: AtomicSchemas = [
+    use std::borrow::Borrow as _;
+
+    fn compare_entries(expected: &[tocs::tbl::Entry], actual: &[tocs::tbl::Entry]) {
+        assert_eq!(actual.len(), expected.len());
+        for row in 0..expected.len() {
+            assert_eq!(actual[row].header, expected[row].header);
+            assert_eq!(actual[row].values.len(), expected[row].values.len());
+            for col in 0..actual[row].values.len() {
+                let (actual_attr, actual_value) = actual[row].values.get_index(col).unwrap();
+                let (expected_attr, expected_value) = expected[row].values.get_index(col).unwrap();
+                assert_eq!(actual_attr, expected_attr);
+                assert_eq!(actual_value.r#type(), expected_value.r#type());
+                assert_eq!(actual_value.to_string(), expected_value.to_string());
+            }
+        }
+    }
+
+    lazy_static::lazy_static! {
+    pub static ref SCHEMAS : AtomicSchemas = [
             ("MasterQuartzMemo", vec![("item_id", AtomicType::I16), ("memo_id", AtomicType::I16), ("text", AtomicType::CUtf8)]),
             ("MasterQuartzDummy", vec![("data", AtomicType::X(4))]),
             (
@@ -281,22 +296,25 @@ mod test {
         .into_iter()
         .map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema.into_iter().map(|(attr, ty)| (Attribute::new(attr), ty)).collect()))
         .collect();
+    }
 
-        let to_entry = |(header, data)| -> tocs::tbl::Entry {
-            let header = Header::new(header).unwrap();
-            let schema = schemas.get(&header).unwrap();
-            let data: std::vec::Vec<(&str, &str)> = data;
-            let values = data
-                .into_iter()
-                .map(|(attr, s)| {
-                    let attr = Attribute::new(attr);
-                    let val = AtomicValue::from_str(schema.get(&attr).unwrap(), &s).unwrap();
-                    (attr, val)
-                })
-                .collect();
-            tocs::tbl::Entry { header, values }
-        };
+    fn to_entry((header, data): (&str, std::vec::Vec<(&str, &str)>)) -> tocs::tbl::Entry {
+        let header = Header::new(header).unwrap();
+        let schema = SCHEMAS.get(&header).unwrap();
+        let values = data
+            .into_iter()
+            .map(|(attr, s)| {
+                let attr = Attribute::new(attr);
+                let val = AtomicValue::from_str(schema.get(&attr).unwrap(), &s).unwrap();
+                (attr, val)
+            })
+            .collect();
+        tocs::tbl::Entry { header, values }
+    }
 
+    #[test]
+    fn test_order() {
+        // we simulate a simplified mstqrt table with rows in some arbitrary order (but not all entries of the same type in one block because then the test would be pointless).
         let original_data: std::vec::Vec<tocs::tbl::Entry> = [
             // first master quartz + MasterQuartzStatus and MasterQuartzDummy table in the middle
             // MasterQuartzMemo, MasterQuartzData, and MasterQuartzBase are "split" tables, i.e. not contiguous
@@ -339,7 +357,7 @@ mod test {
         .map(to_entry)
         .collect();
 
-        let mut tbl_history = TblStateHistory::new(tocs::tbl::Tbl::new(tocs::tbl::Version::V2(&schemas), [], original_data));
+        let mut tbl_history = TblStateHistory::new(tocs::tbl::Tbl::new(tocs::tbl::Version::V2(&SCHEMAS), [], original_data));
 
         // Now we make some changes
         tbl_history.change(Change::UpdateCell {
@@ -459,23 +477,7 @@ mod test {
 
         let actual: std::vec::Vec<tocs::tbl::Entry> = tbl_history.all_current_rows().cloned().collect();
 
-        assert_eq!(actual.len(), expected.len());
-        for row in 0..expected.len() {
-            assert_eq!(actual[row].header, expected[row].header);
-            assert_eq!(actual[row].values.len(), expected[row].values.len());
-            for col in 0..actual[row].values.len() {
-                let (actual_attr, actual_value) = actual[row].values.get_index(col).unwrap();
-                let (expected_attr, expected_value) = expected[row].values.get_index(col).unwrap();
-                assert_eq!(actual_attr, expected_attr);
-                assert_eq!(actual_value.r#type(), expected_value.r#type());
-                assert_eq!(actual_value.to_string(), expected_value.to_string());
-            }
-        }
-    }
-
-    #[test]
-    fn test_undo_redo() {
-        todo!()
+        compare_entries(&actual, &expected);
     }
 
     #[test]
@@ -510,8 +512,9 @@ mod test {
             assert_eq!(tbl_history.undo.len(), std::cmp::min(1 + 2 * i, super::MAX_UNDO));
         }
 
-        for i in 0..1_000 {
+        for i in 1..=1_000 {
             assert!(tbl_history.undo().is_some());
+            assert_eq!(tbl_history.undo.len(), 1000 - i);
         }
 
         assert!(tbl_history.undo().is_none());
@@ -520,4 +523,394 @@ mod test {
 
         assert_eq!(tbl_history.all_current_rows().count(), 4500);
     }
+
+    enum TestItem {
+        Undo,
+        Redo,
+        Change(Change),
+    }
+
+    #[test]
+    fn test_undo_redo() {
+        // start state
+        // first master quartz + MasterQuartzStatus and MasterQuartzDummy table in the middle
+        // MasterQuartzMemo, MasterQuartzData, and MasterQuartzBase are "split" tables, i.e. not contiguous
+        let state_0: std::vec::Vec<tocs::tbl::Entry> = [
+            // first master quartz + MasterQuartzStatus and MasterQuartzDummy table in the middle
+            // MasterQuartzMemo, MasterQuartzData, and MasterQuartzBase are "split" tables, i.e. not contiguous
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 1234 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 1234 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 1234 memo 10")]),
+            ("MasterQuartzDummy", vec![("data", "00ab00cd")]),
+            ("MasterQuartzDummy", vec![("data", "aaaabbbb")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "1"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "2"), ("main_hp", "600"), ("sub_hp", "60")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "3"), ("main_hp", "800"), ("sub_hp", "80")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "1"), ("main_hp", "300"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "2"), ("main_hp", "400"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "3"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "1"), ("main_hp", "1000"), ("sub_hp", "100")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "2"), ("main_hp", "1100"), ("sub_hp", "110")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "3"), ("main_hp", "1200"), ("sub_hp", "120")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "815"), ("art_2", "3"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "42"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            // second master quartz
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "9"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "1"), ("art_1", "123"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "3"), ("art_1", "555"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "4444"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            // third master quartz
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "730"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+        ]
+        .into_iter()
+        .map(to_entry)
+        .collect();
+
+        let mut tbl_history = TblStateHistory::new(tocs::tbl::Tbl::new(tocs::tbl::Version::V1(&SCHEMAS), [].into_iter().map(|s| Header::new(s).unwrap()), state_0.clone()));
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_0);
+
+        tbl_history.change(Change::UpdateCell {
+            header: Header::new("MasterQuartzMemo").unwrap(),
+            row: 5,
+            column: 1,
+            value: AtomicValue::I16(10),
+        });
+        let state_1: std::vec::Vec<tocs::tbl::Entry> = [
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 1234 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 1234 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 1234 memo 10")]),
+            ("MasterQuartzDummy", vec![("data", "00ab00cd")]),
+            ("MasterQuartzDummy", vec![("data", "aaaabbbb")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "1"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "2"), ("main_hp", "600"), ("sub_hp", "60")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "3"), ("main_hp", "800"), ("sub_hp", "80")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "1"), ("main_hp", "300"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "2"), ("main_hp", "400"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "3"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "1"), ("main_hp", "1000"), ("sub_hp", "100")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "2"), ("main_hp", "1100"), ("sub_hp", "110")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "3"), ("main_hp", "1200"), ("sub_hp", "120")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "815"), ("art_2", "3"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "42"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "1"), ("art_1", "123"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "3"), ("art_1", "555"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "4444"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "730"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+        ]
+        .into_iter()
+        .map(to_entry)
+        .collect();
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_1);
+
+        assert!(tbl_history.undo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_0);
+
+        assert!(tbl_history.undo().is_none());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_0);
+
+        assert!(tbl_history.redo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_1);
+
+        tbl_history.change(Change::DuplicateRow {
+            header: Header::new("MasterQuartzBase").unwrap(),
+            row: 2,
+        });
+        let state_2: std::vec::Vec<tocs::tbl::Entry> = [
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 1234 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 1234 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 1234 memo 10")]),
+            ("MasterQuartzDummy", vec![("data", "00ab00cd")]),
+            ("MasterQuartzDummy", vec![("data", "aaaabbbb")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "1"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "2"), ("main_hp", "600"), ("sub_hp", "60")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "3"), ("main_hp", "800"), ("sub_hp", "80")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "1"), ("main_hp", "300"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "2"), ("main_hp", "400"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "3"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "1"), ("main_hp", "1000"), ("sub_hp", "100")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "2"), ("main_hp", "1100"), ("sub_hp", "110")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "3"), ("main_hp", "1200"), ("sub_hp", "120")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "815"), ("art_2", "3"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "42"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "1"), ("art_1", "123"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "3"), ("art_1", "555"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "4444"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "730"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+        ]
+        .into_iter()
+        .map(to_entry)
+        .collect();
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_2);
+
+        tbl_history.change(Change::UpdateCell {
+            header: Header::new("MasterQuartzBase").unwrap(),
+            row: 2,
+            column: 2,
+            value: AtomicValue::U16(2),
+        });
+        let state_3: std::vec::Vec<tocs::tbl::Entry> = [
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 1234 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 1234 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 1234 memo 10")]),
+            ("MasterQuartzDummy", vec![("data", "00ab00cd")]),
+            ("MasterQuartzDummy", vec![("data", "aaaabbbb")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "1"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "2"), ("main_hp", "600"), ("sub_hp", "60")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "3"), ("main_hp", "800"), ("sub_hp", "80")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "1"), ("main_hp", "300"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "2"), ("main_hp", "400"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "3"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "1"), ("main_hp", "1000"), ("sub_hp", "100")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "2"), ("main_hp", "1100"), ("sub_hp", "110")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "3"), ("main_hp", "1200"), ("sub_hp", "120")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "815"), ("art_2", "3"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "42"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "1"), ("art_1", "123"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "3"), ("art_1", "555"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "4444"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "730"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "2")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+        ]
+        .into_iter()
+        .map(to_entry)
+        .collect();
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_3);
+
+        assert!(tbl_history.undo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_2);
+
+        assert!(tbl_history.undo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_1);
+
+        assert!(tbl_history.undo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_0);
+
+        assert!(tbl_history.redo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_1);
+
+        tbl_history.change(Change::UpdateCell {
+            header: Header::new("MasterQuartzBase").unwrap(),
+            row: 2,
+            column: 2,
+            value: AtomicValue::U16(2),
+        });
+        let state_4: std::vec::Vec<tocs::tbl::Entry> = [
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 1234 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 1234 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 1234 memo 10")]),
+            ("MasterQuartzDummy", vec![("data", "00ab00cd")]),
+            ("MasterQuartzDummy", vec![("data", "aaaabbbb")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "1"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "2"), ("main_hp", "600"), ("sub_hp", "60")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "3"), ("main_hp", "800"), ("sub_hp", "80")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "1"), ("main_hp", "300"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "2"), ("main_hp", "400"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "3"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "1"), ("main_hp", "1000"), ("sub_hp", "100")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "2"), ("main_hp", "1100"), ("sub_hp", "110")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "3"), ("main_hp", "1200"), ("sub_hp", "120")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "815"), ("art_2", "3"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "42"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "1"), ("art_1", "123"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "3"), ("art_1", "555"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "4444"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "730"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "2")]),
+        ]
+        .into_iter()
+        .map(to_entry)
+        .collect();
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_4);
+
+        // completely replace MasterQuartzBase table
+        let new_base_rows: std::vec::Vec<std::rc::Rc<tocs::tbl::Entry>> = [
+            ("MasterQuartzBase", vec![("item_id", "10"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzBase", vec![("item_id", "11"), ("mq_id", "1"), ("hp_pattern", "1")]),
+            ("MasterQuartzBase", vec![("item_id", "12"), ("mq_id", "2"), ("hp_pattern", "2")]),
+            ("MasterQuartzBase", vec![("item_id", "13"), ("mq_id", "4"), ("hp_pattern", "1")]),
+        ]
+        .into_iter()
+        .map(to_entry)
+        .map(std::rc::Rc::new)
+        .collect();
+        tbl_history.change(Change::ImportTable {
+            header: Header::new("MasterQuartzBase").unwrap(),
+            rows: new_base_rows,
+        });
+        let state_5: std::vec::Vec<tocs::tbl::Entry> = [
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 1234 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 1234 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 1234 memo 10")]),
+            ("MasterQuartzDummy", vec![("data", "00ab00cd")]),
+            ("MasterQuartzDummy", vec![("data", "aaaabbbb")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "1"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "2"), ("main_hp", "600"), ("sub_hp", "60")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "3"), ("main_hp", "800"), ("sub_hp", "80")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "1"), ("main_hp", "300"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "2"), ("main_hp", "400"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "3"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "1"), ("main_hp", "1000"), ("sub_hp", "100")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "2"), ("main_hp", "1100"), ("sub_hp", "110")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "3"), ("main_hp", "1200"), ("sub_hp", "120")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "815"), ("art_2", "3"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "42"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "10"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzBase", vec![("item_id", "11"), ("mq_id", "1"), ("hp_pattern", "1")]),
+            ("MasterQuartzBase", vec![("item_id", "12"), ("mq_id", "2"), ("hp_pattern", "2")]),
+            ("MasterQuartzBase", vec![("item_id", "13"), ("mq_id", "4"), ("hp_pattern", "1")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "1"), ("art_1", "123"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "3"), ("art_1", "555"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "730"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "10")]),
+        ]
+        .into_iter()
+        .map(to_entry)
+        .collect();
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_5);
+
+        assert!(tbl_history.redo().is_none());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_5);
+
+        assert!(tbl_history.undo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_4);
+
+        assert!(tbl_history.undo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_1);
+
+        assert!(tbl_history.undo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_0);
+
+        assert!(tbl_history.undo().is_none());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_0);
+
+        assert!(tbl_history.redo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_1);
+
+        assert!(tbl_history.undo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_0);
+
+        assert!(tbl_history.redo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_1);
+
+        assert!(tbl_history.redo().is_some());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_4);
+
+        tbl_history.change(Change::UpdateCell {
+            header: Header::new("MasterQuartzStatus").unwrap(),
+            row: 4,
+            column: 2,
+            value: AtomicValue::I16(500),
+        });
+        let state_6: std::vec::Vec<tocs::tbl::Entry> = [
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 1234 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 1234 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 1234 memo 10")]),
+            ("MasterQuartzDummy", vec![("data", "00ab00cd")]),
+            ("MasterQuartzDummy", vec![("data", "aaaabbbb")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "1"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "2"), ("main_hp", "600"), ("sub_hp", "60")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "0"), ("level", "3"), ("main_hp", "800"), ("sub_hp", "80")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "1"), ("main_hp", "300"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "2"), ("main_hp", "500"), ("sub_hp", "40")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "1"), ("level", "3"), ("main_hp", "500"), ("sub_hp", "50")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "1"), ("main_hp", "1000"), ("sub_hp", "100")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "2"), ("main_hp", "1100"), ("sub_hp", "110")]),
+            ("MasterQuartzStatus", vec![("pattern_id", "2"), ("level", "3"), ("main_hp", "1200"), ("sub_hp", "120")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "815"), ("art_2", "3"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "42"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "4444"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "1"), ("art_1", "123"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "4444"), ("level", "3"), ("art_1", "555"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "4444"), ("mq_id", "0"), ("hp_pattern", "0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 4444 memo 0")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "1"), ("text", "mq 4444 memo 1")]),
+            ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "10"), ("text", "mq 4444 memo 10")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "1"), ("art_1", "730"), ("art_2", "-1"), ("memo", "0")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "2"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "1")]),
+            ("MasterQuartzData", vec![("item_id", "1234"), ("level", "3"), ("art_1", "-1"), ("art_2", "-1"), ("memo", "10")]),
+            ("MasterQuartzBase", vec![("item_id", "1234"), ("mq_id", "0"), ("hp_pattern", "2")]),
+        ]
+        .into_iter()
+        .map(to_entry)
+        .collect();
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_6);
+
+        assert!(tbl_history.redo().is_none());
+        compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_6);
+    }
+
+    // TODO: randomized test for tbl_history
 }
