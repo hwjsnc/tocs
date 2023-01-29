@@ -307,7 +307,7 @@ fn pkg_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
 fn pkg_check_single(pkg: &std::path::Path) -> anyhow::Result<()> {
     log::debug!("Checking file {}", pkg.display());
 
-    let data = std::fs::read(&pkg).with_context(|| format!("couldn't read pkg file '{}'", pkg.display()))?;
+    let data = std::fs::read(pkg).with_context(|| format!("couldn't read pkg file '{}'", pkg.display()))?;
     let mut cursor = std::io::Cursor::new(&data);
     let filelist = tocs::pkg::load_filelist(&mut cursor).with_context(|| format!("couldn't parse pkg file '{}'", pkg.display()))?;
     let offset_after_metadata = cursor.stream_position().expect("cursor stream_position should not fail");
@@ -359,7 +359,7 @@ fn pkg_check_single(pkg: &std::path::Path) -> anyhow::Result<()> {
 
 fn pkg_stats<P: AsRef<std::path::Path>>(dir: P) -> anyhow::Result<()> {
     let mut csv = csv::Writer::from_writer(std::io::stdout());
-    csv.write_record(&["pkg", "file", "decompressed size", "compressed size", "data offset", "compression"])
+    csv.write_record(["pkg", "file", "decompressed size", "compressed size", "data offset", "compression"])
         .with_context(|| String::from("couldn't write csv header to stdout"))?;
 
     for direntry in walkdir::WalkDir::new(dir) {
@@ -367,7 +367,7 @@ fn pkg_stats<P: AsRef<std::path::Path>>(dir: P) -> anyhow::Result<()> {
         let path = direntry.path();
         if direntry.file_type().is_file() {
             // TODO: use Pkg struct rather than reading the filelist
-            let data = std::fs::read(&path).with_context(|| format!("couldn't read pkg file '{}'", path.display()))?;
+            let data = std::fs::read(path).with_context(|| format!("couldn't read pkg file '{}'", path.display()))?;
             let filelist = tocs::pkg::load_filelist(&mut std::io::Cursor::new(data)).with_context(|| format!("couldn't parse pkg file '{}'", path.display()))?;
             for e in filelist.iter() {
                 let name = tocs::pkg::PaddedAsciiName::try_from(&e.filename).context("invalid pkg entry name")?;
@@ -440,7 +440,7 @@ fn pkg_pack<P: AsRef<std::path::Path>>(dir: P, pkg: P, compression: tocs::compre
         if path == dir.as_ref() {
             continue;
         } else if path.is_file() {
-            let data = std::fs::read(&path).with_context(|| format!("couldn't read file '{}'", path.display()))?;
+            let data = std::fs::read(path).with_context(|| format!("couldn't read file '{}'", path.display()))?;
             let name = path.file_name().expect("folder child should have a final component");
             files.push((
                 name.to_os_string()
@@ -548,19 +548,19 @@ fn pka_stats<P: AsRef<std::path::Path>>(path: P, force: bool) -> anyhow::Result<
 
     let f = std::io::BufWriter::new(open_options.open(files_csv).with_context(|| format!("couldn't open output file '{}'", files_csv.display()))?);
     let mut csv = csv::Writer::from_writer(f);
-    csv.write_record(&["pkg", "file", "hash"]).with_context(|| String::from("couldn't write csv header to stdout"))?;
+    csv.write_record(["pkg", "file", "hash"]).with_context(|| String::from("couldn't write csv header to stdout"))?;
     for pkg in pkgs {
         let pkgname = tocs::pkg::PaddedAsciiName::try_from(pkg.name)?.to_string();
         for file in pkg.files.iter() {
             let filename = tocs::pkg::PaddedAsciiName::try_from(&file.name)?.to_string();
-            csv.write_record(&[&pkgname, &filename, &hex::encode(file.hash)])
+            csv.write_record([&pkgname, &filename, &hex::encode(file.hash)])
                 .with_context(|| String::from("couldn't write record"))?;
         }
     }
 
     let f = std::io::BufWriter::new(open_options.open(blobs_csv).with_context(|| format!("couldn't open output file '{}'", blobs_csv.display()))?);
     let mut csv = csv::Writer::from_writer(f);
-    csv.write_record(&["hash", "offset", "compressed size", "decompressed size", "compression"])
+    csv.write_record(["hash", "offset", "compressed size", "decompressed size", "compression"])
         .with_context(|| String::from("couldn't write csv header to stdout"))?;
     for blob in blobs {
         csv.write_record(&[
@@ -1140,7 +1140,7 @@ fn pka_pack<P: AsRef<std::path::Path>>(force: bool, cache_compressed_data: bool,
             file_hashes.par_iter().for_each_with(sender, |sender, (hash, path)| {
                 sender
                     .send(
-                        std::fs::read(&path)
+                        std::fs::read(path)
                             .map_err(anyhow::Error::msg)
                             .and_then(|data| compression.compress(&data).map_err(anyhow::Error::msg))
                             .with_context(|| format!("couldn't read '{}'", path.display()))

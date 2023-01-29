@@ -816,7 +816,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
     }
 
     // if there are too many utf8 errors, there's probably an encoding mismatch or something
-    if utf8errors > std::cmp::min(std::cmp::max(1, tbl.get_entries().len() / 10), 10) {
+    if utf8errors > (tbl.get_entries().len() / 10).clamp(1, 10) {
         return false;
     }
 

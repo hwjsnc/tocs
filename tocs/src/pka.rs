@@ -159,7 +159,7 @@ pub fn get_blob_data<F: std::io::Read + std::io::Seek>(file: &mut F, blob: &File
 // TODO: get data by hash, get data by file name
 
 pub fn hash_data(data: &[u8]) -> [u8; 32] {
-    let sha256 = sha2::Sha256::digest(&data);
+    let sha256 = sha2::Sha256::digest(data);
     sha256.as_slice().try_into().expect("SHA256 result should be 32 byte long")
 }
 
