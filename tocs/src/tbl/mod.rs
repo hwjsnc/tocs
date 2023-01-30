@@ -165,7 +165,7 @@ impl std::fmt::Display for DeserializeErrorDetail {
                 } else {
                     write!(f, "(exceeds max allowed)",)?;
                 }
-                write!(f, " exceeds expected number ({})", expected_total)
+                write!(f, " differs from expected number ({})", expected_total)
             }
             DeserializeErrorDetail::DuplicateHeader(hdr) => write!(f, "duplicate header '{}'", hdr),
             DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing } => write!(f, "file contains entry with header '{}' which does not appear in the tbl header", missing),

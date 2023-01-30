@@ -1,4 +1,7 @@
-use super::{deserialize_tbl_v1, deserialize_tbl_v2, read, schemas, serialize_tbl_v1, serialize_tbl_v2, write, DeserializeError, ReadTblResult, Version, WarningLogger};
+use super::{
+    deserialize_tbl_v1, deserialize_tbl_v2, read, schemas, serialize_tbl_v1, serialize_tbl_v2, write, AtomicSchemas, AtomicType, AtomicValue, Attribute, DeserializeError, Entry, Header,
+    ReadTblResult, Tbl, Version, WarningLogger,
+};
 
 static INIT_LOG: std::sync::Once = std::sync::Once::new();
 
@@ -197,5 +200,175 @@ fn test_roundtrip_cs4_strict() {
             };
             compare_data(&fixed, &serialized);
         }
+    }
+}
+
+fn to_entry(schemas: &AtomicSchemas, (header, data): (&str, std::vec::Vec<(&str, &str)>)) -> Entry {
+    let fallback_schema = [(Attribute::new("data"), AtomicType::X(0))].into_iter().collect();
+    let header = Header::new(header).unwrap();
+    let schema = schemas.get(&header).unwrap_or(&fallback_schema);
+    let values = data
+        .into_iter()
+        .map(|(attr, s)| {
+            let attr = Attribute::new(attr);
+            let val = AtomicValue::from_str_nonstrict(schema.get(&attr).unwrap(), &s).unwrap();
+            (attr, val)
+        })
+        .collect();
+    Entry { header, values }
+}
+
+fn compare_entries(expected: &[Entry], actual: &[Entry]) {
+    assert_eq!(actual.len(), expected.len());
+    for row in 0..expected.len() {
+        assert_eq!(actual[row].header, expected[row].header);
+        assert_eq!(actual[row].values.len(), expected[row].values.len());
+        for col in 0..actual[row].values.len() {
+            let (actual_attr, actual_value) = actual[row].values.get_index(col).unwrap();
+            let (expected_attr, expected_value) = expected[row].values.get_index(col).unwrap();
+            assert_eq!(actual_attr, expected_attr);
+            assert_eq!(actual_value.r#type(), expected_value.r#type());
+            assert_eq!(actual_value.to_string(), expected_value.to_string());
+        }
+    }
+}
+
+#[test]
+fn test_file_rw() {
+    INIT_LOG.call_once(|| {
+        simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
+    });
+    let schemas: AtomicSchemas = [
+        ("foo", vec![("id", AtomicType::U16), ("abc", AtomicType::U16), ("data", AtomicType::X(2))]),
+        ("bar", vec![("i16", AtomicType::I16), ("f32", AtomicType::F32), ("text", AtomicType::CUtf8), ("i8", AtomicType::I8)]),
+    ]
+    .into_iter()
+    .map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema.into_iter().map(|(attr, t)| (Attribute::new(attr), t)).collect()))
+    .collect();
+
+    let original_rows: std::vec::Vec<Entry> = [
+        ("foo", vec![("id", "12"), ("abc", "0"), ("data", "a0b0")]),
+        ("foo", vec![("id", "13"), ("abc", "1"), ("data", "cccc")]),
+        ("bar", vec![("i16", "-4"), ("f32", "0.428"), ("text", "aβが"), ("i8", "5")]),
+        ("foo", vec![("id", "20"), ("abc", "2"), ("data", "1122")]),
+        ("foobar", vec![("data", "0a0b0c0d")]),
+        ("foobar", vec![("data", "99aabb")]),
+        ("foo", vec![("id", "30"), ("abc", "5"), ("data", "0001")]),
+        ("bar", vec![("i16", "19"), ("f32", "123.45678"), ("text", "lorem\nipsum"), ("i8", "-4")]),
+        ("baz", vec![("data", "c0ffee")]),
+    ]
+    .into_iter()
+    .map(|tup| to_entry(&schemas, tup))
+    .collect();
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let path = tmp_dir.path();
+    //let path = tempfile::tempdir().unwrap().into_path();
+    let tmp_file_1 = path.join(std::path::Path::new("v1.tbl"));
+    let tmp_file_2 = path.join(std::path::Path::new("v2.tbl"));
+
+    log::info!("file 1: {}", tmp_file_1.display());
+    log::info!("file 2: {}", tmp_file_2.display());
+
+    {
+        log::info!("tbl version 1 write/read");
+        crate::tbl::write_file(&tmp_file_1, &Tbl::new(Version::V1(&schemas), vec![], original_rows.clone())).unwrap();
+        let read_rows = match crate::tbl::read_file(&tmp_file_1, Version::V1(&schemas)) {
+            ReadTblResult::Ok(tbl) => tbl.into_entries(),
+            ReadTblResult::Warn { warnings, .. } => {
+                for warning in warnings {
+                    log::error!("error reading tbl: {}", warning);
+                }
+                panic!();
+            }
+            ReadTblResult::Err(err) => {
+                panic!("{err}");
+            }
+        };
+        compare_entries(&read_rows, &original_rows);
+    }
+
+    {
+        log::info!("tbl version 2 write/read");
+        crate::tbl::write_file(
+            &tmp_file_2,
+            &Tbl::new(
+                Version::V2(&schemas),
+                ["foo", "foobar", "bar", "baz"].into_iter().map(|s| Header::new(s).unwrap()).collect::<std::vec::Vec<_>>(),
+                original_rows.clone(),
+            ),
+        )
+        .unwrap();
+        let read_rows = match crate::tbl::read_file(&tmp_file_2, Version::V2(&schemas)) {
+            ReadTblResult::Ok(tbl) => tbl.into_entries(),
+            ReadTblResult::Warn { warnings, .. } => {
+                for warning in warnings {
+                    log::error!("error reading tbl: {}", warning);
+                }
+                panic!();
+            }
+            ReadTblResult::Err(err) => {
+                panic!("{err}");
+            }
+        };
+        compare_entries(&read_rows, &original_rows);
+    }
+
+    let original_rows: std::vec::Vec<Entry> = [
+        ("foo", vec![("id", "7"), ("abc", "0"), ("data", "a0b0")]),
+        ("foobar", vec![("data", "07429891")]),
+        ("foo", vec![("id", "20"), ("abc", "2"), ("data", "1122")]),
+        ("bar", vec![("i16", "-4"), ("f32", "0.428"), ("text", "ẞ"), ("i8", "-4")]),
+        ("foobar", vec![("data", "ab")]),
+        ("baz", vec![("data", "feed")]),
+    ]
+    .into_iter()
+    .map(|tup| to_entry(&schemas, tup))
+    .collect();
+
+    // save the modified rows to the same files
+    // the old data should be overwritten
+    {
+        log::info!("tbl version 1 write/read");
+        crate::tbl::write_file(&tmp_file_1, &Tbl::new(Version::V1(&schemas), vec![], original_rows.clone())).unwrap();
+        let read_rows = match crate::tbl::read_file(&tmp_file_1, Version::V1(&schemas)) {
+            ReadTblResult::Ok(tbl) => tbl.into_entries(),
+            ReadTblResult::Warn { warnings, .. } => {
+                for warning in warnings {
+                    log::error!("error reading tbl: {}", warning);
+                }
+                panic!();
+            }
+            ReadTblResult::Err(err) => {
+                panic!("{err}");
+            }
+        };
+        compare_entries(&read_rows, &original_rows);
+    }
+
+    {
+        log::info!("tbl version 2 write/read");
+        crate::tbl::write_file(
+            &tmp_file_2,
+            &Tbl::new(
+                Version::V2(&schemas),
+                ["foo", "foobar", "bar", "baz"].into_iter().map(|s| Header::new(s).unwrap()).collect::<std::vec::Vec<_>>(),
+                original_rows.clone(),
+            ),
+        )
+        .unwrap();
+        let read_rows = match crate::tbl::read_file(&tmp_file_2, Version::V2(&schemas)) {
+            ReadTblResult::Ok(tbl) => tbl.into_entries(),
+            ReadTblResult::Warn { warnings, .. } => {
+                for warning in warnings {
+                    log::error!("error reading tbl: {}", warning);
+                }
+                panic!();
+            }
+            ReadTblResult::Err(err) => {
+                panic!("{err}");
+            }
+        };
+        compare_entries(&read_rows, &original_rows);
     }
 }

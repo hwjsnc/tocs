@@ -113,31 +113,13 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[Header], entrie
     }
     let number_of_headers: u32 = headers.len().try_into().map_err(|_| SerializeError::TooManyHeaders)?;
     written += f.write(&number_of_headers.to_le_bytes()).map_err(SerializeError::IoError)?;
-    let header_counts = headers.iter().map(|hdr| {
-        let n: u32 = entries.iter().filter(|e| &e.header == hdr).count().try_into().expect("total number of entries fits in a u16");
-        (hdr, n)
-    });
-    for (h, n) in header_counts {
-        // TODO
-        written += h.write_to(f).map_err(SerializeError::IoError)?;
+    for header in headers.iter() {
+        let n: u32 = entries.iter().filter(|e| &e.header == header).count().try_into().expect("total number of entries fits in a u16");
+        written += header.write_to(f).map_err(SerializeError::IoError)?;
         written += f.write(&n.to_le_bytes()).map_err(SerializeError::IoError)?;
     }
     for entry in entries {
         written += nf1_schema_serialize(f, &entry.header, &entry.values)?;
     }
-    Ok(written)
-}
-
-pub fn save_file_v1<P: AsRef<std::path::Path>>(path: P, entries: &[Entry]) -> Result<usize, SerializeError> {
-    let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IoError)?);
-    let written = serialize_tbl_v1(&mut f, entries)?;
-    f.flush().map_err(SerializeError::IoError)?;
-    Ok(written)
-}
-
-pub fn save_file_v2<P: AsRef<std::path::Path>>(path: P, headers: &[Header], entries: &[Entry]) -> Result<usize, SerializeError> {
-    let mut f = std::io::BufWriter::new(std::fs::File::options().create(true).write(true).open(path).map_err(SerializeError::IoError)?);
-    let written = serialize_tbl_v2(&mut f, headers, entries)?;
-    f.flush().map_err(SerializeError::IoError)?;
     Ok(written)
 }

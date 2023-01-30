@@ -39,3 +39,4 @@ proptest = { version = "1", optional = true } # should be a dev dependency, but 
 
 [dev-dependencies]
 walkdir = "2.3.2"
+tempfile = "3.3"
