@@ -191,6 +191,7 @@ fn subset_index(partition: u8, i: u8, subsets: u8) -> u8 {
     ];
     //let i = (x % 4) * 4 + (y % 4); // x-major order
     match subsets {
+        1 => 0,
         2 => P2[partition as usize][i as usize],
         3 => P3[partition as usize][i as usize],
         _ => unreachable!("invalid number of subsets ({subsets})"),
@@ -222,7 +223,7 @@ fn is_anchor_index(i: u8, partition: u8, subsets: u8) -> bool {
 }
 
 fn slice_to_u8<T: bitvec::store::BitStore, O: bitvec::order::BitOrder>(slice: &bitvec::slice::BitSlice<T, O>) -> u8 {
-    assert!(slice.len() <= 8);
+    //assert!(slice.len() <= 8); // intentionally not checked because we may want to read and discard more than 8 bits at a time
     slice.iter().enumerate().fold(0u8, |acc, (i, b)| acc | ((*b as u8) << i))
 }
 
@@ -478,7 +479,7 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
     let mut i = 0;
     for x in 0..4 {
         for y in 0..4 {
-            let subset = subset_index(i, partition, p.subsets) as usize;
+            let subset = subset_index(partition, i, p.subsets) as usize;
             let index: u8;
             if is_anchor_index(i, partition, p.subsets) {
                 index = read_bits(index_bits - 1);
@@ -527,13 +528,13 @@ impl std::error::Error for BC7DecodeError {}
 /// Decode a BC7 encoded image with blocks in x-major order
 ///
 /// Returns a colors with pixels in x-major order.
-pub fn bc7_decode(data: &[u8], width: usize, height: usize) -> Result<std::vec::Vec<Color>, BC7DecodeError> {
+pub fn decode(data: &[u8], width: usize, height: usize) -> Result<std::vec::Vec<Color>, BC7DecodeError> {
     if (width % 4 != 0) || (height % 4 != 0) {
         return Err(BC7DecodeError::UnsupportedSize); // other sizes are valid, but require more effort
     }
 
     let number_of_blocks = (width * height) / 16;
-    if data.len() != number_of_blocks * 8 {
+    if data.len() != number_of_blocks * 16 {
         return Err(BC7DecodeError::DataSize);
     }
 
@@ -543,14 +544,14 @@ pub fn bc7_decode(data: &[u8], width: usize, height: usize) -> Result<std::vec::
     let mut off = 0;
     for block_x in 0..(width / 4) {
         for block_y in 0..(height / 4) {
-            let block_colors = decode_block(&Bc7BlockSlice::from_slice(&data[off..off + 8]));
+            let block_colors = decode_block(&Bc7BlockSlice::from_slice(&data[off..off + 16]));
             for x in 0..4 {
                 for y in 0..4 {
                     let i = (4 * block_x + x) * height + (4 * block_y + y);
                     result[i] = block_colors[x][y];
                 }
             }
-            off += 8;
+            off += 16;
         }
     }
 

@@ -393,6 +393,11 @@ pub fn parse_dds(path: &std::path::Path) {
             for (i, n) in block_counts.iter().enumerate() {
                 log::info!(" - blocks with mode {i}: {n}");
             }
+
+            if ext.dxgi_format == tocs::dds::dxgi_format::BC7_UNORM || ext.dxgi_format == tocs::dds::dxgi_format::BC7_UNORM_SRGB {
+                println!("{}", tex.raw_data.len());
+                let _ = tocs::bc7::decode(tex.raw_data, base.width.try_into().unwrap(), base.height.try_into().unwrap()).unwrap();
+            }
         }
     }
 }
