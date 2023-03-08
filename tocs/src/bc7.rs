@@ -33,6 +33,10 @@ impl<'a> Bc7BlockSlice<'a> {
     fn bits(&self) -> &bitvec::slice::BitSlice<u8, bitvec::order::Lsb0> {
         self.data
     }
+
+    fn mode(&self) -> u8 {
+        std::cmp::min(self.data.leading_zeros(), 8) as u8 // TODO: make sure to only consider the first byte (even if it's all zero)
+    }
 }
 
 pub type DecodedBlock = [[Color; 4]; 4];
@@ -52,7 +56,7 @@ fn interpolate(a: u8, b: u8, index: u8, precision: u8) -> u8 {
     (((64 - weight) * a + weight * b + 32) >> 6) as u8
 }
 
-fn subset_index(partition: u8, x: u8, y: u8, subsets: u8) -> u8 {
+fn subset_index(partition: u8, i: u8, subsets: u8) -> u8 {
     const P2: [[u8; 16]; 64] = [
         [0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1],
         [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
@@ -185,7 +189,7 @@ fn subset_index(partition: u8, x: u8, y: u8, subsets: u8) -> u8 {
         [0, 1, 0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
         [0, 1, 1, 1, 2, 0, 1, 1, 2, 2, 0, 1, 2, 2, 2, 0],
     ];
-    let i = (x % 4) * 4 + (y % 4); // x-major order
+    //let i = (x % 4) * 4 + (y % 4); // x-major order
     match subsets {
         2 => P2[partition as usize][i as usize],
         3 => P3[partition as usize][i as usize],
@@ -211,24 +215,9 @@ fn is_anchor_index(i: u8, partition: u8, subsets: u8) -> bool {
 
     match subsets {
         1 => i == 0,
-        2 => i == 0 || i == A2[partition],
-        3 => i == 0 || i == A3A[partition] || i == A3B[partition],
+        2 => i == 0 || i == A2[partition as usize],
+        3 => i == 0 || i == A3A[partition as usize] || i == A3B[partition as usize],
         _ => unreachable!("invalid number of subsets ({subsets})"),
-    }
-}
-
-fn decode_block(pixel_pos: Position, block: &Bc7BlockSlice) -> DecodedBlock {
-    // For block modes, see: https://learn.microsoft.com/en-us/windows/win32/direct3d11/bc7-format-mode-reference
-    match block.bits().leading_zeros() {
-        0 => decode_block_mode_0(pixel_pos, block),
-        1 => todo!(),
-        2 => todo!(),
-        3 => todo!(),
-        4 => todo!(),
-        5 => todo!(),
-        6 => todo!(),
-        7 => todo!(),
-        _ => decode_block_mode_8(block),
     }
 }
 
@@ -237,98 +226,333 @@ fn slice_to_u8<T: bitvec::store::BitStore, O: bitvec::order::BitOrder>(slice: &b
     slice.iter().enumerate().fold(0u8, |acc, (i, b)| acc | ((*b as u8) << i))
 }
 
-fn decode_block_mode_0(pixel_pos: Position, block: &Bc7BlockSlice) -> DecodedBlock {
-    // Mode 0:
-    // - Only color components, no alpha
-    // - 3 subsets (i.e. pair of color endpoints) per block
-    // - RGBP 4.4.4.1 endpoints, unique P-bit per endpoint
-    // - 3 bit indices
-    // - 16 partitions
-    //
-    // from lsb to msb:
-    // - 1 bit mode identifier: 0b1
-    // - 4 bits: partition
-    // - 6 times 4 bits: R0 to R5
-    // - 6 times 4 bits: G0 to G5
-    // - 6 times 4 bits: B0 to B5
-    // - 6 times 1 bit: P0 to P5
-    // 45 bits: index
+struct Bc7ModeParams {
+    subsets: u8,
+    partition_bits: u8,
+    has_rotation: bool,
+    has_index_selection: bool,
+    color_bits: u8,
+    alpha_bits: u8,
+    p_bits: u8,
+    shared_p_bits: u8,
+    primary_index_bits: u8,
+    secondary_index_bits: u8,
+}
+
+pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
+    // mode parameters for modes 0-7.
+    const PARAMS: [Bc7ModeParams; 8] = [
+        Bc7ModeParams {
+            // mode 0
+            subsets: 3,
+            partition_bits: 4,
+            has_rotation: false,
+            has_index_selection: false,
+            color_bits: 4,
+            alpha_bits: 0,
+            p_bits: 1,
+            shared_p_bits: 0,
+            primary_index_bits: 3,
+            secondary_index_bits: 0,
+        },
+        Bc7ModeParams {
+            // mode 1
+            subsets: 2,
+            partition_bits: 6,
+            has_rotation: false,
+            has_index_selection: false,
+            color_bits: 6,
+            alpha_bits: 0,
+            p_bits: 0,
+            shared_p_bits: 1,
+            primary_index_bits: 3,
+            secondary_index_bits: 0,
+        },
+        Bc7ModeParams {
+            // mode 2
+            subsets: 3,
+            partition_bits: 6,
+            has_rotation: false,
+            has_index_selection: false,
+            color_bits: 5,
+            alpha_bits: 0,
+            p_bits: 0,
+            shared_p_bits: 0,
+            primary_index_bits: 2,
+            secondary_index_bits: 0,
+        },
+        Bc7ModeParams {
+            // mode 3
+            subsets: 2,
+            partition_bits: 6,
+            has_rotation: false,
+            has_index_selection: false,
+            color_bits: 7,
+            alpha_bits: 0,
+            p_bits: 1,
+            shared_p_bits: 0,
+            primary_index_bits: 2,
+            secondary_index_bits: 0,
+        },
+        Bc7ModeParams {
+            // mode 4
+            subsets: 1,
+            partition_bits: 0,
+            has_rotation: true,
+            has_index_selection: true,
+            color_bits: 5,
+            alpha_bits: 6,
+            p_bits: 0,
+            shared_p_bits: 0,
+            primary_index_bits: 2,
+            secondary_index_bits: 3,
+        },
+        Bc7ModeParams {
+            // mode 5
+            subsets: 1,
+            partition_bits: 0,
+            has_rotation: true,
+            has_index_selection: false,
+            color_bits: 7,
+            alpha_bits: 8,
+            p_bits: 0,
+            shared_p_bits: 0,
+            primary_index_bits: 2,
+            secondary_index_bits: 2,
+        },
+        Bc7ModeParams {
+            // mode 6
+            subsets: 1,
+            partition_bits: 0,
+            has_rotation: false,
+            has_index_selection: false,
+            color_bits: 7,
+            alpha_bits: 7,
+            p_bits: 1,
+            shared_p_bits: 0,
+            primary_index_bits: 4,
+            secondary_index_bits: 0,
+        },
+        Bc7ModeParams {
+            // mode 7
+            subsets: 2,
+            partition_bits: 6,
+            has_rotation: false,
+            has_index_selection: false,
+            color_bits: 5,
+            alpha_bits: 5,
+            p_bits: 1,
+            shared_p_bits: 0,
+            primary_index_bits: 2,
+            secondary_index_bits: 0,
+        },
+    ];
+
+    // we read from the block bit by bit; we don't need random access
     let bits = block.bits();
+    let mut off: usize = 0;
+    let mut read_bits = move |nbits: u8| -> u8 {
+        let nbits: usize = nbits.into();
+        let res: u8 = slice_to_u8(&bits[off..off + nbits]);
+        off += nbits;
+        res
+    };
 
-    let partition = slice_to_u8(&bits[1..5]);
-
-    // extract endpoint rgb values
-    let mut off = 5;
-    let mut r_values: [u8; 6] = <[u8; 6]>::default();
-    let mut g_values: [u8; 6] = <[u8; 6]>::default();
-    let mut b_values: [u8; 6] = <[u8; 6]>::default();
-    for x in r_values.iter_mut() {
-        *x = slice_to_u8(&bits[off..off + 4]);
-        off += 4;
+    // determine mode by the number of leading zeros
+    let mode_number = block.mode();
+    if mode_number > 7 {
+        // Hardware should return all zeros for mode 8, so let's do that.
+        let mut colors = DecodedBlock::default();
+        for x in 0..4 {
+            for y in 0..4 {
+                colors[x][y].r = 0;
+                colors[x][y].g = 0;
+                colors[x][y].b = 0;
+                colors[x][y].a = 0;
+            }
+        }
+        return colors;
     }
-    for x in g_values.iter_mut() {
-        *x = slice_to_u8(&bits[off..off + 4]);
-        off += 4;
-    }
-    for x in b_values.iter_mut() {
-        *x = slice_to_u8(&bits[off..off + 4]);
-        off += 4;
-    }
-    assert_eq!(off, 77);
+    let p = &PARAMS[mode_number as usize];
 
-    // extract p-bits and apply them to the endpoint rgb values
-    for i in 0..6 {
-        r_values[i] = r_values[i] << 1 | bits[off] as u8;
-        g_values[i] = g_values[i] << 1 | bits[off] as u8;
-        b_values[i] = b_values[i] << 1 | bits[off] as u8;
-        off += 1;
+    // skip mode identification bits
+    _ = read_bits(mode_number + 1);
+
+    // read miscellaneous data
+    let partition = read_bits(p.partition_bits);
+
+    let rotation: u8;
+    if p.has_rotation {
+        rotation = read_bits(2);
+    } else {
+        rotation = 0;
     }
-    assert_eq!(off, 83);
 
-    // shift endpoint bits up and replicate them on the lower bits
-    for i in 0..6 {
-        r_values[i] = r_values[i] << 3 | r_values[i] >> 2;
-        g_values[i] = g_values[i] << 3 | g_values[i] >> 2;
-        b_values[i] = b_values[i] << 3 | b_values[i] >> 2;
+    let index_number: u8;
+    if p.has_index_selection {
+        index_number = read_bits(1);
+    } else {
+        index_number = 0;
     }
-    assert_eq!(off, 83);
-    // endpoints are decoded now
 
-    // decode pixels one by one
-    let mut result = DecodedBlock::default();
-    for i in 0..4 {
-        for j in 0..4 {
-            let subset_index: usize = todo!("{partition} {pixel_pos:?} (and maybe i, j?)"); // 0, 1, or 2
-            let color_idx_1 = 2 * subset_index;
-            let color_idx_2 = 2 * subset_index + 1;
-            let index = slice_to_u8(&bits[off..off + 3]);
-            off += 3;
+    // read endpoint color/alpha data
 
-            result[i][j] = Color {
-                r: interpolate(r_values[color_idx_1], r_values[color_idx_2], index, 3),
-                g: interpolate(g_values[color_idx_1], g_values[color_idx_2], index, 3),
-                b: interpolate(b_values[color_idx_1], b_values[color_idx_2], index, 3),
-                a: 255,
+    // endpoint colors:
+    // - innermost index is channel (rgba)
+    // - middle index is endpoint (low/high)
+    // - outermost index is subset (0, 1, 2; only some modes use all subsets)
+    let mut endpoints: [[[u8; 4]; 2]; 3] = <[[[u8; 4]; 2]; 3]>::default();
+
+    for c in 0..3 {
+        for i in 0..(p.subsets as usize) {
+            for j in 0..2 {
+                endpoints[i][j][c] = read_bits(p.color_bits);
             }
         }
     }
-    assert_eq!(off, 128);
-
-    result
-}
-
-fn decode_block_mode_8(block: &Bc7BlockSlice) -> DecodedBlock {
-    // Mode 8 is reserved and should not be present
-    // From lsb to msb:
-    // - 8 bits mode identifier: 0x00
-    // - 120 bits: unspecified
-
-    // Hardware is specified to return all 0, so let's do that.
-    let mut result: DecodedBlock = DecodedBlock::default();
-    for row in result.iter_mut() {
-        for px in row.iter_mut() {
-            *px = Color { r: 0, g: 0, b: 0, a: 0 };
+    if p.alpha_bits != 0 {
+        let c = 3;
+        for i in 0..(p.subsets as usize) {
+            for j in 0..2 {
+                endpoints[i][j][c] = read_bits(p.alpha_bits);
+            }
         }
     }
-    result
+
+    // per-endpoint p-bits
+    if p.p_bits != 0 {
+        for i in 0..(p.subsets as usize) {
+            for j in 0..2 {
+                let nbits = p.p_bits;
+                let p = read_bits(nbits);
+                for c in 0..4 {
+                    endpoints[i][j][c] = (endpoints[i][j][c] << nbits) | p;
+                }
+            }
+        }
+    }
+
+    // shared p-bits
+    if p.shared_p_bits != 0 {
+        for i in 0..(p.subsets as usize) {
+            let nbits = p.shared_p_bits;
+            let p = read_bits(p.shared_p_bits);
+            for j in 0..2 {
+                for c in 0..4 {
+                    endpoints[i][j][c] = (endpoints[i][j][c] << nbits) | p;
+                }
+            }
+        }
+    }
+
+    // fully decode endpoints by shifting the raw bits up and replicating them to the lower bits
+    for i in 0..p.subsets {
+        for j in 0..2 {
+            for c in 0..4 {
+                let raw_bits;
+                if c < 3 {
+                    raw_bits = p.color_bits + p.p_bits + p.shared_p_bits;
+                } else {
+                    raw_bits = p.alpha_bits + p.p_bits + p.shared_p_bits;
+                }
+                // note: raw_bits > 4 except when alpha_bits = 0, in which case the values don't matter
+                let x = endpoints[i as usize][j as usize][c as usize];
+                endpoints[i as usize][j as usize][c as usize] = (x << (8 - raw_bits)) | (x >> (2 * raw_bits - 8));
+            }
+        }
+    }
+    let endpoints = endpoints;
+
+    // skip primary index bits if necessary
+    let index_bits: u8;
+    if index_number == 1 {
+        _ = read_bits(16 * p.primary_index_bits - p.subsets);
+        index_bits = p.secondary_index_bits;
+    } else {
+        index_bits = p.primary_index_bits;
+    }
+
+    // read the index bits and interpolate the color/alpha values
+    let mut colors = DecodedBlock::default();
+
+    let mut i = 0;
+    for x in 0..4 {
+        for y in 0..4 {
+            let subset = subset_index(i, partition, p.subsets) as usize;
+            let index: u8;
+            if is_anchor_index(i, partition, p.subsets) {
+                index = read_bits(index_bits - 1);
+            } else {
+                index = read_bits(index_bits);
+            }
+            colors[x][y].r = interpolate(endpoints[subset][0][0], endpoints[subset][1][0], index, index_bits);
+            colors[x][y].g = interpolate(endpoints[subset][0][1], endpoints[subset][1][1], index, index_bits);
+            colors[x][y].b = interpolate(endpoints[subset][0][2], endpoints[subset][1][2], index, index_bits);
+            if p.alpha_bits != 0 {
+                colors[x][y].a = interpolate(endpoints[subset][0][3], endpoints[subset][1][3], index, index_bits);
+            } else {
+                colors[x][y].a = 255;
+            }
+            match rotation {
+                0 => {} // nothing
+                1 => std::mem::swap(&mut colors[x][y].a, &mut colors[x][y].r),
+                2 => std::mem::swap(&mut colors[x][y].a, &mut colors[x][y].g),
+                3 => std::mem::swap(&mut colors[x][y].a, &mut colors[x][y].b),
+                _ => unreachable!("invalid rotation number {rotation} should never be constructed"),
+            }
+            i += 1;
+        }
+    }
+
+    colors
+}
+
+#[derive(Clone, Debug)]
+pub enum BC7DecodeError {
+    UnsupportedSize,
+    DataSize,
+}
+
+impl std::fmt::Display for BC7DecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            BC7DecodeError::UnsupportedSize => write!(f, "unsupported size: width and height should be multiples of 4"),
+            BC7DecodeError::DataSize => write!(f, "incorrect data size"),
+        }
+    }
+}
+
+impl std::error::Error for BC7DecodeError {}
+
+/// Decode a BC7 encoded image with blocks in x-major order
+///
+/// Returns a colors with pixels in x-major order.
+pub fn bc7_decode(data: &[u8], width: usize, height: usize) -> Result<std::vec::Vec<Color>, BC7DecodeError> {
+    if (width % 4 != 0) || (height % 4 != 0) {
+        return Err(BC7DecodeError::UnsupportedSize); // other sizes are valid, but require more effort
+    }
+
+    let number_of_blocks = (width * height) / 16;
+    if data.len() != number_of_blocks * 8 {
+        return Err(BC7DecodeError::DataSize);
+    }
+
+    let mut result = std::vec::Vec::new();
+    result.resize(width * height, Color::default());
+
+    let mut off = 0;
+    for block_x in 0..(width / 4) {
+        for block_y in 0..(height / 4) {
+            let block_colors = decode_block(&Bc7BlockSlice::from_slice(&data[off..off + 8]));
+            for x in 0..4 {
+                for y in 0..4 {
+                    let i = (4 * block_x + x) * height + (4 * block_y + y);
+                    result[i] = block_colors[x][y];
+                }
+            }
+            off += 8;
+        }
+    }
+
+    Ok(result)
 }
