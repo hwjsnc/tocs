@@ -9,6 +9,9 @@ resources:
 - BC7 texture format (but incomplete): https://learn.microsoft.com/en-us/windows/uwp/graphics-concepts/bc7-format
 */
 
+const MAGIC_HEADER: [u8; 4] = ['D' as u8, 'D' as u8, 'S' as u8, ' ' as u8];
+const DX10_PIXEL_FORMAT: [u8; 4] = ['D' as u8, 'X' as u8, '1' as u8, '0' as u8];
+
 #[derive(Clone, Copy, Debug)]
 pub struct PixelFormat {
     pub size: u32,
@@ -128,13 +131,13 @@ pub fn load_texture(data: &[u8]) -> Result<TextureRef<'_>, String> {
     }
 
     let magic_header: [u8; 4] = data[0..4].try_into().expect("we checked the length earlier");
-    if magic_header != ['D' as u8, 'D' as u8, 'S' as u8, ' ' as u8] {
+    if magic_header != MAGIC_HEADER {
         return Err(format!("unexpected magic header '{:?}'", magic_header));
     }
 
     let base_header = BaseHeader::from_slice(&data[4..128]);
 
-    if (base_header.flags & 4) != 0 && base_header.dds_pixel_format.id == ['D' as u8, 'X' as u8, '1' as u8, '0' as u8] {
+    if (base_header.flags & 4) != 0 && base_header.dds_pixel_format.id == DX10_PIXEL_FORMAT {
         if data.len() < 148 {
             return Err(format!("data too short ({} bytes long)", data.len()));
         }
@@ -167,8 +170,10 @@ pub fn write_header<F: std::io::Write>(f: &mut F, header: &Header) -> std::io::R
         reserved_2,
     } = match header {
         Header::Base(h) => h,
-        Header::WithDxt10(base, ext) => base,
+        Header::WithDxt10(base, _) => base,
     };
+
+    f.write(&MAGIC_HEADER)?;
 
     f.write(&size.to_le_bytes())?;
     f.write(&flags.to_le_bytes())?;
@@ -194,6 +199,8 @@ pub fn write_header<F: std::io::Write>(f: &mut F, header: &Header) -> std::io::R
     f.write(&reserved_2.to_le_bytes())?;
 
     if let Header::WithDxt10(_, ext) = header {
+        assert!(dds_pixel_format.id == DX10_PIXEL_FORMAT);
+
         let Dxt10ExtensionHeader {
             dxgi_format,
             resource_dimension,

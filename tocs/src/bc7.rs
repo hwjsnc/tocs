@@ -6,16 +6,10 @@
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Color {
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Position {
-    x: u32,
-    y: u32,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
 }
 
 pub struct Bc7BlockSlice<'a> {
@@ -477,8 +471,8 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
     let mut colors = DecodedBlock::default();
 
     let mut i = 0;
-    for x in 0..4 {
-        for y in 0..4 {
+    for y in 0..4 {
+        for x in 0..4 {
             let subset = subset_index(partition, i, p.subsets) as usize;
             let index: u8;
             if is_anchor_index(i, partition, p.subsets) {
@@ -510,14 +504,12 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
 
 #[derive(Clone, Debug)]
 pub enum BC7DecodeError {
-    UnsupportedSize,
     DataSize,
 }
 
 impl std::fmt::Display for BC7DecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            BC7DecodeError::UnsupportedSize => write!(f, "unsupported size: width and height should be multiples of 4"),
             BC7DecodeError::DataSize => write!(f, "incorrect data size"),
         }
     }
@@ -525,16 +517,14 @@ impl std::fmt::Display for BC7DecodeError {
 
 impl std::error::Error for BC7DecodeError {}
 
-/// Decode a BC7 encoded image with blocks in x-major order
+/// Decode a BC7 encoded image with blocks in x-minor order.
 ///
-/// Returns a colors with pixels in x-major order.
+/// Returns colors with pixels in x-minor order.
 pub fn decode(data: &[u8], width: usize, height: usize) -> Result<std::vec::Vec<Color>, BC7DecodeError> {
-    if (width % 4 != 0) || (height % 4 != 0) {
-        return Err(BC7DecodeError::UnsupportedSize); // other sizes are valid, but require more effort
-    }
+    let nblocks_x = width / 4 + ((width % 4) != 0) as usize;
+    let nblocks_y = height / 4 + ((height % 4) != 0) as usize;
 
-    let number_of_blocks = (width * height) / 16;
-    if data.len() != number_of_blocks * 16 {
+    if data.len() != nblocks_x * nblocks_y * 16 {
         return Err(BC7DecodeError::DataSize);
     }
 
@@ -542,13 +532,18 @@ pub fn decode(data: &[u8], width: usize, height: usize) -> Result<std::vec::Vec<
     result.resize(width * height, Color::default());
 
     let mut off = 0;
-    for block_x in 0..(width / 4) {
-        for block_y in 0..(height / 4) {
+    for y0 in (0..height).step_by(4) {
+        for x0 in (0..width).step_by(4) {
             let block_colors = decode_block(&Bc7BlockSlice::from_slice(&data[off..off + 16]));
-            for x in 0..4 {
-                for y in 0..4 {
-                    let i = (4 * block_x + x) * height + (4 * block_y + y);
-                    result[i] = block_colors[x][y];
+            for dx in 0..4 {
+                for dy in 0..4 {
+                    let x = x0 + dx;
+                    let y = y0 + dy;
+                    if x >= width || y >= height {
+                        continue;
+                    }
+                    let i = x + y * width;
+                    result[i] = block_colors[dx][dy];
                 }
             }
             off += 16;
