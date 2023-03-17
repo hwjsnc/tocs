@@ -216,9 +216,38 @@ fn is_anchor_index(i: u8, partition: u8, subsets: u8) -> bool {
     }
 }
 
-fn slice_to_u8<T: bitvec::store::BitStore, O: bitvec::order::BitOrder>(slice: &bitvec::slice::BitSlice<T, O>) -> u8 {
-    //assert!(slice.len() <= 8); // intentionally not checked because we may want to read and discard more than 8 bits at a time
-    slice.iter().enumerate().fold(0u8, |acc, (i, b)| acc | ((*b as u8) << i))
+struct BitReader<'a, T: bitvec::store::BitStore, O: bitvec::order::BitOrder> {
+    data: &'a bitvec::slice::BitSlice<T, O>,
+    offset: usize,
+}
+
+impl<'a, T: bitvec::store::BitStore, O: bitvec::order::BitOrder> BitReader<'a, T, O> {
+    pub fn new(data: &'a bitvec::slice::BitSlice<T, O>) -> Self {
+        Self { data, offset: 0 }
+    }
+
+    pub fn read_bits(&mut self, n: usize) -> &'a bitvec::slice::BitSlice<T, O> {
+        let result = &self.data[self.offset..self.offset + n];
+        self.offset += n;
+        result
+    }
+
+    pub fn read_bits_as_u8(&mut self, n: usize) -> u8 {
+        assert!(n <= 8);
+        self.read_bits(n).iter().enumerate().fold(0u8, |acc, (i, b)| acc | ((*b as u8) << i))
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn skip(&mut self, n: usize) {
+        self.offset += n;
+    }
+
+    pub fn seek(&mut self, off: usize) {
+        self.offset = off;
+    }
 }
 
 struct Bc7ModeParams {
@@ -343,15 +372,7 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
         },
     ];
 
-    // we read from the block bit by bit; we don't need random access
-    let bits = block.bits();
-    let mut off: usize = 0;
-    let mut read_bits = move |nbits: u8| -> u8 {
-        let nbits: usize = nbits.into();
-        let res: u8 = slice_to_u8(&bits[off..off + nbits]);
-        off += nbits;
-        res
-    };
+    let mut reader = BitReader::new(block.bits());
 
     // determine mode by the number of leading zeros
     let mode_number = block.mode();
@@ -370,22 +391,44 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
     }
     let p = &PARAMS[mode_number as usize];
 
+    /*
+    // for identifying problems: color each block based just on its mode
+    let mode_colors = [
+        Color { r: 255, g: 0, b: 0, a: 255 }, // 0: red
+        Color { r: 0, g: 255, b: 0, a: 255 }, // 1: green
+        Color { r: 0, g: 0, b: 255, a: 255 }, // 2: blue
+        Color { r: 255, g: 255, b: 0, a: 255 }, // 3: yellow
+        Color { r: 255, g: 0, b: 255, a: 255 }, // 4: purple
+        Color { r: 0, g: 255, b: 255, a: 255 }, // 5: cyan
+        Color { r: 128, g: 128, b: 128, a: 255 }, // 6: grey
+        Color { r: 255, g: 255, b: 255, a: 255 }, // 7: white
+    ];
+
+    let mut colors = DecodedBlock::default();
+    for x in 0..4 {
+        for y in 0..4 {
+            colors[x][y] = mode_colors[mode_number as usize];
+        }
+    }
+    return colors;
+    */
+
     // skip mode identification bits
-    _ = read_bits(mode_number + 1);
+    reader.skip((mode_number + 1).into());
 
     // read miscellaneous data
-    let partition = read_bits(p.partition_bits);
+    let partition = reader.read_bits_as_u8(p.partition_bits.into());
 
     let rotation: u8;
     if p.has_rotation {
-        rotation = read_bits(2);
+        rotation = reader.read_bits_as_u8(2);
     } else {
         rotation = 0;
     }
 
     let index_number: u8;
     if p.has_index_selection {
-        index_number = read_bits(1);
+        index_number = reader.read_bits_as_u8(1);
     } else {
         index_number = 0;
     }
@@ -401,7 +444,7 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
     for c in 0..3 {
         for i in 0..(p.subsets as usize) {
             for j in 0..2 {
-                endpoints[i][j][c] = read_bits(p.color_bits);
+                endpoints[i][j][c] = reader.read_bits_as_u8(p.color_bits.into());
             }
         }
     }
@@ -409,7 +452,7 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
         let c = 3;
         for i in 0..(p.subsets as usize) {
             for j in 0..2 {
-                endpoints[i][j][c] = read_bits(p.alpha_bits);
+                endpoints[i][j][c] = reader.read_bits_as_u8(p.alpha_bits.into());
             }
         }
     }
@@ -419,7 +462,7 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
         for i in 0..(p.subsets as usize) {
             for j in 0..2 {
                 let nbits = p.p_bits;
-                let p = read_bits(nbits);
+                let p = reader.read_bits_as_u8(nbits.into());
                 for c in 0..4 {
                     endpoints[i][j][c] = (endpoints[i][j][c] << nbits) | p;
                 }
@@ -431,7 +474,7 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
     if p.shared_p_bits != 0 {
         for i in 0..(p.subsets as usize) {
             let nbits = p.shared_p_bits;
-            let p = read_bits(p.shared_p_bits);
+            let p = reader.read_bits_as_u8(p.shared_p_bits.into());
             for j in 0..2 {
                 for c in 0..4 {
                     endpoints[i][j][c] = (endpoints[i][j][c] << nbits) | p;
@@ -458,44 +501,91 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
     }
     let endpoints = endpoints;
 
-    // skip primary index bits if necessary
-    let index_bits: u8;
-    if index_number == 1 {
-        _ = read_bits(16 * p.primary_index_bits - p.subsets);
-        index_bits = p.secondary_index_bits;
+    // determine which index set is used for color and alpha, in case there are two
+    let color_index_bits;
+    let alpha_index_bits;
+    let color_indexes_offset;
+    let alpha_indexes_offset;
+    if p.secondary_index_bits == 0 {
+        color_index_bits = p.primary_index_bits;
+        alpha_index_bits = p.primary_index_bits;
+        color_indexes_offset = reader.offset();
+        alpha_indexes_offset = reader.offset();
     } else {
-        index_bits = p.primary_index_bits;
+        let total_primary_index_bits: usize = (16 * p.primary_index_bits - p.subsets).into();
+        if index_number == 0 {
+            // color uses primary indexes, alpha uses secondary indexes
+            color_index_bits = p.primary_index_bits;
+            alpha_index_bits = p.secondary_index_bits;
+            color_indexes_offset = reader.offset();
+            alpha_indexes_offset = reader.offset() + total_primary_index_bits;
+        } else {
+            // color uses secondary indexes, alpha uses primary indexes
+            color_index_bits = p.secondary_index_bits;
+            alpha_index_bits = p.primary_index_bits;
+            color_indexes_offset = reader.offset() + total_primary_index_bits;
+            alpha_indexes_offset = reader.offset();
+        }
     }
 
-    // read the index bits and interpolate the color/alpha values
+    // read the color index bits and interpolate the color values
     let mut colors = DecodedBlock::default();
 
+    reader.seek(color_indexes_offset);
     let mut i = 0;
     for y in 0..4 {
         for x in 0..4 {
             let subset = subset_index(partition, i, p.subsets) as usize;
             let index: u8;
             if is_anchor_index(i, partition, p.subsets) {
-                index = read_bits(index_bits - 1);
+                index = reader.read_bits_as_u8((color_index_bits - 1).into());
             } else {
-                index = read_bits(index_bits);
+                index = reader.read_bits_as_u8(color_index_bits.into());
             }
-            colors[x][y].r = interpolate(endpoints[subset][0][0], endpoints[subset][1][0], index, index_bits);
-            colors[x][y].g = interpolate(endpoints[subset][0][1], endpoints[subset][1][1], index, index_bits);
-            colors[x][y].b = interpolate(endpoints[subset][0][2], endpoints[subset][1][2], index, index_bits);
-            if p.alpha_bits != 0 {
-                colors[x][y].a = interpolate(endpoints[subset][0][3], endpoints[subset][1][3], index, index_bits);
-            } else {
+            colors[x][y].r = interpolate(endpoints[subset][0][0], endpoints[subset][1][0], index, color_index_bits);
+            colors[x][y].g = interpolate(endpoints[subset][0][1], endpoints[subset][1][1], index, color_index_bits);
+            colors[x][y].b = interpolate(endpoints[subset][0][2], endpoints[subset][1][2], index, color_index_bits);
+            i += 1;
+        }
+    }
+
+    // read the alpha index bits (if there are any) and interpolate the alpha values; otherwise fill alpha channel with max value
+    if p.alpha_bits > 0 {
+        reader.seek(alpha_indexes_offset);
+        i = 0;
+        for y in 0..4 {
+            for x in 0..4 {
+                let subset = subset_index(partition, i, p.subsets) as usize;
+                let index: u8;
+                if is_anchor_index(i, partition, p.subsets) {
+                    index = reader.read_bits_as_u8((alpha_index_bits - 1).into());
+                } else {
+                    index = reader.read_bits_as_u8(alpha_index_bits.into());
+                }
+                colors[x][y].a = interpolate(endpoints[subset][0][3], endpoints[subset][1][3], index, alpha_index_bits);
+                i += 1;
+            }
+        }
+    } else {
+        for y in 0..4 {
+            for x in 0..4 {
                 colors[x][y].a = 255;
             }
-            match rotation {
-                0 => {} // nothing
-                1 => std::mem::swap(&mut colors[x][y].a, &mut colors[x][y].r),
-                2 => std::mem::swap(&mut colors[x][y].a, &mut colors[x][y].g),
-                3 => std::mem::swap(&mut colors[x][y].a, &mut colors[x][y].b),
-                _ => unreachable!("invalid rotation number {rotation} should never be constructed"),
+        }
+    }
+
+    // rotate color and alpha if necessary
+    if rotation != 0 {
+        for y in 0..4 {
+            for x in 0..4 {
+                match rotation {
+                    0 => unreachable!("we only run the loop if rotation != 0"),
+                    1 => std::mem::swap(&mut colors[x][y].a, &mut colors[x][y].r),
+                    2 => std::mem::swap(&mut colors[x][y].a, &mut colors[x][y].g),
+                    3 => std::mem::swap(&mut colors[x][y].a, &mut colors[x][y].b),
+                    _ => unreachable!("invalid rotation number {rotation} should never be constructed"),
+                }
             }
-            i += 1;
         }
     }
 
