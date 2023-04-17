@@ -9,8 +9,8 @@ resources:
 - BC7 texture format (but incomplete): https://learn.microsoft.com/en-us/windows/uwp/graphics-concepts/bc7-format
 */
 
-const MAGIC_HEADER: [u8; 4] = ['D' as u8, 'D' as u8, 'S' as u8, ' ' as u8];
-const DX10_PIXEL_FORMAT: [u8; 4] = ['D' as u8, 'X' as u8, '1' as u8, '0' as u8];
+const MAGIC_HEADER: [u8; 4] = [b'D', b'D', b'S', b' '];
+const DX10_PIXEL_FORMAT: [u8; 4] = [b'D', b'X', b'1', b'0'];
 
 #[derive(Clone, Copy, Debug)]
 pub struct PixelFormat {

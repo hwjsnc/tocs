@@ -263,6 +263,7 @@ struct Bc7ModeParams {
     secondary_index_bits: u8,
 }
 
+#[allow(clippy::needless_range_loop, clippy::needless_late_init)]
 pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
     // mode parameters for modes 0-7.
     const PARAMS: [Bc7ModeParams; 8] = [
@@ -378,16 +379,8 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
     let mode_number = block.mode();
     if mode_number > 7 {
         // Hardware should return all zeros for mode 8, so let's do that.
-        let mut colors = DecodedBlock::default();
-        for x in 0..4 {
-            for y in 0..4 {
-                colors[x][y].r = 0;
-                colors[x][y].g = 0;
-                colors[x][y].b = 0;
-                colors[x][y].a = 0;
-            }
-        }
-        return colors;
+        // Note that the derived Default falls back on u8::default() which is 0.
+        return DecodedBlock::default();
     }
     let p = &PARAMS[mode_number as usize];
 
@@ -610,6 +603,7 @@ impl std::error::Error for BC7DecodeError {}
 /// Decode a BC7 encoded image with blocks in x-minor order.
 ///
 /// Returns colors with pixels in x-minor order.
+#[allow(clippy::needless_range_loop)]
 pub fn decode(data: &[u8], width: usize, height: usize) -> Result<std::vec::Vec<Color>, BC7DecodeError> {
     let nblocks_x = width / 4 + ((width % 4) != 0) as usize;
     let nblocks_y = height / 4 + ((height % 4) != 0) as usize;
