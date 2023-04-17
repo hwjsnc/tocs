@@ -197,14 +197,17 @@ pub struct PaddedUtf8String<const PADDING: usize> {
 }
 
 impl<const PADDING: usize> PaddedUtf8String<PADDING> {
+    #[allow(dead_code)]
     pub fn new(str: &str) -> Result<Self, PaddedStringError> {
         PaddedByteString::new(str.as_bytes()).map(|bytes| Self { bytes })
     }
 
+    #[allow(dead_code)]
     pub fn len_with_padding(&self) -> usize {
         self.bytes.len_with_padding()
     }
 
+    #[allow(dead_code)]
     pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
         self.bytes.write_to(f)
     }

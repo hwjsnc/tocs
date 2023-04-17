@@ -1,7 +1,5 @@
 // tbl serialization: create .tbl file from in-memory representation
 
-use std::io::Write as _;
-
 use super::schema::{AtomicAttributeValues, AtomicValue, Header};
 use super::Entry;
 
