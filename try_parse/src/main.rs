@@ -33,8 +33,10 @@ enum Subcommand {
     Pka { path: std::path::PathBuf },
     /// Try to parse a dds file
     ///
-    /// For now, only prints metadata
-    Dds { path: std::path::PathBuf },
+    /// Prints metadata, attempts to parse BC7
+    ParseDds { path: std::path::PathBuf },
+    /// Convert a .dds with BC7-encoded texture data to r8g8b8a8
+    DdsConvertBC7 { source: std::path::PathBuf, target: std::path::PathBuf },
 }
 
 // TODO: use generic parser in tocs?
@@ -92,7 +94,8 @@ pub fn main() {
         },
         Subcommand::Pkg { path } => parse_pkg(&path),
         Subcommand::Pka { path } => parse_pka(&path),
-        Subcommand::Dds { path } => parse_dds(&path),
+        Subcommand::ParseDds { path } => parse_dds(&path),
+        Subcommand::DdsConvertBC7 { source, target } => convert_bc7(&source, &target),
     }
 }
 
@@ -359,7 +362,7 @@ pub fn parse_pka(path: &std::path::Path) {
 use std::io::Write as _;
 
 pub fn parse_dds(path: &std::path::Path) {
-    let data = std::fs::read(&path).unwrap();
+    let data = std::fs::read(path).unwrap();
     let tex = tocs::dds::load_texture(&data).unwrap();
     match tex.header {
         tocs::dds::Header::Base(h) => {
@@ -394,75 +397,6 @@ pub fn parse_dds(path: &std::path::Path) {
             log::info!("BC7 block stats:");
             for (i, n) in block_counts.iter().enumerate() {
                 log::info!(" - blocks with mode {i}: {n}");
-            }
-
-            if ext.dxgi_format == tocs::dds::dxgi_format::BC7_UNORM || ext.dxgi_format == tocs::dds::dxgi_format::BC7_UNORM_SRGB {
-                println!("{}", tex.raw_data.len());
-                //let mut base = base;
-                //std::mem::swap(&mut base.width, &mut base.height);
-                let colors = tocs::bc7::decode(tex.raw_data, base.width.try_into().unwrap(), base.height.try_into().unwrap()).unwrap();
-                let header = tocs::dds::Header::WithDxt10(
-                    base,
-                    tocs::dds::Dxt10ExtensionHeader {
-                        dxgi_format: tocs::dds::dxgi_format::R8G8B8A8_UNORM,
-                        resource_dimension: 3,
-                        misc_flag: 0,
-                        array_size: 1,
-                        reserved: 0,
-                    },
-                );
-                let mut f = std::fs::OpenOptions::new().write(true).create(true).open("out.dds").unwrap();
-                let mut buf = std::io::BufWriter::new(&mut f);
-                tocs::dds::write_header(
-                    &mut buf,
-                    &tocs::dds::Header::Base(tocs::dds::BaseHeader {
-                        size: 124,
-                        flags: 0x100f, // no idea what these mean tbh
-                        height: base.height,
-                        width: base.width,
-                        pitch_or_linear_size: 0,
-                        depth: 0,
-                        mip_map_count: 0,
-                        reserved_1: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                        dds_pixel_format: tocs::dds::PixelFormat {
-                            size: 32,
-                            flags: 65, // not sure what these mean either
-                            id: [0, 0, 0, 0],
-                            rgb_bit_count: 32,
-                            r_bit_mask: 0x000000ff,
-                            g_bit_mask: 0x0000ff00,
-                            b_bit_mask: 0x00ff0000,
-                            a_bit_mask: 0xff000000,
-                        },
-                        caps: [0, 0, 0, 0],
-                        reserved_2: 0,
-                    }),
-                )
-                .unwrap();
-                let mut new_colors = colors.clone();
-                new_colors.fill(tocs::bc7::Color::default());
-                let (w, h) = (base.width as usize, base.height as usize);
-                //let i = |x, y| x * h + y;
-                let mut out_x = 0;
-                /*
-                for x in 0..w {
-                    for y in 0..h {
-                        new_colors[x * h + y] = colors[x + y * w];
-                    }
-                }
-                let colors = new_colors;
-                */
-                let mut i = 0;
-                for c in colors {
-                        buf.write(&[c.r, c.g, c.b, c.a]);
-                }
-        /*
-                write!(buf, "P3\n{} {}\n255\n\n", base.width, base.height);
-                for c in colors {
-                    //buf.write(&[c.r, c.g, c.b, c.a]);
-                    writeln!(buf, "{} {} {}", c.r, c.g, c.b);
-                }
-        */
             }
         }
     }
@@ -534,4 +468,50 @@ fn print_dds_dx10_ext_header(h: &tocs::dds::Dxt10ExtensionHeader) {
     log::info!(" - misc_flag: {misc_flag}");
     log::info!(" - array_size: {array_size} (0x{array_size:x})");
     log::info!(" - reserved: {reserved}");
+}
+
+fn convert_bc7(source: &std::path::Path, target: &std::path::Path) {
+    let data = std::fs::read(source).unwrap();
+    let tex = tocs::dds::load_texture(&data).unwrap();
+    match tex.header {
+        tocs::dds::Header::Base(_) => {
+            log::error!("No extension header");
+        }
+        tocs::dds::Header::WithDxt10(base, ext) => {
+            if ext.dxgi_format == tocs::dds::dxgi_format::BC7_UNORM || ext.dxgi_format == tocs::dds::dxgi_format::BC7_UNORM_SRGB {
+                let colors = tocs::bc7::decode(tex.raw_data, base.width.try_into().unwrap(), base.height.try_into().unwrap()).unwrap();
+                let mut f = std::fs::OpenOptions::new().write(true).create(true).open(target).unwrap();
+                let mut buf = std::io::BufWriter::new(&mut f);
+                tocs::dds::write_header(
+                    &mut buf,
+                    &tocs::dds::Header::Base(tocs::dds::BaseHeader {
+                        size: 124,
+                        flags: 0x100f, // no idea what these mean tbh
+                        height: base.height,
+                        width: base.width,
+                        pitch_or_linear_size: 0,
+                        depth: 0,
+                        mip_map_count: 0,
+                        reserved_1: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        dds_pixel_format: tocs::dds::PixelFormat {
+                            size: 32,
+                            flags: 65, // not sure what these mean either
+                            id: [0, 0, 0, 0],
+                            rgb_bit_count: 32,
+                            r_bit_mask: 0x000000ff,
+                            g_bit_mask: 0x0000ff00,
+                            b_bit_mask: 0x00ff0000,
+                            a_bit_mask: 0xff000000,
+                        },
+                        caps: [0, 0, 0, 0],
+                        reserved_2: 0,
+                    }),
+                )
+                .unwrap();
+                for c in colors {
+                    buf.write_all(&[c.r, c.g, c.b, c.a]).unwrap();
+                }
+            }
+        }
+    }
 }
