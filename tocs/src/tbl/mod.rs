@@ -115,9 +115,9 @@ pub enum DeserializeErrorDetail {
     Ascii,
     Utf8(std::str::Utf8Error, String),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
-    DuplicateHeader(Header),
-    EntryHeaderNotInTblHeader { missing: Header },
-    EntryCountDoesNotMatchHeaderEntry { header: Header, expected: u32, actual: usize },
+    DuplicateHeader(Box<Header>),
+    EntryHeaderNotInTblHeader { missing: Box<Header> },
+    EntryCountDoesNotMatchHeaderEntry { header: Box<Header>, expected: u32, actual: usize },
     EntryDataLengthMismatch { expected: u16, actual: Option<u16> },
     TrailingData,
 }
@@ -396,7 +396,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
                 let hdr = e.key();
                 // TODO: make a macro for this pattern:
                 let err = DeserializeError {
-                    detail: DeserializeErrorDetail::DuplicateHeader(hdr.clone()),
+                    detail: DeserializeErrorDetail::DuplicateHeader(Box::new(hdr.clone())),
                     position: f.stream_position().ok(),
                     context: vec![DeserializeErrorPosition::TblHeaderEntry { entry_number: i }],
                 };
@@ -452,7 +452,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
     if let Some(allowed) = header_counts {
         if !allowed.contains_key(&hdr) {
             let e = DeserializeError {
-                detail: DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing: hdr.clone() },
+                detail: DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing: Box::new(hdr.clone()) },
                 position: f.stream_position().ok(),
                 context: vec![],
             };
@@ -801,7 +801,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
                 DeserializeErrorDetail::DuplicateHeader(_) => {}
                 DeserializeErrorDetail::EntryHeaderNotInTblHeader { .. } => {}
                 DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, .. } => {
-                    if !schemas.contains_key(header) {
+                    if !schemas.contains_key(header.as_ref()) {
                         return false; // otherwise it's probably fine
                     }
                 }
