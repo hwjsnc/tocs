@@ -173,30 +173,30 @@ pub fn write_header<F: std::io::Write>(f: &mut F, header: &Header) -> std::io::R
         Header::WithDxt10(base, _) => base,
     };
 
-    f.write(&MAGIC_HEADER)?;
+    f.write_all(&MAGIC_HEADER)?;
 
-    f.write(&size.to_le_bytes())?;
-    f.write(&flags.to_le_bytes())?;
-    f.write(&height.to_le_bytes())?;
-    f.write(&width.to_le_bytes())?;
-    f.write(&pitch_or_linear_size.to_le_bytes())?;
-    f.write(&depth.to_le_bytes())?;
-    f.write(&mip_map_count.to_le_bytes())?;
+    f.write_all(&size.to_le_bytes())?;
+    f.write_all(&flags.to_le_bytes())?;
+    f.write_all(&height.to_le_bytes())?;
+    f.write_all(&width.to_le_bytes())?;
+    f.write_all(&pitch_or_linear_size.to_le_bytes())?;
+    f.write_all(&depth.to_le_bytes())?;
+    f.write_all(&mip_map_count.to_le_bytes())?;
     for x in reserved_1 {
-        f.write(&x.to_le_bytes())?;
+        f.write_all(&x.to_le_bytes())?;
     }
-    f.write(&dds_pixel_format.size.to_le_bytes())?;
-    f.write(&dds_pixel_format.flags.to_le_bytes())?;
-    f.write(&dds_pixel_format.id)?;
-    f.write(&dds_pixel_format.rgb_bit_count.to_le_bytes())?;
-    f.write(&dds_pixel_format.r_bit_mask.to_le_bytes())?;
-    f.write(&dds_pixel_format.g_bit_mask.to_le_bytes())?;
-    f.write(&dds_pixel_format.b_bit_mask.to_le_bytes())?;
-    f.write(&dds_pixel_format.a_bit_mask.to_le_bytes())?;
+    f.write_all(&dds_pixel_format.size.to_le_bytes())?;
+    f.write_all(&dds_pixel_format.flags.to_le_bytes())?;
+    f.write_all(&dds_pixel_format.id)?;
+    f.write_all(&dds_pixel_format.rgb_bit_count.to_le_bytes())?;
+    f.write_all(&dds_pixel_format.r_bit_mask.to_le_bytes())?;
+    f.write_all(&dds_pixel_format.g_bit_mask.to_le_bytes())?;
+    f.write_all(&dds_pixel_format.b_bit_mask.to_le_bytes())?;
+    f.write_all(&dds_pixel_format.a_bit_mask.to_le_bytes())?;
     for x in caps {
-        f.write(&x.to_le_bytes())?;
+        f.write_all(&x.to_le_bytes())?;
     }
-    f.write(&reserved_2.to_le_bytes())?;
+    f.write_all(&reserved_2.to_le_bytes())?;
 
     if let Header::WithDxt10(_, ext) = header {
         assert!(dds_pixel_format.id == DX10_PIXEL_FORMAT);
@@ -208,11 +208,11 @@ pub fn write_header<F: std::io::Write>(f: &mut F, header: &Header) -> std::io::R
             array_size,
             reserved,
         } = ext;
-        f.write(&dxgi_format.to_le_bytes())?;
-        f.write(&resource_dimension.to_le_bytes())?;
-        f.write(&misc_flag.to_le_bytes())?;
-        f.write(&array_size.to_le_bytes())?;
-        f.write(&reserved.to_le_bytes())?;
+        f.write_all(&dxgi_format.to_le_bytes())?;
+        f.write_all(&resource_dimension.to_le_bytes())?;
+        f.write_all(&misc_flag.to_le_bytes())?;
+        f.write_all(&array_size.to_le_bytes())?;
+        f.write_all(&reserved.to_le_bytes())?;
     }
 
     Ok(())
