@@ -68,10 +68,12 @@ pub struct TblStateHistory {
 
     /// undo stack
     ///
-    /// Stores older states and the change that brings us to the NEXT state
+    /// Stores older states and the change that brings us to the NEXT state.
+    /// This is a VecDeque so we can have a fast limit to its size (whenever we push too many, we can drop from the front).
+    /// The size of the redo stack is naturally limited by the (maximum) size of the undo stack.
     undo: std::collections::VecDeque<(TblStateWithoutHistory, Change)>,
 
-    /// undo stack
+    /// redo stack
     ///
     /// Stores newer states and the change that brings the PREVIOUS state to "this one" (inverse meaning compared to 'undo'!).
     redo: std::vec::Vec<(Change, TblStateWithoutHistory)>,
@@ -255,8 +257,6 @@ impl Default for TblStateHistory {
 mod test {
     use super::{Change, TblStateHistory};
     use tocs::tbl::schema::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Header};
-
-    use std::borrow::Borrow as _;
 
     fn compare_entries(expected: &[tocs::tbl::Entry], actual: &[tocs::tbl::Entry]) {
         assert_eq!(actual.len(), expected.len());
@@ -522,12 +522,6 @@ mod test {
         assert_eq!(tbl_history.redo.len(), 1000);
 
         assert_eq!(tbl_history.all_current_rows().count(), 4500);
-    }
-
-    enum TestItem {
-        Undo,
-        Redo,
-        Change(Change),
     }
 
     #[test]

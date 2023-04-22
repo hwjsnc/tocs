@@ -241,9 +241,7 @@ impl App {
                 fltk::table::TableContext::Cell => {
                     let celltype = if table.is_selected(row, col) {
                         CellType::Selected
-                    }
-                    /* else if changed: CellType::Changed */
-                    else if row % 2 == 0 {
+                    } else if row % 2 == 0 {
                         CellType::EvenRow
                     } else {
                         CellType::OddRow
@@ -819,7 +817,7 @@ pub enum CellType {
     EvenRow,
     OddRow,
     Selected, // currently selected
-    Changed,  // cell was changed since last save
+    Changed,  // cell was changed since last save; TODO: actually make use of this
 }
 
 fn draw_data(value: &tocs::tbl::AtomicValue, x: i32, y: i32, w: i32, h: i32, celltype: CellType) {
