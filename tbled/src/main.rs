@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"] // don't open terminal on windows
 
+mod table_widget;
 mod tblstate;
 mod warn_diag;
 
