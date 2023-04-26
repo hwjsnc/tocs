@@ -3,6 +3,7 @@
 use smol_str::SmolStr;
 
 use hex::FromHex as _;
+use std::io::Write as _;
 use std::str::FromStr as _;
 
 #[cfg(feature = "rusqlite")]
@@ -57,6 +58,19 @@ impl AtomicValue {
 
     pub fn from_str_nonstrict(ty: &AtomicType, text: &str) -> Result<AtomicValue, AtomicValueFromStringError> {
         try_atomic_value_from_str(ty, text, false)
+    }
+
+    pub fn to_smol_str(&self) -> SmolStr {
+        match self {
+            AtomicValue::I8(_) | AtomicValue::I16(_) | AtomicValue::I32(_) | AtomicValue::U8(_) | AtomicValue::U16(_) | AtomicValue::U32(_) | AtomicValue::F32(_) => {
+                let mut buf = smallvec::SmallVec::<[u8; 22]>::new();
+                write!(buf, "{self}").expect("write to SmallVec should not fail"); // this should not allocate because buf is long enough
+                SmolStr::from_str(std::str::from_utf8(&buf).expect("Display should write valid UTF-8")).expect("SmolStr::from_str should not fail")
+                // should not allocate since buf.len() <= 22
+            }
+            AtomicValue::CUtf8(s) => s.clone(),
+            AtomicValue::X(x) => SmolStr::from(hex::encode(x)), // TODO: don't double-allocate!
+        }
     }
 }
 
