@@ -13,11 +13,6 @@ use fltk::prelude::WidgetExt as _;
 
 use clap::Parser;
 
-use indexmap::IndexMap;
-
-use tocs::tbl::AtomicSchema as Schema;
-use tocs::tbl::Header;
-
 use tblstate::{Change, TblStateHistory};
 
 #[derive(Debug, Parser)]
@@ -56,7 +51,7 @@ pub struct AppData {
     tbl_history: TblStateHistory,
     tbl_version: tocs::tbl::Version<'static>,
     path: std::path::PathBuf,
-    active_entry_type: Option<Header>,
+    active_entry_type: Option<tocs::tbl::Header>,
     warnings: std::vec::Vec<tocs::tbl::DeserializeError>,
     //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
 }
@@ -300,7 +295,7 @@ impl App {
                 if let Some(hdr) = active_entry_type.as_ref() {
                     let Some(path) = misc::save_file_dialog("csv", &format!("{}.csv", hdr)) else { return };
                     let entries: std::vec::Vec<_> = tbl_history.rows_for_header(hdr).map(|entry| &entry.values).cloned().collect();
-                    match misc::export_csv(&path, schema_for_header(hdr, tbl_version.schemas()), &entries) {
+                    match misc::export_csv(&path, misc::schema_for_header(hdr, tbl_version.schemas()), &entries) {
                         Ok(_) => {}
                         Err(e) => {
                             fltk::dialog::alert_default(&format!("error exporting to csv: {:?}", e));
@@ -312,16 +307,8 @@ impl App {
             }
             Some(Msg::ImportCSV) => {
                 if let Some(hdr) = self.state.active_entry_type.as_ref().cloned() {
-                    // open a file browser dialog to select the file
-                    let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
-                    diag.set_title("Select .csv file to import...");
-                    //diag.set_preset_file(&format!("{}.csv", hdr)); // freezes if this file doesn't exist
-                    diag.show();
-                    let path = diag.filename();
-                    if path.as_os_str().is_empty() {
-                        return;
-                    }
-                    match misc::import_csv(&path, schema_for_header(&hdr, self.state.tbl_version.schemas())) {
+                    let Some(path) = misc::load_file_dialog("csv") else { return };
+                    match misc::import_csv(&path, misc::schema_for_header(&hdr, self.state.tbl_version.schemas())) {
                         Ok(entries) => {
                             let rows = entries.into_iter().map(|values| std::rc::Rc::new(tocs::tbl::Entry { header: hdr.clone(), values })).collect();
                             self.state.tbl_history.change(Change::ImportTable { header: hdr.clone(), rows });
@@ -346,7 +333,6 @@ impl App {
                     self.update_table();
                 } else {
                     fltk::dialog::alert_default("please select exactly one row");
-                    // TODO: allow multiple? spliced or blockwise?
                 }
             }
             Some(Msg::DeleteEntry) => {
@@ -390,7 +376,7 @@ impl App {
                 // copy text input to selected cell
                 let text = input.value();
                 let header = self.state.active_entry_type.clone().unwrap();
-                let ty = schema_for_header(&header, self.state.tbl_version.schemas()).get_index(column).unwrap().1;
+                let ty = misc::schema_for_header(&header, self.state.tbl_version.schemas()).get_index(column).unwrap().1;
                 if let Ok(value) = tocs::tbl::AtomicValue::from_str_nonstrict(ty, &text) {
                     self.state.tbl_history.change(Change::UpdateCell { header, row, column, value });
                     self.update_table();
@@ -408,7 +394,7 @@ impl App {
     fn update_table(&mut self) {
         // get active entry type from header selector
         self.state.active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
-            let hdr = Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
+            let hdr = tocs::tbl::Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
             if self.state.tbl_history.has_header(&hdr) {
                 Some(hdr)
             } else {
@@ -481,15 +467,6 @@ impl App {
     }
 }
 
-fn schema_for_header<'a>(header: &Header, schemas: &'a IndexMap<Header, Schema>) -> &'a Schema {
-    lazy_static::lazy_static! {
-        pub static ref GENERIC : Schema = [
-            ("data".into(), tocs::tbl::AtomicType::X(0))
-        ].into_iter().collect();
-    };
-    schemas.get(header).unwrap_or(&GENERIC)
-}
-
 fn main() {
     simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
 
@@ -539,12 +516,4 @@ fn main() {
     log::debug!("starting app");
     let app = App::new(appstate);
     app.run();
-}
-
-fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
-    fltk::draw::push_clip(x, y, w, h);
-    fltk::draw::draw_box(fltk::enums::FrameType::ThinUpBox, x, y, w, h, fltk::enums::Color::FrameDefault);
-    fltk::draw::set_draw_color(fltk::enums::Color::Black);
-    fltk::draw::draw_text2(txt, x, y, w, h, fltk::enums::Align::Center);
-    fltk::draw::pop_clip();
 }

@@ -1,6 +1,7 @@
 // table widget with (possibly) filtered rows and (possibly) reordered/hidden columns
 
 use crate::filter::row_passes_filter;
+use crate::misc;
 
 use tocs::tbl::AtomicSchema as Schema;
 use tocs::tbl::{AtomicType, Attribute, Entry, Header};
@@ -58,10 +59,14 @@ impl FilteredTable {
                 match ctx {
                     fltk::table::TableContext::ColHeader => {
                         let Some(attr) = attributes.get(col_idx) else { return };
-                        crate::draw_header(attr, x, y, w, h); // Column titles
+                        fltk::draw::push_clip(x, y, w, h);
+                        fltk::draw::draw_box(fltk::enums::FrameType::ThinUpBox, x, y, w, h, fltk::enums::Color::FrameDefault);
+                        fltk::draw::set_draw_color(fltk::enums::Color::Black);
+                        fltk::draw::draw_text2(attr, x, y, w, h, fltk::enums::Align::Center);
+                        fltk::draw::pop_clip();
                     }
                     fltk::table::TableContext::RowHeader => {
-                        crate::draw_header("", x, y, w, h); // Row titles
+                        // TODO: original row index as row header? -> needs space for 5 digits
                     }
                     fltk::table::TableContext::Cell => {
                         let Some(s) = cells.get(row_idx, col_idx) else { return };
@@ -115,7 +120,7 @@ impl FilteredTable {
 
     pub fn update_data_alternative(&mut self, state: &crate::AppData) {
         if let Some(header) = state.active_entry_type.as_ref() {
-            let schema = crate::schema_for_header(header, state.tbl_version.schemas());
+            let schema = misc::schema_for_header(header, state.tbl_version.schemas());
             let attributes = schema.keys().cloned().collect();
             let filters = &[];
             let all_tbl_rows = state.tbl_history.all_current_rows();

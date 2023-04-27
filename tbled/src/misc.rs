@@ -2,6 +2,7 @@
 
 use tocs::tbl::AtomicAttributeValues as AttributeValues;
 use tocs::tbl::AtomicSchema as Schema;
+use tocs::tbl::Header;
 
 pub fn load_file_dialog(filetype: &str) -> Option<std::path::PathBuf> {
     // open a file browser dialog to select the file
@@ -104,4 +105,13 @@ pub fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::V
     }
 
     Ok(result)
+}
+
+pub fn schema_for_header<'a>(header: &Header, schemas: &'a indexmap::IndexMap<Header, Schema>) -> &'a Schema {
+    lazy_static::lazy_static! {
+        pub static ref GENERIC : Schema = [
+            ("data".into(), tocs::tbl::AtomicType::X(0))
+        ].into_iter().collect();
+    };
+    schemas.get(header).unwrap_or(&GENERIC)
 }
