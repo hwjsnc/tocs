@@ -4,6 +4,7 @@ use tocs::tbl::AtomicSchema as Schema;
 use tocs::tbl::{Attribute, Entry, Header};
 
 use smol_str::SmolStr;
+use std::borrow::Borrow;
 use std::sync::{Arc, Mutex};
 
 use fltk::prelude::TableExt as _;
@@ -41,12 +42,15 @@ impl FilteredTable {
         table.set_col_resize(true);
         table.set_row_header(true);
         table.set_row_resize(true);
+        table.set_col_width_all(40);
 
         table.draw_cell({
             // We move a reference to the table data into the following closure
             let table_data = table_data.clone();
             move |table, ctx, row, col, x, y, w, h| {
-                log::trace!("table draw {row} {col}, {x}, {y}, {w}, {h}");
+                let nrows = table.rows();
+                let ncols = table.cols();
+                log::trace!("table draw: ctx={ctx:?} row={row}/{nrows} row={col}/{ncols}, x={x}, y={y}, w={w}, h={h}");
                 let mut guard = table_data.lock().unwrap();
                 let TableData {
                     columns_and_original_indexes,
@@ -64,27 +68,53 @@ impl FilteredTable {
                         crate::draw_header("", x, y, w, h); // Row titles
                     }
                     fltk::table::TableContext::Cell => {
+                        let Some(s) = cells.get(row_idx, col_idx) else { return };
                         // TODO: draw cell
                         // to consider:
                         // - is it selected?
                         // - even or odd row?
                         // - alignment? (attribute type! -> get this from the schema)
+                        fltk::draw::push_clip(x, y, w, h);
+                        fltk::draw::set_draw_color(fltk::enums::Color::from_u32(0x00_ff_ff_ff));
+                        fltk::draw::draw_rectf(x, y, w, h);
+                        fltk::draw::set_draw_color(fltk::enums::Color::Gray0);
+                        fltk::draw::draw_rect(x, y, w, h);
+
+                        let (x, w) = if w > 5 { (x + 2, w - 4) } else { (x, w) };
+                        let (y, h) = if h > 5 { (y + 2, h - 4) } else { (y, h) };
+                        fltk::draw::draw_text2(&s, x, y, w, h, fltk::enums::Align::Right);
+                        fltk::draw::pop_clip();
                     }
-                    _ => (),
+                    _ => {}
                 }
             }
         });
 
-        Self {
-            widget: fltk::table::Table::default(),
-            data: table_data,
-        }
+        Self { widget: table, data: table_data }
     }
 
-    pub fn update_data<I, E>(&mut self, schema: &Schema, header_name: Header, attributes: indexmap::IndexSet<Attribute>, row_filters: &[RowFilter], all_tbl_rows: I)
+    pub fn update_data_alternative(&mut self, state: &crate::AppData) {
+        if let Some(header) = state.active_entry_type.as_ref() {
+            let schema = crate::schema_for_header(header, state.tbl_version.schemas());
+            let attributes = schema.keys().cloned().into_iter().collect();
+            let filters = &[];
+            let all_tbl_rows = state.tbl_history.all_current_rows();
+            self.update_data(header.clone(), &schema, &attributes, filters, all_tbl_rows)
+        } else {
+            let header = Header::new("").expect("empty string is valid ASCII");
+            let schema = Schema::new();
+            let attributes = indexmap::IndexSet::new();
+            let filters = &[];
+            let all_tbl_rows = &[];
+            self.update_data(header, &schema, &attributes, filters, all_tbl_rows.into_iter());
+        }
+        self.auto_size_cells(); // TODO: only when necessary
+    }
+
+    pub fn update_data<I, E>(&mut self, header_name: Header, schema: &Schema, attributes: &indexmap::IndexSet<Attribute>, row_filters: &[RowFilter], all_tbl_rows: I)
     where
         I: Iterator<Item = E>,
-        E: AsRef<Entry>,
+        E: Borrow<Entry>,
     {
         let mut guard = self.data.lock().unwrap();
         let TableData {
@@ -112,9 +142,9 @@ impl FilteredTable {
         // update rows
         original_row_indexes.clear();
         for row in all_tbl_rows {
-            if row.as_ref().header == header_name && row_filters.iter().all(|filter| row_passes_filter(row.as_ref(), filter)) {
+            if row.borrow().header == header_name && row_filters.iter().all(|filter| row_passes_filter(row.borrow(), filter)) {
                 for (attr, attr_idx) in columns_and_original_indexes.iter() {
-                    let (k, v) = row.as_ref().values.get_index(*attr_idx).expect("entry attributes should correspond to schema");
+                    let (k, v) = row.borrow().values.get_index(*attr_idx).expect("entry attributes should correspond to schema");
                     assert_eq!(k, attr, "entry should have attributes in the same order as the schema");
                     row_major_vector_of_cells.push(v.to_smol_str());
                 }
@@ -125,11 +155,41 @@ impl FilteredTable {
         let mut new_cells = grid::Grid::from_vec(row_major_vector_of_cells, attributes.len());
         std::mem::swap(cells, &mut new_cells);
 
-        self.widget.set_cols(i32::try_from(cells.cols()).unwrap());
-        self.widget.set_rows(i32::try_from(cells.rows()).unwrap());
+        // We need to drop the guard before redrawing the table to allow draw_cell access to the data
+        let (nrows, ncols) = (cells.rows().try_into().unwrap(), cells.cols().try_into().unwrap());
+        drop(guard);
 
+        self.widget.set_rows(nrows);
+        self.widget.set_cols(ncols);
+        log::debug!("table data updated; {} rows, {} columns", self.widget.rows(), self.widget.cols());
+        self.widget.redraw();
+    }
+
+    pub fn auto_size_cells(&mut self) {
+        let guard = self.data.lock().unwrap();
+        let TableData {
+            columns_and_original_indexes, cells, ..
+        } = &*guard;
+        let mut column_widths: std::vec::Vec<i32> = columns_and_original_indexes.iter().map(|(attr, _)| fltk::draw::measure(attr, false).0).collect();
+        let nrows: i32 = cells.rows().try_into().unwrap();
+        let mut row_height = 1;
+        for r in 0..cells.rows() {
+            for c in 0..cells.cols() {
+                let (w, h) = fltk::draw::measure(cells.get(r, c).unwrap(), false);
+                column_widths[c] = std::cmp::max(column_widths[c], w);
+                row_height = std::cmp::max(row_height, h);
+            }
+        }
         // We need to drop the guard before redrawing the table to allow draw_cell access to the data
         drop(guard);
+
+        log::trace!("column widths: {:?} rows: {} row height: {}", column_widths, nrows, row_height);
+
+        for (i, w) in column_widths.into_iter().enumerate() {
+            self.widget.set_col_width(i.try_into().unwrap(), w);
+        }
+        self.widget.set_row_height_all(row_height);
+
         self.widget.redraw();
     }
 

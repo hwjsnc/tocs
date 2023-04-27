@@ -7,7 +7,6 @@ mod warn_diag;
 use fltk::prelude::GroupExt as _;
 use fltk::prelude::InputExt as _;
 use fltk::prelude::MenuExt as _;
-use fltk::prelude::TableExt as _;
 use fltk::prelude::WidgetExt as _;
 
 use clap::Parser;
@@ -50,7 +49,7 @@ struct Widgets {
     menu: fltk::menu::SysMenuBar,
     input: fltk::input::Input,
     header_selector: fltk::misc::InputChoice,
-    table: fltk::table::Table,
+    table: table_widget::FilteredTable,
 }
 
 pub struct AppData {
@@ -66,13 +65,11 @@ struct App {
     app: fltk::app::App,
     receiver: fltk::app::Receiver<Msg>,
     widgets: Widgets,
-    state: std::sync::Arc<std::sync::Mutex<AppData>>,
+    state: AppData,
 }
 
 impl App {
     pub fn new(state: AppData) -> Self {
-        let state = std::sync::Arc::new(std::sync::Mutex::new(state));
-
         fltk::draw::set_font(fltk::enums::Font::Helvetica, 14);
 
         let (w, h) = (1280, 720);
@@ -197,61 +194,8 @@ impl App {
         flex_row.end();
         flex.set_size(&flex_row, 26);
 
-        let mut table = fltk::table::Table::default();
-        table.set_col_header(true);
-        table.set_col_width_all(40);
-        table.set_col_resize(true);
-        table.set_row_header(true);
-        table.set_row_resize(true);
-
+        let mut table = table_widget::FilteredTable::new();
         table.emit(sender, Msg::TableEvent);
-
-        let state_clone = state.clone();
-        table.draw_cell(move |table, ctx, row, col, x, y, w, h| {
-            log::trace!("table draw");
-            // called when the table is drawn (both the first time and due to events)
-            let mut state = state_clone.lock().unwrap();
-            let AppData { tbl_history, active_entry_type, .. } = &mut *state;
-            let header = if let Some(hdr) = active_entry_type.as_ref() {
-                hdr
-            } else {
-                return;
-            };
-            let row_idx: usize = if let Ok(row_idx) = row.try_into() {
-                row_idx
-            } else {
-                return;
-            };
-            let col_idx: usize = if let Ok(col_idx) = col.try_into() {
-                col_idx
-            } else {
-                return;
-            };
-            let (attribute, value) = if let Some(tup) = tbl_history.get_cell_contents(header, row_idx, col_idx) {
-                tup
-            } else {
-                return;
-            };
-            match ctx {
-                fltk::table::TableContext::ColHeader => {
-                    draw_header(attribute, x, y, w, h); // Column titles
-                }
-                fltk::table::TableContext::RowHeader => {
-                    draw_header("", x, y, w, h); // Row titles
-                }
-                fltk::table::TableContext::Cell => {
-                    let celltype = if table.is_selected(row, col) {
-                        CellType::Selected
-                    } else if row % 2 == 0 {
-                        CellType::EvenRow
-                    } else {
-                        CellType::OddRow
-                    };
-                    draw_data(value, x, y, w, h, celltype);
-                }
-                _ => (),
-            }
-        });
 
         flex.end();
 
@@ -294,14 +238,13 @@ impl App {
                 }
                 {
                     // reset state related to tbl data
-                    let mut state = self.state.lock().unwrap();
                     let AppData {
                         tbl_history,
                         active_entry_type,
                         tbl_version,
                         path,
                         warnings,
-                    } = &mut *state;
+                    } = &mut self.state;
                     *active_entry_type = None;
                     *tbl_version = *version;
                     warnings.clear();
@@ -338,9 +281,11 @@ impl App {
             }
             Some(Msg::SaveFile) => {
                 // try saving data to file
-                let state = self.state.lock().unwrap();
-                let tbl = tocs::tbl::Tbl::new(state.tbl_version, state.tbl_history.headers().iter().cloned(), state.tbl_history.all_current_rows().cloned());
-                let result = tocs::tbl::write_file(&state.path, &tbl);
+                let version = self.state.tbl_version;
+                let headers = self.state.tbl_history.headers().iter().cloned();
+                let rows = self.state.tbl_history.all_current_rows().cloned();
+                let tbl = tocs::tbl::Tbl::new(version, headers, rows);
+                let result = tocs::tbl::write_file(&self.state.path, &tbl);
                 match result {
                     Ok(_) => {
                         // TODO: clear changed cell flags
@@ -351,35 +296,15 @@ impl App {
                 }
             }
             Some(Msg::SelectAndSaveFile) => {
-                // open a file browser dialog to select the file
-                let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseSaveFile);
-                diag.set_title("Select .tbl file to save to ...");
-                diag.show();
-                let path = diag.filename();
-                if path.as_os_str().is_empty() {
-                    return;
-                }
-                // try saving data to file
-                let state = self.state.lock().unwrap();
-                let tbl = tocs::tbl::Tbl::new(state.tbl_version, state.tbl_history.headers().iter().cloned(), state.tbl_history.all_current_rows().cloned());
-                let result = tocs::tbl::write_file(&path, &tbl);
-                match result {
-                    Ok(_) => {
-                        // TODO: clear changed cell flags
-                    }
-                    Err(e) => {
-                        fltk::dialog::alert_default(&format!("error saving file: {:?}", e));
-                    }
-                }
+                todo!("re-implement this but deduplicate with Msg::SaveFile")
             }
             Some(Msg::ExportCSV) => {
-                let mut state = self.state.lock().unwrap();
                 let AppData {
                     tbl_history,
                     tbl_version,
                     active_entry_type,
                     ..
-                } = &mut *state;
+                } = &mut self.state;
                 if let Some(hdr) = active_entry_type.as_ref() {
                     // open a file browser dialog to select the file
                     let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseSaveFile);
@@ -402,8 +327,7 @@ impl App {
                 }
             }
             Some(Msg::ImportCSV) => {
-                let mut state = self.state.lock().unwrap();
-                if let Some(hdr) = state.active_entry_type.as_ref().cloned() {
+                if let Some(hdr) = self.state.active_entry_type.as_ref().cloned() {
                     // open a file browser dialog to select the file
                     let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
                     diag.set_title("Select .csv file to import...");
@@ -413,10 +337,10 @@ impl App {
                     if path.as_os_str().is_empty() {
                         return;
                     }
-                    match import_csv(&path, schema_for_header(&hdr, state.tbl_version.schemas())) {
+                    match import_csv(&path, schema_for_header(&hdr, self.state.tbl_version.schemas())) {
                         Ok(entries) => {
                             let rows = entries.into_iter().map(|values| std::rc::Rc::new(tocs::tbl::Entry { header: hdr.clone(), values })).collect();
-                            state.tbl_history.change(Change::ImportTable { header: hdr.clone(), rows });
+                            self.state.tbl_history.change(Change::ImportTable { header: hdr.clone(), rows });
                         }
                         Err(e) => {
                             fltk::dialog::alert_default(&format!("error importing data from csv: {:?}", e));
@@ -425,20 +349,18 @@ impl App {
                 } else {
                     fltk::dialog::alert_default("no entry type selected, can't import");
                 }
-                drop(state);
-                // Note: mutex must be free for this function because it triggers table redraws:
                 self.update(&Some(Msg::UpdateTable));
             }
             Some(Msg::FileReloaded) => {
                 {
-                    let mut state = self.state.lock().unwrap();
+                    // TODO: this should probably be its own method
                     let AppData {
                         active_entry_type,
                         tbl_version: _,
                         path: _,
                         tbl_history,
                         warnings,
-                    } = &mut *state;
+                    } = &mut self.state;
                     // if there are warnings, show button to display them
                     if warnings.is_empty() {
                         self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap().deactivate();
@@ -460,61 +382,29 @@ impl App {
                     }
                     if let Some(hdr) = tbl_history.headers().iter().next() {
                         self.widgets.header_selector.set_value(hdr.as_str());
-                        state.active_entry_type = Some(hdr.clone());
+                        self.state.active_entry_type = Some(hdr.clone());
                     }
                 }
                 // Note: mutex must be free for this function because it triggers table redraws:
                 self.update(&Some(Msg::UpdateTable));
             }
             Some(Msg::UpdateTable) => {
-                let mut state = self.state.lock().unwrap();
-                let AppData {
-                    active_entry_type,
-                    tbl_history,
-                    tbl_version,
-                    ..
-                } = &mut *state;
                 // reset header selector
-                *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
+                self.state.active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
                     let hdr = Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
-                    if tbl_history.has_header(&hdr) {
+                    if self.state.tbl_history.has_header(&hdr) {
                         Some(hdr)
                     } else {
                         None
                     }
                 });
-                if let Some(hdr) = active_entry_type {
-                    log::trace!("beep");
-                    // width of each column = max(header width, width of each entry in that column)
-                    // width of each row = max(width of all entries in all rows)
-                    let attrs = schema_for_header(hdr, tbl_version.schemas());
-                    let mut column_widths: std::vec::Vec<i32> = attrs.iter().map(|(hdr, _)| fltk::draw::measure(hdr, false).0).collect();
-                    let nrows: i32 = tbl_history.number_of_rows_for_header(hdr).try_into().unwrap();
-                    let mut row_height = 1;
-                    for row in tbl_history.rows_for_header(hdr) {
-                        for (i, (_, val)) in row.values.iter().enumerate() {
-                            let (w, h) = fltk::draw::measure(&val.to_string(), false);
-                            column_widths[i] = std::cmp::max(column_widths[i], w);
-                            row_height = std::cmp::max(row_height, h);
-                        }
-                    }
-                    log::trace!("{} {} {}", column_widths.len(), nrows, row_height);
-                    drop(state);
-                    // Note: mutex must be free for this function because it triggers table redraws:
-                    self.update_table(&column_widths, nrows, row_height);
-                    self.update_undo_redo_menu();
-                }
+                self.update_table();
+                self.update_undo_redo_menu();
             }
             Some(Msg::DuplicateEntry) => {
-                if let Some(row) = try_get_selected_row(&self.widgets.table) {
-                    let row: usize = row.try_into().unwrap();
-                    let mut state = self.state.lock().unwrap();
-                    let AppData { active_entry_type, tbl_history, .. } = &mut *state;
-                    if let Some(hdr) = active_entry_type {
-                        tbl_history.change(Change::DuplicateRow { header: hdr.clone(), row })
-                    }
-                    drop(state);
-                    // Note: mutex must be free for this function because it triggers table redraws:
+                if let Some(row) = self.widgets.table.selected_row() {
+                    let Some(hdr) = self.state.active_entry_type.as_ref() else { return };
+                    self.state.tbl_history.change(Change::DuplicateRow { header: hdr.clone(), row });
                     self.update(&Some(Msg::UpdateTable));
                 } else {
                     fltk::dialog::alert_default("please select exactly one row");
@@ -522,15 +412,9 @@ impl App {
                 }
             }
             Some(Msg::DeleteEntry) => {
-                if let Some(row) = try_get_selected_row(&self.widgets.table) {
-                    let row: usize = row.try_into().unwrap();
-                    let mut state = self.state.lock().unwrap();
-                    let AppData { active_entry_type, tbl_history, .. } = &mut *state;
-                    if let Some(hdr) = active_entry_type {
-                        tbl_history.change(Change::RemoveRow { header: hdr.clone(), row })
-                    }
-                    drop(state);
-                    // Note: mutex must be free for this function because it triggers table redraws:
+                if let Some(row) = self.widgets.table.selected_row() {
+                    let Some(hdr) = self.state.active_entry_type.as_ref() else { return };
+                    self.state.tbl_history.change(Change::RemoveRow { header: hdr.clone(), row });
                     self.update(&Some(Msg::UpdateTable));
                 } else {
                     fltk::dialog::alert_default("please select exactly one row");
@@ -538,30 +422,21 @@ impl App {
                 }
             }
             Some(Msg::Undo) => {
-                let mut state = self.state.lock().unwrap();
-                state.tbl_history.undo();
-                drop(state);
-                // Note: mutex must be free for this function because it triggers table redraws:
+                self.state.tbl_history.undo();
                 self.update(&Some(Msg::UpdateTable));
             }
             Some(Msg::Redo) => {
-                let mut state = self.state.lock().unwrap();
-                state.tbl_history.redo();
-                drop(state);
-                // Note: mutex must be free for this function because it triggers table redraws:
+                self.state.tbl_history.redo();
                 self.update(&Some(Msg::UpdateTable));
             }
             Some(Msg::TableEvent) => {
                 match fltk::app::event() {
                     fltk::enums::Event::Released if fltk::app::event_clicks() => {
-                        // find currently selected cell (if it's exactly one)
-                        let table = &mut self.widgets.table;
                         log::debug!("double click on table");
-                        if let Some((row, col)) = try_get_selected_cell(table) {
+                        if let Some((row, col)) = self.widgets.table.selected_cell() {
                             // copy table value to input
                             log::debug!("double click on cell");
-                            let mut state = self.state.lock().unwrap();
-                            self.widgets.input.set_value(&get_cell_value(&mut state, row, col).unwrap().to_string());
+                            self.widgets.input.set_value(&self.state.tbl_history.get_cell_contents(row, col).unwrap().1.to_smol_str());
                             self.widgets.input.take_focus().unwrap();
                             self.widgets.input.redraw();
                         }
@@ -573,43 +448,28 @@ impl App {
                 // find the currently selected cell (if it's exactly one)
                 let input = &mut self.widgets.input;
                 let table = &mut self.widgets.table;
-                if let Some((row, col)) = try_get_selected_cell(table) {
-                    // copy text input to selected cell
-                    {
-                        let row: usize = row.try_into().unwrap();
-                        let column: usize = col.try_into().unwrap();
-                        let mut state = self.state.lock().unwrap();
-                        let text = input.value();
-                        let header = state.active_entry_type.clone().unwrap();
-                        let ty = schema_for_header(&header, state.tbl_version.schemas()).get_index(column).unwrap().1;
-                        if let Ok(value) = tocs::tbl::AtomicValue::from_str_nonstrict(ty, &text) {
-                            state.tbl_history.change(Change::UpdateCell { header, row, column, value });
-                        } else {
-                            fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", ty.describe()));
-                        }
-                    }
-                    table.redraw();
+                let Some((row, column)) = table.selected_cell() else { return };
+                // copy text input to selected cell
+                let text = input.value();
+                let header = self.state.active_entry_type.clone().unwrap();
+                let ty = schema_for_header(&header, self.state.tbl_version.schemas()).get_index(column).unwrap().1;
+                if let Ok(value) = tocs::tbl::AtomicValue::from_str_nonstrict(ty, &text) {
+                    self.state.tbl_history.change(Change::UpdateCell { header, row, column, value });
+                    self.update(&Some(Msg::UpdateTable));
+                    self.update_undo_redo_menu();
+                } else {
+                    fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", ty.describe()));
                 }
-                self.update_undo_redo_menu();
             }
             Some(Msg::ShowWarnings) => {
-                let mut state = self.state.lock().unwrap();
-                let AppData { warnings, .. } = &mut *state;
-                warn_diag::WarningDialog::new(warnings.iter());
+                warn_diag::WarningDialog::new(self.state.warnings.iter());
             }
             None => {}
         }
     }
 
-    fn update_table(&mut self, column_widths: &[i32], nrows: i32, row_height: i32) {
-        let ncols = column_widths.len().try_into().unwrap_or(i32::MAX);
-        let table = &mut self.widgets.table;
-        table.set_rows(nrows);
-        table.set_cols(ncols);
-        for (w, i) in column_widths.iter().zip(0..ncols) {
-            table.set_col_width(i, w + 4);
-        }
-        table.set_row_height_all(row_height + 4);
+    fn update_table(&mut self) {
+        self.widgets.table.update_data_alternative(&self.state);
     }
 
     fn update_undo_redo_menu(&mut self) {
@@ -620,9 +480,7 @@ impl App {
         assert!(undo_item.label().unwrap().starts_with("Undo"));
         assert!(redo_item.label().unwrap().starts_with("Redo"));
 
-        let state = self.state.lock().unwrap();
-
-        if let Some(change) = state.tbl_history.next_undo() {
+        if let Some(change) = self.state.tbl_history.next_undo() {
             undo_item.set_label(&format!("Undo: {}\t", change.describe()));
             undo_item.activate();
         } else {
@@ -630,7 +488,7 @@ impl App {
             undo_item.deactivate();
         }
 
-        if let Some(change) = state.tbl_history.next_redo() {
+        if let Some(change) = self.state.tbl_history.next_redo() {
             redo_item.set_label(&format!("Redo: {}\t", change.describe()));
             redo_item.activate();
         } else {
@@ -638,18 +496,6 @@ impl App {
             redo_item.deactivate();
         }
     }
-}
-
-fn get_cell_value(state: &mut AppData, row: i32, col: i32) -> Option<&tocs::tbl::AtomicValue> {
-    let row: usize = row.try_into().unwrap();
-    let col: usize = col.try_into().unwrap();
-    let AppData { active_entry_type, tbl_history, .. } = state;
-
-    active_entry_type
-        .as_ref()
-        .and_then(|hdr| tbl_history.row_for_header(hdr, row))
-        .and_then(|entry| entry.values.get_index(col))
-        .map(|(_, value)| value)
 }
 
 fn schema_for_header<'a>(header: &Header, schemas: &'a IndexMap<Header, Schema>) -> &'a Schema {
@@ -786,24 +632,6 @@ fn main() {
     log::debug!("starting app");
     let app = App::new(appstate);
     app.run();
-}
-
-fn try_get_selected_cell(table: &fltk::table::Table) -> Option<(i32, i32)> {
-    let (row1, col1, row2, col2) = table.try_get_selection()?;
-    if row1 == row2 && col1 == col2 {
-        Some((row1, col1))
-    } else {
-        None
-    }
-}
-
-fn try_get_selected_row(table: &fltk::table::Table) -> Option<i32> {
-    let (row1, col1, row2, col2) = table.try_get_selection()?;
-    if row1 == row2 && col1 == 0 && col2 == table.cols() - 1 {
-        Some(row1)
-    } else {
-        None
-    }
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {

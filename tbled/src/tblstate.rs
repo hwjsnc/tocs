@@ -41,15 +41,21 @@ impl FromIterator<tocs::tbl::Entry> for TblStateWithoutHistory {
 #[derive(Clone, Debug)]
 pub enum Change {
     DuplicateRow {
+        /// Header name / type of the entry. Only used to describe the change to the user.
         header: Header,
+        /// Index of the row in the full table (not partitioned by header)
         row: usize,
     },
     RemoveRow {
+        /// Header name / type of the entry. Only used to describe the change to the user.
         header: Header,
+        /// Index of the row in the full table (not partitioned by header)
         row: usize,
     },
     UpdateCell {
+        /// Header name / type of the entry. Only used to describe the change to the user.
         header: Header,
+        /// Index of the row in the full table (not partitioned by header)
         row: usize,
         column: usize,
         value: Value, // TODO: string?
@@ -106,9 +112,9 @@ impl TblStateWithoutHistory {
 impl Change {
     pub fn describe(&self) -> String {
         match self {
-            Change::DuplicateRow { header, row } => format!("duplicate row #{row} in table {header}"),
-            Change::RemoveRow { header, row } => format!("remove row #{row} in table {header}"),
-            Change::UpdateCell { header, row, column, value } => {
+            Change::DuplicateRow { header, row: _ } => format!("duplicate row in table {header}"),
+            Change::RemoveRow { header, row: _ } => format!("remove row in table {header}"),
+            Change::UpdateCell { header, row: _, column: _, value } => {
                 let mut s = value.to_string();
                 // we don't want to show the full string if it's very long, so we truncate it
                 match s.char_indices().nth(15) {
@@ -118,7 +124,7 @@ impl Change {
                         s.push_str("...");
                     }
                 };
-                format!("set value ({row}, {column}) in table {header} to '{}'", s)
+                format!("set cell value in table {header} to '{}'", s)
                 // TODO: attribute name?
             }
             Change::ImportTable { header, rows } => format!("import {} rows into table {}", rows.len(), header),
@@ -146,11 +152,8 @@ impl TblStateHistory {
         self.headers.contains(header)
     }
 
-    pub fn get_cell_contents<'a>(&'a mut self, header: &Header, rowid: usize, colid: usize) -> Option<(&'a Attribute, &'a Value)> {
-        let idx = self.row_indices_for_header(header).nth(rowid)?;
-        let row = self.current.all_rows.get(idx)?;
-        assert_eq!(&row.header, header);
-        row.values.get_index(colid)
+    pub fn get_cell_contents<'a>(&'a mut self, rowid: usize, colid: usize) -> Option<(&'a Attribute, &'a Value)> {
+        self.current.all_rows.get(rowid).and_then(|row| row.values.get_index(colid))
     }
 
     pub fn next_undo(&self) -> Option<&Change> {
@@ -177,9 +180,9 @@ impl TblStateHistory {
 
     pub fn change(&mut self, change: Change) {
         let newstate = match &change {
-            Change::DuplicateRow { header, row } => self.current.duplicate_row(self.row_indices_for_header(header).nth(*row).unwrap()),
-            Change::RemoveRow { header, row } => self.current.remove_row(self.row_indices_for_header(header).nth(*row).unwrap()),
-            Change::UpdateCell { header, row, column, value } => self.current.update_cell(self.row_indices_for_header(header).nth(*row).unwrap(), *column, value.clone()),
+            Change::DuplicateRow { header: _, row } => self.current.duplicate_row(*row),
+            Change::RemoveRow { header: _, row } => self.current.remove_row(*row),
+            Change::UpdateCell { header: _, row, column, value } => self.current.update_cell(*row, *column, value.clone()),
             Change::ImportTable { header, rows: new_rows_for_header } => {
                 // There's not really a good solution here for how to order the rows when the table is split
                 // We could probably use a diffing algorithm to find an approximate solution for the fewest rows assigned to an incorrect chunk.
@@ -221,24 +224,8 @@ impl TblStateHistory {
         self.current.all_rows.iter().map(|rc| rc.borrow())
     }
 
-    pub fn number_of_rows_for_header(&self, header: &Header) -> usize {
-        self.rows_for_header(header).count()
-    }
-
     pub fn rows_for_header<'a>(&'a self, header: &'a Header) -> impl Iterator<Item = &tocs::tbl::Entry> + 'a {
-        // this is not very efficient, but it's simple.
-        // we could cache the rows for each header, but getting the cache right is hard, and as it turns out this isn't noticeably slower.
         self.all_current_rows().filter(move |entry| &entry.header == header)
-    }
-
-    pub fn row_for_header<'a>(&'a self, header: &'a Header, i: usize) -> Option<&'a tocs::tbl::Entry> {
-        self.rows_for_header(header).nth(i)
-    }
-
-    fn row_indices_for_header<'a>(&'a self, header: &'a Header) -> impl Iterator<Item = usize> + 'a {
-        // this is not very efficient, but it's simple.
-        // we could cache the rows for each header, but getting the cache right is hard, and as it turns out this isn't noticeably slower.
-        self.all_current_rows().enumerate().filter(move |(_, entry)| &entry.header == header).map(|(i, _)| i)
     }
 }
 
