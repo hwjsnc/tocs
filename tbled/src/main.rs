@@ -371,6 +371,9 @@ impl App {
             Some(Msg::DoneEditing) => {
                 // find the currently selected cell (if it's exactly one)
                 let input = &mut self.widgets.input;
+                if !input.has_focus() {
+                    return;
+                };
                 let table = &mut self.widgets.table;
                 let Some((row, column)) = table.selected_cell() else { return };
                 // copy text input to selected cell
