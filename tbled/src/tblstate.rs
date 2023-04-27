@@ -180,9 +180,18 @@ impl TblStateHistory {
 
     pub fn change(&mut self, change: Change) {
         let newstate = match &change {
-            Change::DuplicateRow { header: _, row } => self.current.duplicate_row(*row),
-            Change::RemoveRow { header: _, row } => self.current.remove_row(*row),
-            Change::UpdateCell { header: _, row, column, value } => self.current.update_cell(*row, *column, value.clone()),
+            Change::DuplicateRow { header, row } => {
+                assert_eq!(header, &self.current.all_rows[*row].header);
+                self.current.duplicate_row(*row)
+            }
+            Change::RemoveRow { header, row } => {
+                assert_eq!(header, &self.current.all_rows[*row].header);
+                self.current.remove_row(*row)
+            }
+            Change::UpdateCell { header, row, column, value } => {
+                assert_eq!(header, &self.current.all_rows[*row].header);
+                self.current.update_cell(*row, *column, value.clone())
+            }
             Change::ImportTable { header, rows: new_rows_for_header } => {
                 // There's not really a good solution here for how to order the rows when the table is split
                 // We could probably use a diffing algorithm to find an approximate solution for the fewest rows assigned to an incorrect chunk.
@@ -248,6 +257,7 @@ mod test {
     fn compare_entries(expected: &[tocs::tbl::Entry], actual: &[tocs::tbl::Entry]) {
         assert_eq!(actual.len(), expected.len());
         for row in 0..expected.len() {
+            println!("row {}: {}", row, actual[row].header);
             assert_eq!(actual[row].header, expected[row].header);
             assert_eq!(actual[row].values.len(), expected[row].values.len());
             for col in 0..actual[row].values.len() {
@@ -299,9 +309,15 @@ mod test {
         tocs::tbl::Entry { header, values }
     }
 
+    fn number_of_rows_for_header(state: &TblStateHistory, header: &Header) -> usize {
+        state.all_current_rows().enumerate().filter(move |(_, entry)| &entry.header == header).map(|(i, _)| i).count()
+    }
+
     #[test]
     fn test_order() {
         // we simulate a simplified mstqrt table with rows in some arbitrary order (but not all entries of the same type in one block because then the test would be pointless).
+        // This test is probably not super important anymore since we don't partition the tables based on header here, but it doesn't hurt to be here, so.
+
         let original_data: std::vec::Vec<tocs::tbl::Entry> = [
             // first master quartz + MasterQuartzStatus and MasterQuartzDummy table in the middle
             // MasterQuartzMemo, MasterQuartzData, and MasterQuartzBase are "split" tables, i.e. not contiguous
@@ -349,43 +365,44 @@ mod test {
         // Now we make some changes
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzMemo").unwrap(),
-            row: 5,
+            row: 20,
             column: 1,
             value: AtomicValue::I16(10),
         });
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzDummy").unwrap(),
-            row: 0,
+            row: 3,
             column: 0,
             value: AtomicValue::X(hex::decode("00ab00cc").unwrap().into()),
         });
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzData").unwrap(),
-            row: 0,
+            row: 14,
             column: 3,
             value: AtomicValue::I16(30),
         });
         // duplicate and remove some rows
-        assert_eq!(tbl_history.number_of_rows_for_header(&Header::new("MasterQuartzMemo").unwrap()), 9);
+        assert_eq!(number_of_rows_for_header(&tbl_history, &Header::new("MasterQuartzDummy").unwrap()), 2);
+        assert_eq!(number_of_rows_for_header(&tbl_history, &Header::new("MasterQuartzMemo").unwrap()), 9);
         tbl_history.change(Change::DuplicateRow {
             header: Header::new("MasterQuartzMemo").unwrap(),
             row: 0,
         });
-        assert_eq!(tbl_history.number_of_rows_for_header(&Header::new("MasterQuartzDummy").unwrap()), 2);
-        assert_eq!(tbl_history.number_of_rows_for_header(&Header::new("MasterQuartzMemo").unwrap()), 10);
+        assert_eq!(number_of_rows_for_header(&tbl_history, &Header::new("MasterQuartzDummy").unwrap()), 2);
+        assert_eq!(number_of_rows_for_header(&tbl_history, &Header::new("MasterQuartzMemo").unwrap()), 10);
         tbl_history.change(Change::DuplicateRow {
             header: Header::new("MasterQuartzMemo").unwrap(),
-            row: 6,
+            row: 21,
         });
-        assert_eq!(tbl_history.number_of_rows_for_header(&Header::new("MasterQuartzDummy").unwrap()), 2);
-        assert_eq!(tbl_history.number_of_rows_for_header(&Header::new("MasterQuartzMemo").unwrap()), 11);
+        assert_eq!(number_of_rows_for_header(&tbl_history, &Header::new("MasterQuartzDummy").unwrap()), 2);
+        assert_eq!(number_of_rows_for_header(&tbl_history, &Header::new("MasterQuartzMemo").unwrap()), 11);
         tbl_history.change(Change::RemoveRow {
             header: Header::new("MasterQuartzMemo").unwrap(),
-            row: 10,
+            row: 29,
         });
         tbl_history.change(Change::RemoveRow {
             header: Header::new("MasterQuartzData").unwrap(),
-            row: 3,
+            row: 23,
         });
         // completely replace MasterQuartzBase table
         let new_base_rows: std::vec::Vec<std::rc::Rc<tocs::tbl::Entry>> = [
@@ -405,19 +422,19 @@ mod test {
         // now we modify one of the new entries and an original one
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzBase").unwrap(),
-            row: 3,
+            row: 21,
             column: 1,
             value: AtomicValue::U16(3),
         });
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzBase").unwrap(),
-            row: 3,
+            row: 21,
             column: 1,
             value: AtomicValue::U16(3),
         });
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzData").unwrap(),
-            row: 3,
+            row: 26,
             column: 2,
             value: AtomicValue::I16(42),
         });
