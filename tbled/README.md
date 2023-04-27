@@ -66,6 +66,14 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
+### v0.5 (in development)
+
+- Modified tbl state tracking with a new wrapper widget
+  - improved display performance
+  - Row filters (search) - TODO
+  - Column filters/reordering - TODO
+- Better looking table, monospaced font for numeric and hex data
+
 ### [v0.4](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.4/tbled-v0.4.exe)
 
 - warning popup will not be shown anymore in cases where the warnings are very minor

@@ -1,7 +1,7 @@
 // table widget with (possibly) filtered rows and (possibly) reordered/hidden columns
 
 use tocs::tbl::AtomicSchema as Schema;
-use tocs::tbl::{Attribute, Entry, Header};
+use tocs::tbl::{AtomicType, Attribute, Entry, Header};
 
 use smol_str::SmolStr;
 use std::borrow::Borrow;
@@ -19,7 +19,9 @@ fn row_passes_filter(_entry: &Entry, _filter: &RowFilter) -> bool {
 }
 
 struct TableData {
-    columns_and_original_indexes: std::vec::Vec<(Attribute, usize)>,
+    attributes: std::vec::Vec<Attribute>,
+    attribute_types: std::vec::Vec<AtomicType>,
+    original_col_indexes: std::vec::Vec<usize>,
     original_row_indexes: std::vec::Vec<usize>,
     cells: grid::Grid<SmolStr>,
 }
@@ -32,7 +34,9 @@ pub struct FilteredTable {
 impl FilteredTable {
     pub fn new() -> Self {
         let table_data = Arc::new(Mutex::new(TableData {
-            columns_and_original_indexes: std::vec::Vec::new(),
+            attributes: std::vec::Vec::new(),
+            attribute_types: std::vec::Vec::new(),
+            original_col_indexes: std::vec::Vec::new(),
             original_row_indexes: std::vec::Vec::new(),
             cells: grid::Grid::new(0, 0),
         }));
@@ -53,15 +57,13 @@ impl FilteredTable {
                 log::trace!("table draw: ctx={ctx:?} row={row}/{nrows} row={col}/{ncols}, x={x}, y={y}, w={w}, h={h}");
                 let mut guard = table_data.lock().unwrap();
                 let TableData {
-                    columns_and_original_indexes,
-                    original_row_indexes: _,
-                    cells,
+                    attributes, attribute_types, cells, ..
                 } = &mut *guard;
                 let Ok(row_idx) = usize::try_from(row) else { return };
                 let Ok(col_idx) = usize::try_from(col) else { return };
                 match ctx {
                     fltk::table::TableContext::ColHeader => {
-                        let Some((attr, _)) = columns_and_original_indexes.get(col_idx) else { return };
+                        let Some(attr) = attributes.get(col_idx) else { return };
                         crate::draw_header(&attr, x, y, w, h); // Column titles
                     }
                     fltk::table::TableContext::RowHeader => {
@@ -76,15 +78,40 @@ impl FilteredTable {
                         // - alignment? (attribute type! -> get this from the schema)
                         // - if numeric: monospaced font
                         fltk::draw::push_clip(x, y, w, h);
-                        fltk::draw::set_draw_color(fltk::enums::Color::from_u32(0x00_ff_ff_ff));
-                        fltk::draw::draw_rectf(x, y, w, h);
+                        let bg_color = if table.is_selected(row, col) {
+                            0x00_D0_D0_D0 // selected cell
+                        } else if row % 2 == 0 {
+                            0x00_F0_F0_F0 // even rows
+                        } else {
+                            0x00_ff_ff_ff // odd rows
+                        };
+                        fltk::draw::set_draw_color(fltk::enums::Color::from_u32(bg_color));
+                        fltk::draw::draw_rectf(x, y, w, h); // background
+                        fltk::draw::set_draw_color(fltk::enums::Color::Dark1);
+                        fltk::draw::draw_rect(x, y, w, h); // outline
+
                         fltk::draw::set_draw_color(fltk::enums::Color::Gray0);
-                        fltk::draw::draw_rect(x, y, w, h);
+                        let (font, text_alignment) = match attribute_types[col_idx] {
+                            // TODO: also set font
+                            tocs::tbl::AtomicType::I8
+                            | tocs::tbl::AtomicType::I16
+                            | tocs::tbl::AtomicType::I32
+                            | tocs::tbl::AtomicType::U8
+                            | tocs::tbl::AtomicType::U16
+                            | tocs::tbl::AtomicType::U32
+                            | tocs::tbl::AtomicType::F32 => (fltk::enums::Font::Courier, fltk::enums::Align::Right),
+                            tocs::tbl::AtomicType::CUtf8 => (fltk::enums::Font::Helvetica, fltk::enums::Align::Left),
+                            tocs::tbl::AtomicType::X(_) => (fltk::enums::Font::Courier, fltk::enums::Align::Left),
+                        };
+
+                        fltk::draw::set_font(font, 14);
 
                         let (x, w) = if w > 5 { (x + 2, w - 4) } else { (x, w) };
                         let (y, h) = if h > 5 { (y + 2, h - 4) } else { (y, h) };
-                        fltk::draw::draw_text2(&s, x, y, w, h, fltk::enums::Align::Right);
+                        fltk::draw::draw_text2(&s, x, y, w, h, text_alignment);
                         fltk::draw::pop_clip();
+
+                        fltk::draw::set_font(fltk::enums::Font::Helvetica, 14);
                     }
                     _ => {}
                 }
@@ -112,14 +139,16 @@ impl FilteredTable {
         self.auto_size_cells(); // TODO: only when necessary
     }
 
-    pub fn update_data<I, E>(&mut self, header_name: Header, schema: &Schema, attributes: &indexmap::IndexSet<Attribute>, row_filters: &[RowFilter], all_tbl_rows: I)
+    pub fn update_data<I, E>(&mut self, header_name: Header, schema: &Schema, columns: &indexmap::IndexSet<Attribute>, row_filters: &[RowFilter], all_tbl_rows: I)
     where
         I: Iterator<Item = E>,
         E: Borrow<Entry>,
     {
         let mut guard = self.data.lock().unwrap();
         let TableData {
-            ref mut columns_and_original_indexes,
+            ref mut attributes,
+            ref mut attribute_types,
+            ref mut original_col_indexes,
             ref mut original_row_indexes,
             ref mut cells,
         } = &mut *guard;
@@ -133,19 +162,23 @@ impl FilteredTable {
         std::mem::swap(cells, &mut new_cells);
         let mut row_major_vector_of_cells = new_cells.into_vec();
 
-        // update columns
-        columns_and_original_indexes.clear();
-        for attr in attributes.iter() {
-            let original_index = schema.get_index_of(attr).expect("attribute not found in schema");
-            columns_and_original_indexes.push((attr.clone(), original_index));
+        // update columns: for each visible column, look up its corresponding position in the schema
+        attributes.clear();
+        attribute_types.clear();
+        original_col_indexes.clear();
+        for attr in columns.iter() {
+            let (col_idx, _, ty) = schema.get_full(attr).expect("column should be in schema");
+            attributes.push(attr.clone());
+            attribute_types.push(ty.clone());
+            original_col_indexes.push(col_idx);
         }
 
-        // update rows
+        // update rows: filter based on header and explicit filters
         original_row_indexes.clear();
         for (row_idx, row) in all_tbl_rows.enumerate() {
             if row.borrow().header == header_name && row_filters.iter().all(|filter| row_passes_filter(row.borrow(), filter)) {
                 original_row_indexes.push(row_idx);
-                for (attr, attr_idx) in columns_and_original_indexes.iter() {
+                for (attr, attr_idx) in attributes.iter().zip(original_col_indexes.iter()) {
                     let (k, v) = row.borrow().values.get_index(*attr_idx).expect("entry attributes should correspond to schema");
                     assert_eq!(k, attr, "entry should have attributes in the same order as the schema");
                     row_major_vector_of_cells.push(v.to_smol_str());
@@ -169,10 +202,8 @@ impl FilteredTable {
 
     pub fn auto_size_cells(&mut self) {
         let guard = self.data.lock().unwrap();
-        let TableData {
-            columns_and_original_indexes, cells, ..
-        } = &*guard;
-        let mut column_widths: std::vec::Vec<i32> = columns_and_original_indexes.iter().map(|(attr, _)| fltk::draw::measure(attr, false).0).collect();
+        let TableData { attributes, cells, .. } = &*guard;
+        let mut column_widths: std::vec::Vec<i32> = attributes.iter().map(|attr| fltk::draw::measure(attr, false).0).collect();
         let nrows: i32 = cells.rows().try_into().unwrap();
         let mut row_height = 1;
         for r in 0..cells.rows() {
@@ -209,8 +240,8 @@ impl FilteredTable {
     fn original_col(&self, filtered_col_index: i32) -> usize {
         let col: usize = filtered_col_index.try_into().unwrap();
         let guard = self.data.lock().unwrap();
-        let TableData { ref columns_and_original_indexes, .. } = &*guard;
-        columns_and_original_indexes[col].1
+        let TableData { ref original_col_indexes, .. } = &*guard;
+        original_col_indexes[col]
     }
 
     pub fn selected_cell(&self) -> Option<(usize, usize)> {
