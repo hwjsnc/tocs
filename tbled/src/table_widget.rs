@@ -1,5 +1,7 @@
 // table widget with (possibly) filtered rows and (possibly) reordered/hidden columns
 
+use crate::filter::row_passes_filter;
+
 use tocs::tbl::AtomicSchema as Schema;
 use tocs::tbl::{AtomicType, Attribute, Entry, Header};
 
@@ -9,14 +11,6 @@ use std::sync::{Arc, Mutex};
 
 use fltk::prelude::TableExt as _;
 use fltk::prelude::WidgetExt as _;
-
-pub enum RowFilter {
-    // TODO: 'any cell includes "Rean"', 'attribute "foo" = 4', stuff like that
-}
-
-fn row_passes_filter(_entry: &Entry, _filter: &RowFilter) -> bool {
-    return true; // for now
-}
 
 struct TableData {
     attributes: std::vec::Vec<Attribute>,
@@ -139,7 +133,7 @@ impl FilteredTable {
         self.auto_size_cells(); // TODO: only when necessary
     }
 
-    pub fn update_data<I, E>(&mut self, header_name: Header, schema: &Schema, columns: &indexmap::IndexSet<Attribute>, row_filters: &[RowFilter], all_tbl_rows: I)
+    pub fn update_data<I, E>(&mut self, header_name: Header, schema: &Schema, columns: &indexmap::IndexSet<Attribute>, row_filters: &[crate::filter::RowFilter], all_tbl_rows: I)
     where
         I: Iterator<Item = E>,
         E: Borrow<Entry>,
