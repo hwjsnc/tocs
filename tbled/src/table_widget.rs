@@ -74,6 +74,7 @@ impl FilteredTable {
                         // - is it selected?
                         // - even or odd row?
                         // - alignment? (attribute type! -> get this from the schema)
+                        // - if numeric: monospaced font
                         fltk::draw::push_clip(x, y, w, h);
                         fltk::draw::set_draw_color(fltk::enums::Color::from_u32(0x00_ff_ff_ff));
                         fltk::draw::draw_rectf(x, y, w, h);
@@ -141,8 +142,9 @@ impl FilteredTable {
 
         // update rows
         original_row_indexes.clear();
-        for row in all_tbl_rows {
+        for (row_idx, row) in all_tbl_rows.enumerate() {
             if row.borrow().header == header_name && row_filters.iter().all(|filter| row_passes_filter(row.borrow(), filter)) {
+                original_row_indexes.push(row_idx);
                 for (attr, attr_idx) in columns_and_original_indexes.iter() {
                     let (k, v) = row.borrow().values.get_index(*attr_idx).expect("entry attributes should correspond to schema");
                     assert_eq!(k, attr, "entry should have attributes in the same order as the schema");
@@ -186,7 +188,7 @@ impl FilteredTable {
         log::trace!("column widths: {:?} rows: {} row height: {}", column_widths, nrows, row_height);
 
         for (i, w) in column_widths.into_iter().enumerate() {
-            self.widget.set_col_width(i.try_into().unwrap(), w);
+            self.widget.set_col_width(i.try_into().unwrap(), w + 4);
         }
         self.widget.set_row_height_all(row_height);
 
