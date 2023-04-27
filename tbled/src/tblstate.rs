@@ -580,7 +580,7 @@ mod test {
 
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzMemo").unwrap(),
-            row: 5,
+            row: 20,
             column: 1,
             value: AtomicValue::I16(10),
         });
@@ -634,7 +634,7 @@ mod test {
 
         tbl_history.change(Change::DuplicateRow {
             header: Header::new("MasterQuartzBase").unwrap(),
-            row: 2,
+            row: 31,
         });
         let state_2: std::vec::Vec<tocs::tbl::Entry> = [
             ("MasterQuartzMemo", vec![("item_id", "1234"), ("memo_id", "0"), ("text", "mq 1234 memo 0")]),
@@ -678,7 +678,7 @@ mod test {
 
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzBase").unwrap(),
-            row: 2,
+            row: 31,
             column: 2,
             value: AtomicValue::U16(2),
         });
@@ -736,7 +736,7 @@ mod test {
 
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzBase").unwrap(),
-            row: 2,
+            row: 31,
             column: 2,
             value: AtomicValue::U16(2),
         });
@@ -863,7 +863,7 @@ mod test {
 
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzStatus").unwrap(),
-            row: 4,
+            row: 9,
             column: 2,
             value: AtomicValue::I16(500),
         });
