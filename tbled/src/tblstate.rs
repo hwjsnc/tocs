@@ -164,7 +164,7 @@ impl TblStateHistory {
         self.headers.contains(header)
     }
 
-    pub fn get_cell_contents<'a>(&'a mut self, rowid: usize, colid: usize) -> Option<(&'a Attribute, &'a Value)> {
+    pub fn get_cell_contents(&mut self, rowid: usize, colid: usize) -> Option<(&Attribute, &Value)> {
         self.current.all_rows.get(rowid).and_then(|row| row.values.get_index(colid))
     }
 

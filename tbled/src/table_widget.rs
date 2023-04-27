@@ -58,7 +58,7 @@ impl FilteredTable {
                 match ctx {
                     fltk::table::TableContext::ColHeader => {
                         let Some(attr) = attributes.get(col_idx) else { return };
-                        crate::draw_header(&attr, x, y, w, h); // Column titles
+                        crate::draw_header(attr, x, y, w, h); // Column titles
                     }
                     fltk::table::TableContext::RowHeader => {
                         crate::draw_header("", x, y, w, h); // Row titles
@@ -96,7 +96,7 @@ impl FilteredTable {
 
                         let (x, w) = if w > 5 { (x + 2, w - 4) } else { (x, w) };
                         let (y, h) = if h > 5 { (y + 2, h - 4) } else { (y, h) };
-                        fltk::draw::draw_text2(&s, x, y, w, h, text_alignment);
+                        fltk::draw::draw_text2(s, x, y, w, h, text_alignment);
                         fltk::draw::pop_clip();
 
                         fltk::draw::set_font(fltk::enums::Font::Helvetica, 14);
@@ -116,17 +116,17 @@ impl FilteredTable {
     pub fn update_data_alternative(&mut self, state: &crate::AppData) {
         if let Some(header) = state.active_entry_type.as_ref() {
             let schema = crate::schema_for_header(header, state.tbl_version.schemas());
-            let attributes = schema.keys().cloned().into_iter().collect();
+            let attributes = schema.keys().cloned().collect();
             let filters = &[];
             let all_tbl_rows = state.tbl_history.all_current_rows();
-            self.update_data(header.clone(), &schema, &attributes, filters, all_tbl_rows)
+            self.update_data(header.clone(), schema, &attributes, filters, all_tbl_rows)
         } else {
             let header = Header::new("").expect("empty string is valid ASCII");
             let schema = Schema::new();
             let attributes = indexmap::IndexSet::new();
             let filters = &[];
             let all_tbl_rows = &[];
-            self.update_data(header, &schema, &attributes, filters, all_tbl_rows.into_iter());
+            self.update_data(header, &schema, &attributes, filters, all_tbl_rows.iter());
         }
     }
 
@@ -160,7 +160,7 @@ impl FilteredTable {
         for attr in columns.iter() {
             let (col_idx, _, ty) = schema.get_full(attr).expect("column should be in schema");
             attributes.push(attr.clone());
-            attribute_types.push(ty.clone());
+            attribute_types.push(*ty);
             original_col_indexes.push(col_idx);
         }
 
@@ -198,6 +198,7 @@ impl FilteredTable {
         let nrows: i32 = cells.rows().try_into().unwrap();
         let mut row_height = 1;
         for r in 0..cells.rows() {
+            #[allow(clippy::needless_range_loop)]
             for c in 0..cells.cols() {
                 let (w, h) = fltk::draw::measure(cells.get(r, c).unwrap(), false);
                 column_widths[c] = std::cmp::max(column_widths[c], w);
