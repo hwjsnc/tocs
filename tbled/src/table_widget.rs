@@ -65,12 +65,6 @@ impl FilteredTable {
                     }
                     fltk::table::TableContext::Cell => {
                         let Some(s) = cells.get(row_idx, col_idx) else { return };
-                        // TODO: draw cell
-                        // to consider:
-                        // - is it selected?
-                        // - even or odd row?
-                        // - alignment? (attribute type! -> get this from the schema)
-                        // - if numeric: monospaced font
                         fltk::draw::push_clip(x, y, w, h);
                         let bg_color = if table.is_selected(row, col) {
                             0x00_D0_D0_D0 // selected cell
@@ -112,7 +106,11 @@ impl FilteredTable {
             }
         });
 
-        Self { widget: table, data: table_data }
+        let mut this = Self { widget: table, data: table_data };
+
+        this.auto_size_cells();
+
+        this
     }
 
     pub fn update_data_alternative(&mut self, state: &crate::AppData) {
@@ -130,7 +128,6 @@ impl FilteredTable {
             let all_tbl_rows = &[];
             self.update_data(header, &schema, &attributes, filters, all_tbl_rows.into_iter());
         }
-        self.auto_size_cells(); // TODO: only when necessary
     }
 
     pub fn update_data<I, E>(&mut self, header_name: Header, schema: &Schema, columns: &indexmap::IndexSet<Attribute>, row_filters: &[crate::filter::RowFilter], all_tbl_rows: I)

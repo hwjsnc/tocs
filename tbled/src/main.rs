@@ -36,8 +36,7 @@ enum Msg {
     ExportCSV,                                      // user wants to export file to csv
     ImportCSV,                                      // user wants to import table from csv
     ShowWarnings,                                   // user wants to see warnings
-    FileReloaded,                                   // user loaded a different tbl file and we have to update all widgets accordingly
-    UpdateTable,                                    // user selected a different header; update the table widget
+    DifferentHeaderSelected,                        // user selected a different header; update the table widget
     Undo,                                           // user wants to undo last action
     Redo,                                           // user wants to redo last action
     DuplicateEntry,                                 // user wants to duplicate the current row
@@ -179,7 +178,7 @@ impl App {
         );
 
         let mut header_selector = fltk::misc::InputChoice::default();
-        header_selector.emit(sender.clone(), Msg::UpdateTable);
+        header_selector.emit(sender.clone(), Msg::DifferentHeaderSelected);
         header_selector.input().set_readonly(true);
         flex_row.set_size(&header_selector, 200);
 
@@ -211,7 +210,7 @@ impl App {
             state,
         };
 
-        this.update(&Some(Msg::FileReloaded));
+        this.update_after_file_reload();
 
         this
     }
@@ -230,55 +229,47 @@ impl App {
         match msg {
             Some(Msg::SelectAndLoadFile(version)) => {
                 // open a file browser dialog to select the file
-                let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
-                diag.set_title("Select .tbl file to load ...");
-                diag.show();
-                let new_path = diag.filename();
-                if new_path.as_os_str().is_empty() {
-                    return;
-                }
-                {
-                    // reset state related to tbl data
-                    let AppData {
-                        tbl_history,
-                        active_entry_type,
-                        tbl_version,
-                        path,
-                        warnings,
-                    } = &mut self.state;
-                    *active_entry_type = None;
-                    *tbl_version = *version;
-                    warnings.clear();
-                    // try loading data from file
-                    match tocs::tbl::read_file(&new_path, *version) {
-                        tocs::tbl::ReadTblResult::Ok(tbl) => {
-                            *tbl_history = TblStateHistory::new(tbl);
-                            *path = new_path;
+                let Some(new_path) = load_file_dialog() else { return };
+                // reset state related to tbl data
+                let AppData {
+                    tbl_history,
+                    active_entry_type: _, // handled by update_after_file_reload
+                    tbl_version,
+                    path,
+                    warnings,
+                } = &mut self.state;
+                tbl_history.clear_all();
+                *tbl_version = *version;
+                warnings.clear();
+                // try loading data from file
+                match tocs::tbl::read_file(&new_path, *version) {
+                    tocs::tbl::ReadTblResult::Ok(tbl) => {
+                        *tbl_history = TblStateHistory::new(tbl);
+                        *path = new_path;
+                    }
+                    tocs::tbl::ReadTblResult::Warn { tbl, warnings: w } => {
+                        *warnings = w;
+                        *tbl_history = TblStateHistory::new(tbl);
+                        *path = new_path;
+                        // if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
+                        let schemas = tbl_version.schemas();
+                        if tbl_history.all_current_rows().all(|entry| schemas.contains_key(&entry.header))
+                            && warnings.iter().all(|w| matches!(w.detail, tocs::tbl::DeserializeErrorDetail::EntryDataLengthMismatch { .. }))
+                        {
+                            // it's fine
+                        } else {
+                            fltk::dialog::alert_default(
+                                "Warning: Some errors/inconsistencies in the file were detected. Please look at them under the Warnings menu option and ensure that they are harmless",
+                            );
                         }
-                        tocs::tbl::ReadTblResult::Warn { tbl, warnings: w } => {
-                            *warnings = w;
-                            *tbl_history = TblStateHistory::new(tbl);
-                            *path = new_path;
-                            // if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
-                            let schemas = tbl_version.schemas();
-                            if tbl_history.all_current_rows().all(|entry| schemas.contains_key(&entry.header))
-                                && warnings.iter().all(|w| matches!(w.detail, tocs::tbl::DeserializeErrorDetail::EntryDataLengthMismatch { .. }))
-                            {
-                                // it's fine
-                            } else {
-                                fltk::dialog::alert_default(
-                                    "Warning: Some errors/inconsistencies in the file were detected. Please look at them under the Warnings menu option and ensure that they are harmless",
-                                );
-                            }
-                        }
-                        tocs::tbl::ReadTblResult::Err(e) => {
-                            fltk::dialog::alert_default(&format!("error loading file: {}", e));
-                            *path = std::path::PathBuf::new();
-                        }
+                    }
+                    tocs::tbl::ReadTblResult::Err(e) => {
+                        fltk::dialog::alert_default(&format!("error loading file: {}", e));
+                        *path = std::path::PathBuf::new();
                     }
                 }
                 // we need to update other ui elements
-                self.update(&Some(Msg::FileReloaded));
+                self.update_after_file_reload();
             }
             Some(Msg::SaveFile) => {
                 // try saving data to file
@@ -350,63 +341,17 @@ impl App {
                 } else {
                     fltk::dialog::alert_default("no entry type selected, can't import");
                 }
-                self.update(&Some(Msg::UpdateTable));
-            }
-            Some(Msg::FileReloaded) => {
-                {
-                    // TODO: this should probably be its own method
-                    let AppData {
-                        active_entry_type,
-                        tbl_version: _,
-                        path: _,
-                        tbl_history,
-                        warnings,
-                    } = &mut self.state;
-                    // if there are warnings, show button to display them
-                    if warnings.is_empty() {
-                        self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap().deactivate();
-                    } else {
-                        self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap().activate();
-                    }
-                    // reset header selector
-                    *active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
-                        let hdr = Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
-                        if tbl_history.has_header(&hdr) {
-                            Some(hdr)
-                        } else {
-                            None
-                        }
-                    });
-                    self.widgets.header_selector.clear();
-                    for hdr in tbl_history.headers() {
-                        self.widgets.header_selector.add(hdr.as_str());
-                    }
-                    if let Some(hdr) = tbl_history.headers().iter().next() {
-                        self.widgets.header_selector.set_value(hdr.as_str());
-                        self.state.active_entry_type = Some(hdr.clone());
-                    }
-                }
-                // Note: mutex must be free for this function because it triggers table redraws:
-                self.update(&Some(Msg::UpdateTable));
-            }
-            Some(Msg::UpdateTable) => {
-                // reset header selector
-                self.state.active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
-                    let hdr = Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
-                    if self.state.tbl_history.has_header(&hdr) {
-                        Some(hdr)
-                    } else {
-                        None
-                    }
-                });
                 self.update_table();
-                self.update_undo_redo_menu();
+            }
+            Some(Msg::DifferentHeaderSelected) => {
+                self.update_table();
+                self.widgets.table.auto_size_cells();
             }
             Some(Msg::DuplicateEntry) => {
                 if let Some(row) = self.widgets.table.selected_row() {
                     let Some(hdr) = self.state.active_entry_type.as_ref() else { return };
                     self.state.tbl_history.change(Change::DuplicateRow { header: hdr.clone(), row });
-                    self.update(&Some(Msg::UpdateTable));
+                    self.update_table();
                 } else {
                     fltk::dialog::alert_default("please select exactly one row");
                     // TODO: allow multiple? spliced or blockwise?
@@ -416,7 +361,7 @@ impl App {
                 if let Some(row) = self.widgets.table.selected_row() {
                     let Some(hdr) = self.state.active_entry_type.as_ref() else { return };
                     self.state.tbl_history.change(Change::RemoveRow { header: hdr.clone(), row });
-                    self.update(&Some(Msg::UpdateTable));
+                    self.update_table();
                 } else {
                     fltk::dialog::alert_default("please select exactly one row");
                     // TODO: allow multiple
@@ -424,11 +369,11 @@ impl App {
             }
             Some(Msg::Undo) => {
                 self.state.tbl_history.undo();
-                self.update(&Some(Msg::UpdateTable));
+                self.update_table();
             }
             Some(Msg::Redo) => {
                 self.state.tbl_history.redo();
-                self.update(&Some(Msg::UpdateTable));
+                self.update_table();
             }
             Some(Msg::TableEvent) => {
                 match fltk::app::event() {
@@ -456,8 +401,7 @@ impl App {
                 let ty = schema_for_header(&header, self.state.tbl_version.schemas()).get_index(column).unwrap().1;
                 if let Ok(value) = tocs::tbl::AtomicValue::from_str_nonstrict(ty, &text) {
                     self.state.tbl_history.change(Change::UpdateCell { header, row, column, value });
-                    self.update(&Some(Msg::UpdateTable));
-                    self.update_undo_redo_menu();
+                    self.update_table();
                 } else {
                     fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", ty.describe()));
                 }
@@ -470,7 +414,53 @@ impl App {
     }
 
     fn update_table(&mut self) {
+        // get active entry type from header selector
+        self.state.active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
+            let hdr = Header::new(&hdr).expect("it shouldn't be possible to set the selector to an invalid value");
+            if self.state.tbl_history.has_header(&hdr) {
+                Some(hdr)
+            } else {
+                None
+            }
+        });
+
+        self.update_undo_redo_menu();
+
+        // notify table widget about current data
         self.widgets.table.update_data_alternative(&self.state);
+    }
+
+    fn update_after_file_reload(&mut self) {
+        let AppData {
+            active_entry_type,
+            tbl_version: _,
+            path: _,
+            tbl_history,
+            warnings,
+        } = &mut self.state;
+
+        // if there are warnings, show button to display them
+        let mut warning_menu = self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap();
+        if warnings.is_empty() {
+            warning_menu.deactivate();
+        } else {
+            warning_menu.activate();
+        }
+
+        // reset header selector
+        let previously_active_entry_type = active_entry_type.clone();
+        self.widgets.header_selector.clear();
+        *active_entry_type = None;
+        for (i, hdr) in tbl_history.headers().iter().enumerate() {
+            self.widgets.header_selector.add(hdr.as_str());
+            if i == 0 || Some(hdr) == previously_active_entry_type.as_ref() {
+                self.widgets.header_selector.set_value_index(i.try_into().unwrap());
+            }
+        }
+
+        self.update_table();
+
+        self.widgets.table.auto_size_cells();
     }
 
     fn update_undo_redo_menu(&mut self) {
@@ -496,6 +486,19 @@ impl App {
             redo_item.set_label("Redo\t");
             redo_item.deactivate();
         }
+    }
+}
+
+pub fn load_file_dialog() -> Option<std::path::PathBuf> {
+    // open a file browser dialog to select the file
+    let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
+    diag.set_title("Select .tbl file to load ...");
+    diag.show();
+    let path = diag.filename();
+    if path.as_os_str().is_empty() {
+        None
+    } else {
+        Some(path)
     }
 }
 

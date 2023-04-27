@@ -103,7 +103,10 @@ impl TblStateWithoutHistory {
         let mut all_rows = self.all_rows.clone(); // O(1) for immutable vector
         let row = std::rc::Rc::make_mut(&mut all_rows[rowid]); // Clones inner data and gives us a reference to the cloned data
         let (_, oldval) = row.values.get_index_mut(colid).expect("column index should be valid");
-        assert_eq!(oldval.r#type(), value.r#type());
+        match (oldval.r#type(), value.r#type()) {
+            (tocs::tbl::AtomicType::X(_), tocs::tbl::AtomicType::X(_)) => {} // Ok, user is allowed to change length
+            (oldtype, newtype) => assert_eq!(oldtype, newtype),
+        }
         *oldval = value;
         TblStateWithoutHistory { all_rows }
     }
@@ -142,6 +145,15 @@ impl TblStateHistory {
             undo: std::collections::VecDeque::new(),
             redo: vec![],
         }
+    }
+
+    pub fn clear_all(&mut self) {
+        let Self { current, headers, undo, redo } = self;
+        headers.clear();
+        undo.clear();
+        redo.clear();
+        let TblStateWithoutHistory { all_rows } = current;
+        all_rows.clear();
     }
 
     pub fn headers(&self) -> &indexmap::IndexSet<Header> {
