@@ -57,11 +57,7 @@ impl FilteredTable {
                 log::trace!("table draw: ctx={ctx:?} row={row}/{nrows} row={col}/{ncols}, x={x}, y={y}, w={w}, h={h}");
                 let mut guard = table_data.lock().unwrap();
                 let TableData {
-                    attributes,
-                    attribute_types,
-                    cells,
-                    original_row_indexes,
-                    ..
+                    attributes, attribute_types, cells, ..
                 } = &mut *guard;
                 let Ok(row_idx) = usize::try_from(row) else { return };
                 let Ok(col_idx) = usize::try_from(col) else { return };
@@ -71,8 +67,7 @@ impl FilteredTable {
                         crate::draw_header(&attr, x, y, w, h); // Column titles
                     }
                     fltk::table::TableContext::RowHeader => {
-                        let idx: usize = original_row_indexes[usize::try_from(row).unwrap()];
-                        crate::draw_header(&format!("{idx}"), x, y, w, h); // Row titles; TODO: write to a smallvec
+                        crate::draw_header("", x, y, w, h); // Row titles
                     }
                     fltk::table::TableContext::Cell => {
                         let Some(s) = cells.get(row_idx, col_idx) else { return };
