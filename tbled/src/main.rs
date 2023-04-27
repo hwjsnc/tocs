@@ -298,15 +298,7 @@ impl App {
                     ..
                 } = &mut self.state;
                 if let Some(hdr) = active_entry_type.as_ref() {
-                    // open a file browser dialog to select the file
-                    let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseSaveFile);
-                    diag.set_title("Select .tbl file to save to ...");
-                    diag.set_preset_file(&format!("{}.csv", hdr));
-                    diag.show();
-                    let path = diag.filename();
-                    if path.as_os_str().is_empty() {
-                        return;
-                    }
+                    let Some(path) = save_file_dialog("csv", &format!("{}.csv", hdr)) else { return };
                     let entries: std::vec::Vec<_> = tbl_history.rows_for_header(hdr).map(|entry| &entry.values).cloned().collect();
                     match export_csv(&path, schema_for_header(hdr, tbl_version.schemas()), &entries) {
                         Ok(_) => {}
@@ -493,6 +485,20 @@ pub fn load_file_dialog() -> Option<std::path::PathBuf> {
     // open a file browser dialog to select the file
     let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
     diag.set_title("Select .tbl file to load ...");
+    diag.show();
+    let path = diag.filename();
+    if path.as_os_str().is_empty() {
+        None
+    } else {
+        Some(path)
+    }
+}
+
+pub fn save_file_dialog(filetype: &str, preset: &str) -> Option<std::path::PathBuf> {
+    // open a file browser dialog to select the file
+    let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseSaveFile);
+    diag.set_title(&format!("Select .{} file to save to ...", filetype));
+    diag.set_preset_file(preset);
     diag.show();
     let path = diag.filename();
     if path.as_os_str().is_empty() {
