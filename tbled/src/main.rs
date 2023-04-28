@@ -37,6 +37,7 @@ enum Msg {
     Redo,                                           // user wants to redo last action
     DuplicateEntry,                                 // user wants to duplicate the current row
     DeleteEntry,                                    // user wants to delete the current row
+    AutoSizeTable,                                  // user wants to automatically size cells to fit content
     TableEvent,                                     // an arbitrary event on the table
     DoneEditing,                                    // user is done editing, now the value should be updated
     UpdateSearch,                                   // user changed the quick search/filter
@@ -173,6 +174,14 @@ impl App {
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
             Msg::DeleteEntry,
+        );
+
+        menu.add_emit(
+            "&View/Fit cells to content\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::AutoSizeTable,
         );
 
         let mut header_selector = fltk::misc::InputChoice::default();
@@ -416,6 +425,9 @@ impl App {
             }
             Some(Msg::ShowWarnings) => {
                 warn_diag::WarningDialog::new(self.state.warnings.iter());
+            }
+            Some(Msg::AutoSizeTable) => {
+                self.widgets.table.auto_size_cells();
             }
             None => {}
         }

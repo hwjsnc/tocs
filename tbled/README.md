@@ -68,9 +68,10 @@ Releases (downloads & changelogs)
 
 ### v0.5 (in development)
 
+- Added option to adjust cell size
 - Modified tbl state tracking with a new wrapper widget
   - improved display performance
-  - Row filters (search) - TODO
+  - Row filters (search)
   - Column filters/reordering - TODO
 - Better looking table, monospaced font for numeric and hex data
 
