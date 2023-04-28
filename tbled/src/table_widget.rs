@@ -1,7 +1,6 @@
 // table widget with (possibly) filtered rows and (possibly) reordered/hidden columns
 
 use crate::filter::row_passes_filter;
-use crate::misc;
 
 use tocs::tbl::AtomicSchema as Schema;
 use tocs::tbl::{AtomicType, Attribute, Entry, Header};
@@ -118,21 +117,13 @@ impl FilteredTable {
         this
     }
 
-    pub fn update_data_alternative(&mut self, state: &crate::AppData) {
-        if let Some(header) = state.active_entry_type.as_ref() {
-            let schema = misc::schema_for_header(header, state.tbl_version.schemas());
-            let attributes = schema.keys().cloned().collect();
-            let filters = &[];
-            let all_tbl_rows = state.tbl_history.all_current_rows();
-            self.update_data(header.clone(), schema, &attributes, filters, all_tbl_rows)
-        } else {
-            let header = Header::new("").expect("empty string is valid ASCII");
-            let schema = Schema::new();
-            let attributes = indexmap::IndexSet::new();
-            let filters = &[];
-            let all_tbl_rows = &[];
-            self.update_data(header, &schema, &attributes, filters, all_tbl_rows.iter());
-        }
+    pub fn clear(&mut self) {
+        let header = Header::new("").expect("empty string is valid ASCII");
+        let schema = Schema::new();
+        let attributes = indexmap::IndexSet::new();
+        let filters = &[];
+        let all_tbl_rows = &[];
+        self.update_data(header, &schema, &attributes, filters, all_tbl_rows.iter());
     }
 
     pub fn update_data<I, E>(&mut self, header_name: Header, schema: &Schema, columns: &indexmap::IndexSet<Attribute>, row_filters: &[crate::filter::RowFilter], all_tbl_rows: I)
@@ -183,11 +174,20 @@ impl FilteredTable {
         }
 
         // Now we create the new Grid and swap it in for the empty placeholder Grid
-        let mut new_cells = grid::Grid::from_vec(row_major_vector_of_cells, attributes.len());
+        let no_rows = row_major_vector_of_cells.is_empty();
+        let mut new_cells = grid::Grid::from_vec(
+            row_major_vector_of_cells,
+            if no_rows {
+                0 // workaround because the grid crate panics if there are columns but no rows. FFS.
+            } else {
+                attributes.len()
+            },
+        );
         std::mem::swap(cells, &mut new_cells);
 
         // We need to drop the guard before redrawing the table to allow draw_cell access to the data
-        let (nrows, ncols) = (cells.rows().try_into().unwrap(), cells.cols().try_into().unwrap());
+        let (nrows, ncols) = (cells.rows().try_into().unwrap(), attributes.len().try_into().unwrap());
+
         drop(guard);
 
         self.widget.set_rows(nrows);

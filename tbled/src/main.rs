@@ -9,6 +9,7 @@ mod warn_diag;
 use fltk::prelude::GroupExt as _;
 use fltk::prelude::InputExt as _;
 use fltk::prelude::MenuExt as _;
+use fltk::prelude::WidgetBase as _;
 use fltk::prelude::WidgetExt as _;
 
 use clap::Parser;
@@ -38,11 +39,13 @@ enum Msg {
     DeleteEntry,                                    // user wants to delete the current row
     TableEvent,                                     // an arbitrary event on the table
     DoneEditing,                                    // user is done editing, now the value should be updated
+    UpdateSearch,                                   // user changed the quick search/filter
 }
 
 struct Widgets {
     menu: fltk::menu::SysMenuBar,
     input: fltk::input::Input,
+    search: fltk::input::Input,
     header_selector: fltk::misc::InputChoice,
     table: table_widget::FilteredTable,
 }
@@ -186,7 +189,22 @@ impl App {
         input.set_trigger(fltk::enums::CallbackTrigger::EnterKeyAlways);
         input.emit(sender.clone(), Msg::DoneEditing);
 
+        let mut search = fltk::input::Input::default();
+        search.handle({
+            let sender = sender.clone();
+            move |_, event| {
+                match event {
+                    fltk::enums::Event::KeyUp => {
+                        sender.send(Msg::UpdateSearch); // We want search to update on every change
+                    }
+                    _ => {}
+                }
+                false // we haven't handled the event
+            }
+        });
+
         flex_row.end();
+        flex_row.set_size(&search, 200);
         flex.set_size(&flex_row, 26);
 
         let mut table = table_widget::FilteredTable::new();
@@ -201,7 +219,13 @@ impl App {
         let mut this = Self {
             app,
             receiver,
-            widgets: Widgets { menu, header_selector, input, table },
+            widgets: Widgets {
+                menu,
+                header_selector,
+                input,
+                search,
+                table,
+            },
             state,
         };
 
@@ -387,6 +411,9 @@ impl App {
                     fltk::dialog::alert_default(&format!("invalid input for cell, expected a {}", ty.describe()));
                 }
             }
+            Some(Msg::UpdateSearch) => {
+                self.update_table();
+            }
             Some(Msg::ShowWarnings) => {
                 warn_diag::WarningDialog::new(self.state.warnings.iter());
             }
@@ -408,7 +435,19 @@ impl App {
         self.update_undo_redo_menu();
 
         // notify table widget about current data
-        self.widgets.table.update_data_alternative(&self.state);
+        if let Some(header) = self.state.active_entry_type.as_ref() {
+            let schema = misc::schema_for_header(header, self.state.tbl_version.schemas());
+            let attributes = schema.keys().cloned().collect();
+            let search_string = self.widgets.search.value();
+            let filters = [filter::RowFilter::Contains {
+                attribute: None,
+                substring: search_string.into(),
+            }];
+            let all_tbl_rows = self.state.tbl_history.all_current_rows();
+            self.widgets.table.update_data(header.clone(), schema, &attributes, &filters, all_tbl_rows)
+        } else {
+            self.widgets.table.clear();
+        }
     }
 
     fn update_after_file_reload(&mut self) {
