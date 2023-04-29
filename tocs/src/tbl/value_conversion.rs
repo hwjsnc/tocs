@@ -109,7 +109,7 @@ impl rusqlite::ToSql for AtomicValue {
                 let y = str::parse::<f64>(&s).expect("f32 string should parse as f64");
                 Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Real(y)))
             }
-            AtomicValue::CUtf8(s) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::ValueRef::Text(s.as_ref()))),
+            AtomicValue::CUtf8(s) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::ValueRef::Text(s.as_bytes()))),
             AtomicValue::X(data) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::ValueRef::Blob(&data))),
         }
     }

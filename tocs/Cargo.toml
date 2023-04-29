@@ -32,7 +32,7 @@ num-integer = "0.1.45"
 sha2 = { version = "0.10.6", optional = true }
 simple_logger = { version = "4", default-features = false, features = ["stderr"], optional = true }
 smallvec = { version = "1.10.0", features = ["write"] }
-smol_str = { version = "0.1.23", default-features = false }
+smol_str = { version = "0.2", default-features = false }
 rusqlite = { version = "0.28", optional = true }
 zstd = { version = "0.11.2", optional = true }
 proptest = { version = "1", optional = true } # should be a dev dependency, but cargo doesn't like that
