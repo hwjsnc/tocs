@@ -294,23 +294,11 @@ impl App {
                 self.update_after_file_reload();
             }
             Some(Msg::SaveFile) => {
-                // try saving data to file
-                let version = self.state.tbl_version;
-                let headers = self.state.tbl_history.headers().iter().cloned();
-                let rows = self.state.tbl_history.all_current_rows().cloned();
-                let tbl = tocs::tbl::Tbl::new(version, headers, rows);
-                let result = tocs::tbl::write_file(&self.state.path, &tbl);
-                match result {
-                    Ok(_) => {
-                        // TODO: clear changed cell flags
-                    }
-                    Err(e) => {
-                        fltk::dialog::alert_default(&format!("error saving file: {:?}", e));
-                    }
-                }
+                self.save_tbl_to_file(None);
             }
             Some(Msg::SelectAndSaveFile) => {
-                todo!("re-implement this but deduplicate with Msg::SaveFile")
+                let Some(path) = misc::save_file_dialog("tbl", &format!("{}", self.state.path.display())) else { return };
+                self.save_tbl_to_file(Some(path));
             }
             Some(Msg::ExportCSV) => {
                 let AppData {
@@ -511,6 +499,26 @@ impl App {
         } else {
             redo_item.set_label("Redo\t");
             redo_item.deactivate();
+        }
+    }
+
+    fn save_tbl_to_file(&mut self, path: Option<std::path::PathBuf>) {
+        // try saving data to file
+        let version = self.state.tbl_version;
+        let headers = self.state.tbl_history.headers().iter().cloned();
+        let rows = self.state.tbl_history.all_current_rows().cloned();
+        let tbl = tocs::tbl::Tbl::new(version, headers, rows);
+        let new_path = path.as_ref().unwrap_or(&self.state.path);
+        let result = tocs::tbl::write_file(new_path, &tbl);
+        match result {
+            Ok(_) => {
+                if let Some(new_path) = path {
+                    self.state.path = new_path;
+                }
+            }
+            Err(e) => {
+                fltk::dialog::alert_default(&format!("error saving to {}: {:?}", new_path.display(), e));
+            }
         }
     }
 }
