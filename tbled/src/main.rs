@@ -150,15 +150,9 @@ impl App {
             Msg::ImportCSV,
         );
 
-        menu.add_emit("&Edit/Undo\t", fltk::enums::Shortcut::Ctrl | 'z', fltk::menu::MenuFlag::Inactive, sender.clone(), Msg::Undo);
+        menu.add_emit("&Edit/Undo\t", fltk::enums::Shortcut::Ctrl | 'u', fltk::menu::MenuFlag::Inactive, sender.clone(), Msg::Undo);
 
-        menu.add_emit(
-            "&Edit/Redo\t",
-            fltk::enums::Shortcut::Ctrl | fltk::enums::Shortcut::Shift | 'z',
-            fltk::menu::MenuFlag::Inactive,
-            sender.clone(),
-            Msg::Redo,
-        );
+        menu.add_emit("&Edit/Redo\t", fltk::enums::Shortcut::Ctrl | 'r', fltk::menu::MenuFlag::Inactive, sender.clone(), Msg::Redo);
 
         menu.add_emit(
             "&Edit/Duplicate currently selected row\t",
