@@ -1,6 +1,7 @@
 image: archlinux
 packages:
-  - mingw-w64
+  - mingw-w64-headers
+  - mingw-w64-gcc
   - rustup
 sources:
   - https://git.sr.ht/~quf/tocs
