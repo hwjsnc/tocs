@@ -56,6 +56,7 @@ pub struct AppData {
     tbl_version: tocs::tbl::Version<'static>,
     path: std::path::PathBuf,
     active_entry_type: Option<tocs::tbl::Header>,
+    selected_attributes: std::collections::HashMap<tocs::tbl::Header, indexmap::IndexSet<tocs::tbl::Attribute>>, // which attributes should be shown in which order for a given header?
     warnings: std::vec::Vec<tocs::tbl::DeserializeError>,
     //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
 }
@@ -256,11 +257,13 @@ impl App {
                 let AppData {
                     tbl_history,
                     active_entry_type: _, // handled by update_after_file_reload
+                    selected_attributes,
                     tbl_version,
                     path,
                     warnings,
                 } = &mut self.state;
                 tbl_history.clear_all();
+                selected_attributes.clear();
                 *tbl_version = *version;
                 warnings.clear();
                 // try loading data from file
@@ -310,6 +313,7 @@ impl App {
                 if let Some(hdr) = active_entry_type.as_ref() {
                     let Some(path) = misc::save_file_dialog("csv", &format!("{}.csv", hdr)) else { return };
                     let entries: std::vec::Vec<_> = tbl_history.rows_for_header(hdr).map(|entry| &entry.values).cloned().collect();
+                    // note: we're intentionally ignoring the choice and order of headers used for the table
                     match misc::export_csv(&path, misc::schema_for_header(hdr, tbl_version.schemas()), &entries) {
                         Ok(_) => {}
                         Err(e) => {
@@ -431,7 +435,11 @@ impl App {
         // notify table widget about current data
         if let Some(header) = self.state.active_entry_type.as_ref() {
             let schema = misc::schema_for_header(header, self.state.tbl_version.schemas());
-            let attributes = schema.keys().cloned().collect();
+            let attributes = self
+                .state
+                .selected_attributes
+                .get(header)
+                .expect("attributes for every header should always be set in update_after_file_reload");
             let search_string = self.widgets.search.value();
             let filters = [filter::RowFilter::Contains {
                 attribute: None,
@@ -447,7 +455,8 @@ impl App {
     fn update_after_file_reload(&mut self) {
         let AppData {
             active_entry_type,
-            tbl_version: _,
+            selected_attributes,
+            tbl_version,
             path: _,
             tbl_history,
             warnings,
@@ -470,6 +479,13 @@ impl App {
             if i == 0 || Some(hdr) == previously_active_entry_type.as_ref() {
                 self.widgets.header_selector.set_value_index(i.try_into().unwrap());
             }
+        }
+
+        // by default, display every attribute
+        selected_attributes.clear();
+        for hdr in tbl_history.headers().iter() {
+            let schema = misc::schema_for_header(hdr, tbl_version.schemas());
+            selected_attributes.insert(hdr.clone(), schema.keys().cloned().collect());
         }
 
         self.update_table();
@@ -536,6 +552,7 @@ fn main() {
                 tocs::tbl::ReadTblResult::Ok(tbl) => AppData {
                     tbl_history: TblStateHistory::new(tbl),
                     active_entry_type: None,
+                    selected_attributes: version.schemas().iter().map(|(hdr, schema)| (hdr.clone(), schema.keys().cloned().collect())).collect(),
                     tbl_version: version,
                     path,
                     warnings: vec![],
@@ -544,6 +561,7 @@ fn main() {
                     AppData {
                         tbl_history: TblStateHistory::new(tbl),
                         active_entry_type: None,
+                        selected_attributes: version.schemas().iter().map(|(hdr, schema)| (hdr.clone(), schema.keys().cloned().collect())).collect(),
                         tbl_version: version,
                         path,
                         warnings,
@@ -563,6 +581,7 @@ fn main() {
         (None, None) => AppData {
             tbl_history: TblStateHistory::default(),
             active_entry_type: None,
+            selected_attributes: [].into_iter().collect(),
             tbl_version: tocs::tbl::Version::CS1En,
             path: std::path::PathBuf::new(),
             warnings: vec![],
