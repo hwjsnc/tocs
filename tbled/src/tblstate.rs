@@ -58,7 +58,7 @@ pub enum Change {
         /// Index of the row in the full table (not partitioned by header)
         row: usize,
         column: usize,
-        value: Value, // TODO: string?
+        value: Value,
     },
     ImportTable {
         header: Header,

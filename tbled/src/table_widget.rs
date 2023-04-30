@@ -84,7 +84,6 @@ impl FilteredTable {
 
                         fltk::draw::set_draw_color(fltk::enums::Color::Gray0);
                         let (font, text_alignment) = match attribute_types[col_idx] {
-                            // TODO: also set font
                             tocs::tbl::AtomicType::I8
                             | tocs::tbl::AtomicType::I16
                             | tocs::tbl::AtomicType::I32

@@ -578,17 +578,14 @@ fn main() {
                     path,
                     warnings: vec![],
                 },
-                tocs::tbl::ReadTblResult::Warn { tbl, warnings } => {
-                    AppData {
-                        tbl_history: TblStateHistory::new(tbl),
-                        active_entry_type: None,
-                        selected_attributes: version.schemas().iter().map(|(hdr, schema)| (hdr.clone(), schema.keys().cloned().collect())).collect(),
-                        tbl_version: version,
-                        path,
-                        warnings,
-                    }
-                    // TODO: if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
-                }
+                tocs::tbl::ReadTblResult::Warn { tbl, warnings } => AppData {
+                    tbl_history: TblStateHistory::new(tbl),
+                    active_entry_type: None,
+                    selected_attributes: version.schemas().iter().map(|(hdr, schema)| (hdr.clone(), schema.keys().cloned().collect())).collect(),
+                    tbl_version: version,
+                    path,
+                    warnings,
+                },
                 tocs::tbl::ReadTblResult::Err(e) => {
                     log::error!("Unable to read file: {e}");
                     return;
