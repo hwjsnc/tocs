@@ -145,23 +145,103 @@ pub fn select_cols(all: indexmap::IndexSet<Attribute>, visible: &indexmap::Index
             }
             Msg::Hide => {
                 // move selected columns from visible to hidden
+                let mut selected = vec![];
                 for i in (1..=browser_visible.size()).rev() {
                     if browser_visible.selected(i) {
                         let text = browser_visible.text(i).expect("selected should have text");
-                        browser_hidden.add(&text);
+                        selected.push(text);
                         browser_visible.remove(i);
                     }
+                }
+                // push in reverse order to restore the original order
+                for text in selected.iter().rev() {
+                    browser_hidden.add(text);
+                    browser_hidden.select(browser_hidden.size());
                 }
             }
             Msg::Unhide => {
                 // move selected columns from hidden to visible
+                let mut selected = vec![];
                 for i in (1..=browser_hidden.size()).rev() {
                     if browser_hidden.selected(i) {
                         let text = browser_hidden.text(i).expect("selected should have text");
-                        browser_visible.add(&text);
+                        selected.push(text);
                         browser_hidden.remove(i);
                     }
                 }
+                // push in reverse order to restore the original order
+                for text in selected.iter().rev() {
+                    browser_visible.add(text);
+                    browser_visible.select(browser_hidden.size());
+                }
+            }
+            Msg::HideAll => {
+                // move all columns from visible to hidden
+                for i in 1..=browser_visible.size() {
+                    let text = browser_visible.text(i).expect("selected should have text");
+                    browser_hidden.add(&text);
+                }
+                browser_visible.clear();
+            }
+            Msg::UnhideAll => {
+                // move all columns from hidden to visible
+                for i in 1..=browser_hidden.size() {
+                    let text = browser_hidden.text(i).expect("selected should have text");
+                    browser_visible.add(&text);
+                }
+                browser_hidden.clear();
+            }
+            Msg::MoveUp => {
+                // move selected visible columns one up
+                // we start from 2 because we can't move the topmost one up
+                for i in 2..=browser_visible.size() {
+                    if browser_visible.selected(i) {
+                        browser_visible.swap(i, i - 1);
+                    }
+                }
+            }
+            Msg::MoveDown => {
+                // move selected visible columns one down
+                // we stop before size because we can't move the bottommost one down
+                for i in (1..browser_visible.size()).rev() {
+                    if browser_visible.selected(i) {
+                        browser_visible.swap(i, i + 1);
+                    }
+                }
+            }
+            Msg::MoveToTop => {
+                // move selected visible columns to top
+                let mut selected = vec![];
+                for i in (1..=browser_visible.size()).rev() {
+                    if browser_visible.selected(i) {
+                        selected.push(browser_visible.text(i).expect("selected should have text"));
+                        browser_visible.remove(i);
+                    }
+                }
+                for t in selected.iter() {
+                    browser_visible.insert(1, t);
+                }
+                for i in 1..=selected.len() {
+                    browser_visible.select(i.try_into().unwrap());
+                }
+                browser_visible.top_line(1);
+            }
+            Msg::MoveToBottom => {
+                // move selected visible columns to bottom
+                let mut selected = vec![];
+                for i in (1..=browser_visible.size()).rev() {
+                    if browser_visible.selected(i) {
+                        selected.push(browser_visible.text(i).expect("selected should have text"));
+                        browser_visible.remove(i);
+                    }
+                }
+                for t in selected.iter().rev() {
+                    browser_visible.add(t);
+                }
+                for i in 0..selected.len() {
+                    browser_visible.select(browser_visible.size() - (i as i32));
+                }
+                browser_visible.bottom_line(browser_visible.size());
             }
             Msg::ShowAll => {
                 // show all columns in schema order
@@ -169,8 +249,17 @@ pub fn select_cols(all: indexmap::IndexSet<Attribute>, visible: &indexmap::Index
                 browser_visible.clear();
                 all.iter().for_each(|attr| browser_visible.add(attr.as_str()));
             }
-            _ => todo!(""),
         }
+        // make sure we never lose or duplicate columns
+        let mut v = indexmap::IndexSet::with_capacity(all.len());
+        for i in 1..=browser_hidden.size() {
+            v.insert(Attribute::from(browser_hidden.text(i).expect("i < size")));
+        }
+        for i in 1..=browser_visible.size() {
+            v.insert(Attribute::from(browser_visible.text(i).expect("i < size")));
+        }
+        assert_eq!(all.len(), (browser_hidden.size() + browser_visible.size()).try_into().unwrap());
+        assert_eq!(v, all);
     }
 
     None

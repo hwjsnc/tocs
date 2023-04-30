@@ -72,8 +72,8 @@ Releases (downloads & changelogs)
 - Added option to adjust cell size
 - Modified tbl state tracking with a new wrapper widget
   - improved display performance
-  - Row filters (search)
-  - Column filters/reordering - TODO
+  - added row filters (search)
+  - allows hiding and reordering columns
 - Better looking table, monospaced font for numeric and hex data
 
 ### [v0.4](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.4/tbled-v0.4.exe)
