@@ -428,14 +428,12 @@ impl App {
             Some(Msg::SelectAttributes) => {
                 // TODO: disable menu when no header is selected
                 let Some(hdr) = self.state.active_entry_type.as_ref() else { return };
-                let visible = self.state.selected_attributes.get_mut(hdr).expect("visible ");
-                let hidden = misc::schema_for_header(hdr, self.state.tbl_version.schemas())
-                    .keys()
-                    .filter(|attr| !visible.contains(*attr))
-                    .cloned()
-                    .collect();
-                if let Some(new_visible) = select_cols::select_cols(visible, &hidden) {
+                let schema = misc::schema_for_header(hdr, self.state.tbl_version.schemas());
+                let visible = self.state.selected_attributes.get_mut(hdr).expect("selected attributes should be in schema");
+                if let Some(new_visible) = select_cols::select_cols(schema.keys().cloned().collect(), visible) {
                     *visible = new_visible;
+                    self.update_table();
+                    self.widgets.table.auto_size_cells();
                 }
             }
             None => {}

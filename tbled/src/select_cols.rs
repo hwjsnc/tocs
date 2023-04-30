@@ -17,11 +17,12 @@ enum Msg {
     MoveDown,
     MoveToTop,
     MoveToBottom,
+    ShowAll,
     Discard,
     Apply,
 }
 
-pub fn select_cols(visible: &indexmap::IndexSet<Attribute>, hidden: &indexmap::IndexSet<Attribute>) -> Option<indexmap::IndexSet<Attribute>> {
+pub fn select_cols(all: indexmap::IndexSet<Attribute>, visible: &indexmap::IndexSet<Attribute>) -> Option<indexmap::IndexSet<Attribute>> {
     let mut win = fltk::window::Window::default().with_size(640, 360).with_label("select visible attributes/columns");
 
     let (sender, receiver) = fltk::app::channel();
@@ -46,7 +47,7 @@ pub fn select_cols(visible: &indexmap::IndexSet<Attribute>, hidden: &indexmap::I
                 let label = fltk::frame::Frame::default().with_label("hidden columns");
                 flex_col.set_size(&label, 20);
                 browser_hidden = fltk::browser::MultiBrowser::default();
-                hidden.iter().for_each(|attr| browser_hidden.add(attr.as_str()));
+                all.difference(visible).for_each(|attr| browser_hidden.add(attr.as_str()));
                 flex_col.end();
             }
 
@@ -79,6 +80,9 @@ pub fn select_cols(visible: &indexmap::IndexSet<Attribute>, hidden: &indexmap::I
                 flex_col.set_size(&btn_top, 25);
                 let mut btn_bottom = fltk::button::Button::default().with_size(25, 25).with_label("@2DnArrow");
                 btn_bottom.emit(sender.clone(), Msg::MoveToBottom);
+                flex_col.set_size(&btn_bottom, 25);
+                let mut btn_show_all = fltk::button::Button::default().with_size(25, 25).with_label("@$reload");
+                btn_show_all.emit(sender.clone(), Msg::ShowAll);
                 flex_col.set_size(&btn_bottom, 25);
                 let _space = fltk::widget::Widget::default();
                 flex_col.end();
@@ -138,6 +142,32 @@ pub fn select_cols(visible: &indexmap::IndexSet<Attribute>, hidden: &indexmap::I
                     visible.insert(Attribute::from(browser_visible.text(i).expect("1 <= i <= size")));
                 }
                 return Some(visible);
+            }
+            Msg::Hide => {
+                // move selected columns from visible to hidden
+                for i in (1..=browser_visible.size()).rev() {
+                    if browser_visible.selected(i) {
+                        let text = browser_visible.text(i).expect("selected should have text");
+                        browser_hidden.add(&text);
+                        browser_visible.remove(i);
+                    }
+                }
+            }
+            Msg::Unhide => {
+                // move selected columns from hidden to visible
+                for i in (1..=browser_hidden.size()).rev() {
+                    if browser_hidden.selected(i) {
+                        let text = browser_hidden.text(i).expect("selected should have text");
+                        browser_visible.add(&text);
+                        browser_hidden.remove(i);
+                    }
+                }
+            }
+            Msg::ShowAll => {
+                // show all columns in schema order
+                browser_hidden.clear();
+                browser_visible.clear();
+                all.iter().for_each(|attr| browser_visible.add(attr.as_str()));
             }
             _ => todo!(""),
         }
