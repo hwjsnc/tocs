@@ -441,10 +441,7 @@ impl App {
                 .get(header)
                 .expect("attributes for every header should always be set in update_after_file_reload");
             let search_string = self.widgets.search.value();
-            let filters = [filter::RowFilter::Contains {
-                attribute: None,
-                substring: search_string.into(),
-            }];
+            let filters = [filter::RowFilter::case_insensitive_contains(None, search_string.into())];
             let all_tbl_rows = self.state.tbl_history.all_current_rows();
             self.widgets.table.update_data(header.clone(), schema, &attributes, &filters, all_tbl_rows)
         } else {
