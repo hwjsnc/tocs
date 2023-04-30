@@ -182,7 +182,7 @@ impl App {
         );
 
         menu.add_emit(
-            "&View/Select and reorder visible attributes/columns\t",
+            "&View/Select and reorder visible columns\t",
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
