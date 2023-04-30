@@ -2,6 +2,7 @@
 
 mod filter;
 mod misc;
+mod select_cols;
 mod table_widget;
 mod tblstate;
 mod warn_diag;
@@ -38,6 +39,7 @@ enum Msg {
     DuplicateEntry,                                 // user wants to duplicate the current row
     DeleteEntry,                                    // user wants to delete the current row
     AutoSizeTable,                                  // user wants to automatically size cells to fit content
+    SelectAttributes,                               // User wants to select/reorder attributes/columns
     TableEvent,                                     // an arbitrary event on the table
     DoneEditing,                                    // user is done editing, now the value should be updated
     UpdateSearch,                                   // user changed the quick search/filter
@@ -177,6 +179,14 @@ impl App {
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
             Msg::AutoSizeTable,
+        );
+
+        menu.add_emit(
+            "&View/Select and reorder visible attributes/columns\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::SelectAttributes,
         );
 
         let mut header_selector = fltk::misc::InputChoice::default();
@@ -414,6 +424,19 @@ impl App {
             }
             Some(Msg::AutoSizeTable) => {
                 self.widgets.table.auto_size_cells();
+            }
+            Some(Msg::SelectAttributes) => {
+                // TODO: disable menu when no header is selected
+                let Some(hdr) = self.state.active_entry_type.as_ref() else { return };
+                let visible = self.state.selected_attributes.get_mut(hdr).expect("visible ");
+                let hidden = misc::schema_for_header(hdr, self.state.tbl_version.schemas())
+                    .keys()
+                    .filter(|attr| !visible.contains(*attr))
+                    .cloned()
+                    .collect();
+                if let Some(new_visible) = select_cols::select_cols(visible, &hidden) {
+                    *visible = new_visible;
+                }
             }
             None => {}
         }
