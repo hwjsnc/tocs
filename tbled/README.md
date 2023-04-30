@@ -68,6 +68,7 @@ Releases (downloads & changelogs)
 
 ### v0.5 (in development)
 
+- Added tooltips to UI elements whose function isn't immediately obvious
 - Changed undo/redo shortcuts to Ctrl+u and Ctrl+r, respectively (due to technical limitations)
 - Added option to adjust cell size
 - Modified tbl state tracking with a new wrapper widget

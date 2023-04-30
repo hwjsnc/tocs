@@ -192,6 +192,7 @@ impl App {
         let mut header_selector = fltk::misc::InputChoice::default();
         header_selector.emit(sender.clone(), Msg::DifferentHeaderSelected);
         header_selector.input().set_readonly(true);
+        header_selector.set_tooltip("Select header (entry type).");
         flex_row.set_size(&header_selector, 200);
 
         flex_row.end();
@@ -202,6 +203,7 @@ impl App {
         let mut input = fltk::input::Input::default();
         input.set_trigger(fltk::enums::CallbackTrigger::EnterKeyAlways);
         input.emit(sender.clone(), Msg::DoneEditing);
+        input.set_tooltip("Input field: Press enter to update the selected table cell.");
 
         let mut search = fltk::input::Input::default();
         search.handle({
@@ -216,6 +218,7 @@ impl App {
                 false // we haven't handled the event
             }
         });
+        search.set_tooltip("Search filter: Rows which do not contain the search string in any (hidden or visible) cell will be hidden. Search is case-insensitive.");
 
         flex_row.end();
         flex_row.set_size(&search, 200);

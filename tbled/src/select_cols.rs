@@ -47,6 +47,7 @@ pub fn select_cols(all: indexmap::IndexSet<Attribute>, visible: &indexmap::Index
                 let label = fltk::frame::Frame::default().with_label("hidden columns");
                 flex_col.set_size(&label, 20);
                 browser_hidden = fltk::browser::MultiBrowser::default();
+                browser_hidden.set_tooltip("Attributes in this list will be hidden.");
                 all.difference(visible).for_each(|attr| browser_hidden.add(attr.as_str()));
                 flex_col.end();
             }
@@ -59,30 +60,39 @@ pub fn select_cols(all: indexmap::IndexSet<Attribute>, visible: &indexmap::Index
                 let _space = fltk::widget::Widget::default();
                 let mut btn_right = fltk::button::Button::default().with_size(25, 25).with_label("@>");
                 btn_right.emit(sender.clone(), Msg::Unhide);
+                btn_right.set_tooltip("Show selected hidden columns.");
                 flex_col.set_size(&btn_right, 25);
                 let mut btn_left = fltk::button::Button::default().with_size(25, 25).with_label("@<");
                 btn_left.emit(sender.clone(), Msg::Hide);
+                btn_left.set_tooltip("Hide selected visible columns.");
                 flex_col.set_size(&btn_left, 25);
                 let mut btn_all_right = fltk::button::Button::default().with_size(25, 25).with_label("@>>");
                 btn_all_right.emit(sender.clone(), Msg::UnhideAll);
+                btn_all_right.set_tooltip("Show all columns.");
                 flex_col.set_size(&btn_all_right, 25);
                 let mut btn_all_left = fltk::button::Button::default().with_size(25, 25).with_label("@<<");
                 btn_all_left.emit(sender.clone(), Msg::HideAll);
+                btn_all_left.set_tooltip("Hide all columns.");
                 flex_col.set_size(&btn_all_left, 25);
                 let mut btn_up = fltk::button::Button::default().with_size(25, 25).with_label("@8>");
                 btn_up.emit(sender.clone(), Msg::MoveUp);
+                btn_up.set_tooltip("Move selected visible columns one position up.");
                 flex_col.set_size(&btn_up, 25);
                 let mut btn_down = fltk::button::Button::default().with_size(25, 25).with_label("@2>");
                 btn_down.emit(sender.clone(), Msg::MoveDown);
+                btn_down.set_tooltip("Move selected visible columns one position down.");
                 flex_col.set_size(&btn_down, 25);
                 let mut btn_top = fltk::button::Button::default().with_size(25, 25).with_label("@8UpArrow");
                 btn_top.emit(sender.clone(), Msg::MoveToTop);
+                btn_top.set_tooltip("Move selected visible columns to the top.");
                 flex_col.set_size(&btn_top, 25);
                 let mut btn_bottom = fltk::button::Button::default().with_size(25, 25).with_label("@2DnArrow");
                 btn_bottom.emit(sender.clone(), Msg::MoveToBottom);
+                btn_bottom.set_tooltip("Move selected visible columns to the bottom.");
                 flex_col.set_size(&btn_bottom, 25);
                 let mut btn_show_all = fltk::button::Button::default().with_size(25, 25).with_label("@$reload");
                 btn_show_all.emit(sender.clone(), Msg::ShowAll);
+                btn_show_all.set_tooltip("Show all columns in the order as they appear in the .tbl file.");
                 flex_col.set_size(&btn_bottom, 25);
                 let _space = fltk::widget::Widget::default();
                 flex_col.end();
@@ -96,6 +106,7 @@ pub fn select_cols(all: indexmap::IndexSet<Attribute>, visible: &indexmap::Index
                 let label = fltk::frame::Frame::default().with_label("visible columns");
                 flex_col.set_size(&label, 20);
                 browser_visible = fltk::browser::MultiBrowser::default();
+                browser_hidden.set_tooltip("Attributes in this list will be visible. Their order from top to bottom determines the column order from left to right.");
                 visible.iter().for_each(|attr| browser_visible.add(attr.as_str()));
                 flex_col.end();
             }
@@ -109,10 +120,12 @@ pub fn select_cols(all: indexmap::IndexSet<Attribute>, visible: &indexmap::Index
             flex_row.set_type(fltk::group::FlexType::Row);
             let mut cancel = fltk::button::Button::default().with_label("Discard changes");
             cancel.emit(sender.clone(), Msg::Discard);
+            cancel.set_tooltip("Do not change column visibility or order and close this window.");
             flex_row.set_size(&cancel, 140);
             let _space = fltk::widget::Widget::default();
             let mut ok = fltk::button::Button::default().with_label("Apply changes");
             ok.emit(sender.clone(), Msg::Apply);
+            ok.set_tooltip("Apply changes to the column visibility and order and close this window.");
             flex_row.set_size(&ok, 140);
             let _space = fltk::widget::Widget::default();
             flex_row.end();
