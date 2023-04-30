@@ -209,11 +209,8 @@ impl App {
         search.handle({
             let sender = sender.clone();
             move |_, event| {
-                match event {
-                    fltk::enums::Event::KeyUp => {
-                        sender.send(Msg::UpdateSearch); // We want search to update on every change
-                    }
-                    _ => {}
+                if event == fltk::enums::Event::KeyUp {
+                    sender.send(Msg::UpdateSearch); // We want search to update on every change
                 }
                 false // we haven't handled the event
             }
@@ -467,7 +464,7 @@ impl App {
             let search_string = self.widgets.search.value();
             let filters = [filter::RowFilter::case_insensitive_contains(None, search_string.into())];
             let all_tbl_rows = self.state.tbl_history.all_current_rows();
-            self.widgets.table.update_data(header.clone(), schema, &attributes, &filters, all_tbl_rows)
+            self.widgets.table.update_data(header.clone(), schema, attributes, &filters, all_tbl_rows)
         } else {
             self.widgets.table.clear();
         }
