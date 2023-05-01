@@ -173,15 +173,7 @@ impl FilteredTable {
         }
 
         // Now we create the new Grid and swap it in for the empty placeholder Grid
-        let no_rows = row_major_vector_of_cells.is_empty();
-        let mut new_cells = grid::Grid::from_vec(
-            row_major_vector_of_cells,
-            if no_rows {
-                0 // workaround because the grid crate panics if there are columns but no rows. FFS.
-            } else {
-                attributes.len()
-            },
-        );
+        let mut new_cells = grid::Grid::from_vec(row_major_vector_of_cells, attributes.len());
         std::mem::swap(cells, &mut new_cells);
 
         // We need to drop the guard before redrawing the table to allow draw_cell access to the data
