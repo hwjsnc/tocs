@@ -3,7 +3,9 @@ tbled
 
 `tbled` is an editor for `.tbl` files for the Trails of Cold Steel games.
 
-I try very hard to make sure `tbled` doesn't silently corrupt data but I obviously can make mistakes, so I recommend to BACK UP ALL DATA FREQUENTLY.
+`tbled` is a complex program.
+To ensure you don't lose any data due to possible bugs, I recommend to BACK UP ALL DATA FREQUENTLY.
+If you notice any issues with data integrity, please do report them.
 
 `tbled` currently supports the following versions of the games:
 
@@ -66,8 +68,9 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
-### v0.5 (in development)
+### [v0.5](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.5/tbled-v0.5.exe)
 
+- Reduced size of the release binary
 - Added tooltips to UI elements whose function isn't immediately obvious
 - Changed undo/redo shortcuts to Ctrl+u and Ctrl+r, respectively (due to technical limitations)
 - Added option to adjust cell size
@@ -109,3 +112,14 @@ Releases (downloads & changelogs)
 ### [v0.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.1/tbled.exe):
 
 - initial public version
+
+Planned features
+----------------
+
+- schemas for Trails into Reverie (NISA PC)
+  - planned for the 7th or 8th of July
+- make a solid manual test plan for the gui, preferably before ^
+- importing user-provided schemas at runtime
+- column search: show only rows that contain a specific value in a particular column ("type=192")
+  - Maybe also search with inequalities for numeric columns ("effects[1] id>100")
+  - More advanced search is probably not worth the effort
