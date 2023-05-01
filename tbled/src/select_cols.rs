@@ -106,7 +106,7 @@ pub fn select_cols(all: indexmap::IndexSet<Attribute>, visible: &indexmap::Index
                 let label = fltk::frame::Frame::default().with_label("visible columns");
                 flex_col.set_size(&label, 20);
                 browser_visible = fltk::browser::MultiBrowser::default();
-                browser_hidden.set_tooltip("Attributes in this list will be visible. Their order from top to bottom determines the column order from left to right.");
+                browser_visible.set_tooltip("Attributes in this list will be visible. Their order from top to bottom determines the column order from left to right.");
                 visible.iter().for_each(|attr| browser_visible.add(attr.as_str()));
                 flex_col.end();
             }
