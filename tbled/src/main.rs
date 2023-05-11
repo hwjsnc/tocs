@@ -215,7 +215,7 @@ impl App {
                 false // we haven't handled the event
             }
         });
-        search.set_tooltip("Search filter: Rows which do not contain the search string in any (hidden or visible) cell will be hidden. Search is case-insensitive.");
+        search.set_tooltip("Search filter: Rows which do not contain the search string in any (hidden or visible) cell will be hidden. Search is case-insensitive. Special characters :=>< cause different behaviour, see documentation for a full explanation.");
 
         flex_row.end();
         flex_row.set_size(&search, 200);
