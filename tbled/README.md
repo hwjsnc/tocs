@@ -54,6 +54,25 @@ You can also use the CSV import/export function for editing:
 When importing a CSV, under certain circumstances the order of .tbl entries may change relative to the entries that have a different header.
 It's unlikely that this would cause any problems, but I cannot fully exclude the possibility so just be aware of that.
 
+Search / row filters
+--------------------
+
+`tbled` supports some basic search/filter capabilities via the search bar (right of the edit bar).
+
+- If the content of the search bar contains a colon (`:`), the part before that is an attribute name and the part after is a search string.
+  Only rows for which the attribute (column) contains the search string will be shown.
+- If the content of the search bar contains an equal sign (`=`), the part before that is an attribute name and the part after is a search string.
+  Only rows for which the attribute exactly matches the search string will be shown.
+- In all other cases, only rows for which any attribute contains the search string will be shown.
+
+For example:
+
+- If you search `rean`, rows which contain the string `rean` anywhere will be shown. String search is case insensitive.
+- If you search `type=897` (without space!), rows for which `type` equals `897` will be shown. Comparison is case sensitive.
+- If you search `script:mon` (without space!), rows for which `script` contains the string `mon` will be shown. String search is case insensitive.
+
+Combining searches is currently not possible and likely never will be.
+
 Warnings
 --------
 
@@ -67,6 +86,12 @@ If there are warnings when loading files that have previously been written with 
 
 Releases (downloads & changelogs)
 ---------------------------------
+
+### v0.6 (in development)
+
+- Improved search:
+  - show only rows for which a specific attribute equals a given value
+  - show only rows for which a specific attribute value contains a given substring
 
 ### [v0.5](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.5/tbled-v0.5.exe)
 
@@ -120,6 +145,6 @@ Planned features
   - planned for the 7th or 8th of July
 - make a solid manual test plan for the gui, preferably before ^
 - importing user-provided schemas at runtime
-- column search: show only rows that contain a specific value in a particular column ("type=192")
-  - Maybe also search with inequalities for numeric columns ("effects[1] id>100")
-  - More advanced search is probably not worth the effort
+- column search
+  - search with inequalities for numeric columns ("effects[1] id>100")
+  - more advanced search is probably not worth the effort
