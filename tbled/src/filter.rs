@@ -44,7 +44,7 @@ impl std::str::FromStr for Operator {
 }
 
 fn to_case_insensitive_search_regex(s: &str) -> regex::Regex {
-    regex::RegexBuilder::new(&regex::escape(&s)).case_insensitive(true).build().expect("escaped regex should be valid")
+    regex::RegexBuilder::new(&regex::escape(s)).case_insensitive(true).build().expect("escaped regex should be valid")
 }
 
 impl RowFilter {
