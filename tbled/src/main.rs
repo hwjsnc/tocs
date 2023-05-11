@@ -461,7 +461,7 @@ impl App {
                 .selected_attributes
                 .get(header)
                 .expect("attributes for every header should always be set in update_after_file_reload");
-            let filters = [self.widgets.search.value().parse().expect("parsing rowfilter should never fail")];
+            let filters = [filter::RowFilter::from_str(&self.widgets.search.value(), schema)];
             let all_tbl_rows = self.state.tbl_history.all_current_rows();
             self.widgets.table.update_data(header.clone(), schema, attributes, &filters, all_tbl_rows)
         } else {

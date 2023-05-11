@@ -63,15 +63,18 @@ Search / row filters
   Only rows for which the attribute (column) contains the search string will be shown.
 - If the content of the search bar contains an equal sign (`=`), the part before that is an attribute name and the part after is a search string.
   Only rows for which the attribute exactly matches the search string will be shown.
+- mutatis mutandis for `>` (only show values bigger than the search value) and `<` (only show values smaller than the search value).
 - In all other cases, only rows for which any attribute contains the search string will be shown.
 
 For example:
 
-- If you search `rean`, rows which contain the string `rean` anywhere will be shown. String search is case insensitive.
-- If you search `type=897` (without space!), rows for which `type` equals `897` will be shown. Comparison is case sensitive.
-- If you search `script:mon` (without space!), rows for which `script` contains the string `mon` will be shown. String search is case insensitive.
+- If you search `rean`, rows which contain the string `rean` anywhere will be shown. Search is case insensitive.
+- If you search `description:unite` (without space!), rows for which `description` contains the string `unite` will be shown. Search is case insensitive.
+- If you search `element=5` (without space!), rows for which `element` equals `5` will be shown. Text comparison is case sensitive.
+- If you search `effect[0] id>100` (without exactly one space!), rows for which the id of the first effect is bigger than `100` will be shown.
 
 Combining searches is currently not possible and likely never will be.
+If you need more complex searches, you can convert the data to a sqlite database using the `sqlite_conv` utility and query that database using SQL.
 
 Warnings
 --------
@@ -90,8 +93,8 @@ Releases (downloads & changelogs)
 ### v0.6 (in development)
 
 - Improved search:
-  - show only rows for which a specific attribute equals a given value
-  - show only rows for which a specific attribute value contains a given substring
+  - allow restricting substring search to a single attribute
+  - add comparison search (specific attribute value has to equal/exceed/subceed search value)
 
 ### [v0.5](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.5/tbled-v0.5.exe)
 
@@ -145,6 +148,3 @@ Planned features
   - planned for the 7th or 8th of July
 - make a solid manual test plan for the gui, preferably before ^
 - importing user-provided schemas at runtime
-- column search
-  - search with inequalities for numeric columns ("effects[1] id>100")
-  - more advanced search is probably not worth the effort
