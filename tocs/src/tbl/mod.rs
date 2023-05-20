@@ -1,6 +1,6 @@
-pub mod schema;
+mod schema;
 pub mod schemas;
-pub mod ser;
+mod ser;
 pub mod value_conversion;
 
 use indexmap::IndexMap;
@@ -17,8 +17,7 @@ pub use ser::{serialize_tbl_v1, serialize_tbl_v2, SerializeError};
 pub use value_conversion::try_atomic_value_from_str;
 
 // tests
-#[cfg(feature = "private-tests")]
-#[cfg(test)]
+#[cfg(all(test, feature = "private-tests"))]
 mod test;
 
 // Generic helpers
@@ -613,32 +612,6 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, 
     Ok((header_counts, entries))
 }
 
-pub fn load_file_v1<P: AsRef<std::path::Path>, const STRICT: bool, const LOG: bool>(
-    path: P,
-    log: &mut WarningLogger<DeserializeError>,
-    schemas: &AtomicSchemas,
-) -> Result<std::vec::Vec<Entry>, DeserializeError> {
-    let mut f = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| DeserializeError {
-        detail: DeserializeErrorDetail::Io(e),
-        position: None,
-        context: vec![DeserializeErrorPosition::Start],
-    })?);
-    deserialize_tbl_v1::<_, STRICT, LOG>(&mut f, log, schemas)
-}
-
-pub fn load_file_v2<P: AsRef<std::path::Path>, const STRICT: bool, const LOG: bool>(
-    path: P,
-    log: &mut WarningLogger<DeserializeError>,
-    schemas: &AtomicSchemas,
-) -> Result<(IndexMap<Header, u32>, std::vec::Vec<Entry>), DeserializeError> {
-    let mut f = std::fs::File::open(path).map_err(|e| DeserializeError {
-        detail: DeserializeErrorDetail::Io(e),
-        position: None,
-        context: vec![DeserializeErrorPosition::Start],
-    })?;
-    deserialize_tbl_v2::<_, STRICT, LOG>(&mut f, log, schemas)
-}
-
 // generic load/fix/store
 
 #[derive(Clone, Copy, Debug)]
@@ -734,7 +707,6 @@ impl Tbl {
 }
 
 // TODO: load/store Tbl from file/data, including fixes (for specific versions)
-// TODO: update downstream programs to use the new generic interface
 
 pub enum ReadTblResult {
     Ok(Tbl),

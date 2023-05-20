@@ -17,9 +17,7 @@ For that reason, we set an upper bound of 1000 edits on the undo stack.
 The above is not necessarily true if we also consider data imports, but worrying about a user importing a CSV 1000 times for the same file is a waste of time.
 */
 
-use tocs::tbl::schema::AtomicValue as Value;
-use tocs::tbl::schema::Attribute;
-use tocs::tbl::Header;
+use tocs::tbl::{AtomicValue as Value, Attribute, Header};
 
 use std::borrow::Borrow as _;
 
@@ -264,7 +262,7 @@ impl Default for TblStateHistory {
 #[cfg(test)]
 mod test {
     use super::{Change, TblStateHistory};
-    use tocs::tbl::schema::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Header};
+    use tocs::tbl::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Header};
 
     fn compare_entries(expected: &[tocs::tbl::Entry], actual: &[tocs::tbl::Entry]) {
         assert_eq!(actual.len(), expected.len());
