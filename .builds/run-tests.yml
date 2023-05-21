@@ -2,7 +2,6 @@ image: archlinux
 packages:
  - rust
  - sccache
- - gtk3
 sources:
  - https://git.sr.ht/~quf/tocs
 secrets:
