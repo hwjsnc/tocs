@@ -1,6 +1,8 @@
 image: archlinux
 packages:
  - rust
+ - xorg-server
+ - fltk
 sources:
  - https://git.sr.ht/~quf/tocs
 secrets:
