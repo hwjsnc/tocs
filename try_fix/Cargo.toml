@@ -2,6 +2,7 @@
 name = "try_fix"
 version = "0.1.0"
 edition = "2021"
+try_fix = false
 
 [dependencies]
 clap = { version = "4.0.26", features = ["derive"] }

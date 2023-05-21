@@ -3,6 +3,7 @@ name = "pkgtool"
 version = "1.0.0"
 edition = "2021"
 description = "pkgtool handles .pkg and .pka files from the Trails of Cold Steel games"
+publish = false
 
 [dependencies]
 anyhow = "1.0.66"
