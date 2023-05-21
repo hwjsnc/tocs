@@ -3,6 +3,8 @@ packages:
  - rust
  - xorg-server
  - fltk
+ - pango
+ - cairo
 sources:
  - https://git.sr.ht/~quf/tocs
 secrets:
