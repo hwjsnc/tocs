@@ -42,7 +42,7 @@ impl<'a> MaybeFixedCow<'a> {
 }
 
 pub fn fix_in_place(version: GameVersion, data: &mut std::vec::Vec<u8>) -> MaybeFixed {
-    match get_fix_for(version, &data) {
+    match get_fix_for(version, data) {
         Some(fix) => {
             fix(data);
             MaybeFixed::Fixed
@@ -73,7 +73,7 @@ fn replace_bytes(data: &mut [u8], replacements: &[(usize, u8, u8)]) {
     }
 }
 
-type FIXFUN = dyn Fn(&mut std::vec::Vec<u8>) + Sync;
+type FixFun = dyn Fn(&mut std::vec::Vec<u8>) + Sync;
 
 macro_rules! fix_fun {
     ($ver:expr, $hash:expr, $version_string:literal, $filename:literal, $fixfun:expr) => {
@@ -83,15 +83,15 @@ macro_rules! fix_fun {
             &(|data: &mut std::vec::Vec<u8>| {
                 log::debug!("detected {}, '{}'. Applying fixes", $version_string, $filename);
                 $fixfun(data)
-            }) as &'static FIXFUN,
+            }) as &'static FixFun,
         )
     };
 }
 
-fn get_fix_for(version: GameVersion, data: &[u8]) -> Option<&'static FIXFUN> {
-    let hash: [u8; 64] = blake2::Blake2b512::digest(&data).try_into().unwrap();
+fn get_fix_for(version: GameVersion, data: &[u8]) -> Option<&'static FixFun> {
+    let hash: [u8; 64] = blake2::Blake2b512::digest(data).try_into().unwrap();
 
-    static FIXES: &'static [(GameVersion, [u8; 64], &'static FIXFUN)] = &[
+    static FIXES: &[(GameVersion, [u8; 64], &FixFun)] = &[
         fix_fun!(
             GameVersion::CS1,
             *hex_literal!("e3a75ea6c0902da1f8da0d052305a4db98839a8a3c4403cf129144177a3910504a4c8b11ce8aa177db3a7554c58575e86a41655fb8414a90ce2c3083ecef88d5"),

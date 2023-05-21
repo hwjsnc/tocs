@@ -109,7 +109,7 @@ impl rusqlite::ToSql for AtomicValue {
                 Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Real(y)))
             }
             AtomicValue::CUtf8(s) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::ValueRef::Text(s.as_bytes()))),
-            AtomicValue::X(data) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::ValueRef::Blob(&data))),
+            AtomicValue::X(data) => Ok(rusqlite::types::ToSqlOutput::Borrowed(rusqlite::types::ValueRef::Blob(data))),
         }
     }
 }

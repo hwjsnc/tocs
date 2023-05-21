@@ -2,8 +2,6 @@ use clap::Parser;
 
 use anyhow::Context as _;
 
-use tocs::tbl::fixes;
-
 #[derive(Debug, Parser)]
 struct Args {
     /// Either a directory or file.
