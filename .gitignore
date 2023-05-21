@@ -1,5 +1,4 @@
-/*/target
-/tocs_internal/*/target
+/target
 /private-test-data
 /.builds/data.tar.xz
 *.tbl

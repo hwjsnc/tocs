@@ -4,12 +4,6 @@ version = "1.0.0"
 edition = "2021"
 description = "pkgtool handles .pkg and .pka files from the Trails of Cold Steel games"
 
-[profile.release]
-#strip = true
-#opt-level = "z"
-lto = true
-#codegen-units=1
-
 [dependencies]
 anyhow = "1.0.66"
 clap = { version = "4.0.26", features = ["derive"] }

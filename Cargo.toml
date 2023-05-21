@@ -1,0 +1,9 @@
+[workspace]
+
+members = ["misc", "pkgtool", "sqlite_conv", "tbled", "tocs", "try_fix", "try_parse"]
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
+#codegen-units=1
