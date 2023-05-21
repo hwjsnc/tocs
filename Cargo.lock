@@ -607,16 +607,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
 
 [[package]]
-name = "hex"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+name = "hexhex"
+version = "1.0.0"
+source = "git+https://git.sr.ht/~quf/hexhex#b8ef1448e96840cfa98558532ec2ca0c442500a7"
+dependencies = [
+ "hexhex_impl",
+ "hexhex_macros",
+]
 
 [[package]]
-name = "hex-literal"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
+name = "hexhex_impl"
+version = "0.1.0"
+source = "git+https://git.sr.ht/~quf/hexhex#b8ef1448e96840cfa98558532ec2ca0c442500a7"
+dependencies = [
+ "fallible-iterator",
+]
+
+[[package]]
+name = "hexhex_macros"
+version = "1.0.0"
+source = "git+https://git.sr.ht/~quf/hexhex#b8ef1448e96840cfa98558532ec2ca0c442500a7"
+dependencies = [
+ "hexhex_impl",
+]
 
 [[package]]
 name = "indexmap"
@@ -885,8 +898,7 @@ dependencies = [
  "clap",
  "csv",
  "fallible-iterator",
- "hex",
- "hex-literal",
+ "hexhex",
  "log",
  "misc",
  "rayon",
@@ -1233,7 +1245,7 @@ dependencies = [
  "csv",
  "fltk",
  "grid",
- "hex",
+ "hexhex",
  "indexmap",
  "lazy_static",
  "log",
@@ -1285,8 +1297,7 @@ dependencies = [
  "blake2",
  "fallible-iterator",
  "hashbrown 0.13.2",
- "hex",
- "hex-literal",
+ "hexhex",
  "indexmap",
  "itertools",
  "lazy_static",
@@ -1318,7 +1329,7 @@ name = "try_parse"
 version = "0.1.0"
 dependencies = [
  "clap",
- "hex",
+ "hexhex",
  "log",
  "simple_logger",
  "tocs",

@@ -383,7 +383,7 @@ mod test {
             header: Header::new("MasterQuartzDummy").unwrap(),
             row: 3,
             column: 0,
-            value: AtomicValue::X(hex::decode("00ab00cc").unwrap().into()),
+            value: AtomicValue::X(hexhex::decode("00ab00cc").unwrap().into()),
         });
         tbl_history.change(Change::UpdateCell {
             header: Header::new("MasterQuartzData").unwrap(),

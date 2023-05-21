@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 clap = { version = "4.0.26", features = ["derive"] }
-hex = "0.4.3"
+hexhex = { git = "https://git.sr.ht/~quf/hexhex", version = "1.0.0" }
 log = { version = "0.4.17" }
 simple_logger = { version = "4", default-features = false, features = [] }
 tocs = { path = "../tocs" }

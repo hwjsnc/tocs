@@ -1,6 +1,7 @@
 extern crate blake2;
-extern crate hex_literal;
 extern crate lazy_static;
+
+use hexhex::hex_literal;
 
 use blake2::Digest as _;
 
@@ -14,9 +15,9 @@ pub fn fix_in_place_if_necessary(data: &mut std::vec::Vec<u8>) -> Option<()> {
     type FixFun = fn(&mut std::vec::Vec<u8>) -> ();
     lazy_static::lazy_static! {
         static ref FIXFUN: std::collections::HashMap<[u8; 64], FixFun> = [
-                (hex_literal::hex!("711db0f9f27f55cfbd99b0b2b556b94d5fe428efe2e4fb34a0f217fd5a08b40d68b6c959870a95a16336f5e05312742fb39dbb0e4ca921e0c3652aacbff81f41"), fix_CS3_PC_1_05_data_text_dat_en_t_name_tbl as FixFun),
-                (hex_literal::hex!("6467d5835a0197ef06bf585cbc66d735aa808f6d1029c999c719cfc53ce3832dec92ce25845fb4f27c2ec5c0030020571e2e1a4b3977dba8fee4e413dd64f4fa"), fix_CS3_PC_1_05_data_text_dat_en_t_quest_tbl as FixFun),
-                (hex_literal::hex!("7db08a20e3e887e7ad94f5ee1023e7c0130ebaca23f4e9715f5517192b6ab57dfbb60826e12e9e22e4293f9d28c6150189d14ea946b19a640e969958c88b87d3"), fix_CS3_PC_1_05_data_text_dat_fr_t_quest_tbl as FixFun),
+                (*hex_literal!("711db0f9f27f55cfbd99b0b2b556b94d5fe428efe2e4fb34a0f217fd5a08b40d68b6c959870a95a16336f5e05312742fb39dbb0e4ca921e0c3652aacbff81f41"), fix_CS3_PC_1_05_data_text_dat_en_t_name_tbl as FixFun),
+                (*hex_literal!("6467d5835a0197ef06bf585cbc66d735aa808f6d1029c999c719cfc53ce3832dec92ce25845fb4f27c2ec5c0030020571e2e1a4b3977dba8fee4e413dd64f4fa"), fix_CS3_PC_1_05_data_text_dat_en_t_quest_tbl as FixFun),
+                (*hex_literal!("7db08a20e3e887e7ad94f5ee1023e7c0130ebaca23f4e9715f5517192b6ab57dfbb60826e12e9e22e4293f9d28c6150189d14ea946b19a640e969958c88b87d3"), fix_CS3_PC_1_05_data_text_dat_fr_t_quest_tbl as FixFun),
         ].into_iter().collect();
     }
     let hash = blake2::Blake2b512::digest(&data);

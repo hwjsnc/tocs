@@ -2,7 +2,6 @@
 
 use smol_str::SmolStr;
 
-use hex::FromHex as _;
 use std::io::Write as _;
 use std::str::FromStr as _;
 
@@ -41,7 +40,7 @@ pub fn try_atomic_value_from_str(t: &AtomicType, s: &str, strict: bool) -> Resul
         AtomicType::F32 => Ok(AtomicValue::F32(f32::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
         AtomicType::CUtf8 => Ok(AtomicValue::CUtf8(SmolStr::from(s))),
         AtomicType::X(n) => {
-            let data = std::vec::Vec::<u8>::from_hex(s).map_err(|_| AtomicValueFromStringError::Generic)?; // TODO: SmallVec<_> from hex
+            let data = hexhex::decode(s).map_err(|_| AtomicValueFromStringError::Generic)?; // TODO: SmallVec<_> from hex
             if strict && data.len() != *n {
                 Err(AtomicValueFromStringError::LengthMismatch { expected: *n, actual: data.len() })
             } else {
@@ -69,7 +68,7 @@ impl AtomicValue {
                 // should not allocate since buf.len() <= 22
             }
             AtomicValue::CUtf8(s) => s.clone(),
-            AtomicValue::X(x) => SmolStr::from(hex::encode(x)), // TODO: don't double-allocate!
+            AtomicValue::X(x) => SmolStr::from(hexhex::Hex::new(x).to_string()), // TODO: don't double-allocate!
         }
     }
 }
@@ -85,7 +84,7 @@ impl std::fmt::Display for AtomicValue {
             AtomicValue::U32(x) => write!(f, "{}", x),
             AtomicValue::F32(x) => write!(f, "{}", x),
             AtomicValue::CUtf8(x) => write!(f, "{}", x),
-            AtomicValue::X(x) => write!(f, "{}", hex::encode(x)), // TODO: shouldn't need to allocate here, but https://github.com/KokaKiwi/rust-hex/issues/8
+            AtomicValue::X(x) => write!(f, "{}", hexhex::Hex::new(x)),
         }
     }
 }

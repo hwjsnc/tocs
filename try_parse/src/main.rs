@@ -341,14 +341,14 @@ pub fn parse_pka(path: &std::path::Path) {
         log::debug!("pkg: {}", pkg.name.to_utf8_lossy());
         log::info!("pkg: {}", tocs::pka::PkgName::try_from(pkg.name).unwrap());
         for file in pkg.files {
-            log::debug!("file: name = {}, hash = '{}'", file.name.to_utf8_lossy(), hex::encode(file.hash));
-            log::info!("file: name = {}, hash = '{}'", tocs::pka::FileName::try_from(file.name).unwrap(), hex::encode(file.hash));
+            log::debug!("file: name = {}, hash = '{}'", file.name.to_utf8_lossy(), hexhex::Hex::new(file.hash));
+            log::info!("file: name = {}, hash = '{}'", tocs::pka::FileName::try_from(file.name).unwrap(), hexhex::Hex::new(file.hash));
         }
     }
     for hash in hashes {
         log::info!(
             "hash {}: offset = {} (0x{:x}), compressed size = {} (0x{}), decompressed size = {}, compression = {}",
-            hex::encode(hash.hash),
+            hexhex::Hex::new(hash.hash),
             hash.offset,
             hash.offset,
             hash.compressed_size,

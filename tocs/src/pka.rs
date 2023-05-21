@@ -82,7 +82,7 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgLi
             let filename = FileNameUnchecked::read(f)?;
             log::trace!("file name: {}", filename.to_utf8_lossy());
             let hash = read_bytes::<32, _>(f).map_err(PkgError::IO)?;
-            log::trace!("file hash: {}", hex::encode(hash));
+            log::trace!("file hash: {}", hexhex::Hex::new(hash));
             files.push(PkgFileListEntryUnchecked { name: filename, hash });
         }
         pkgs.push(PkgListEntryUnchecked { name: pkg_filename, files });
@@ -104,7 +104,7 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgLi
             "hash {} of {}: hash = {}, offset = {} (0x{:x}), compressed size = {} (0x{:x}), decompressed size = {}, compression = {}",
             i + 1,
             number_of_hashes,
-            hex::encode(hash),
+            hexhex::Hex::new(hash),
             offset,
             offset,
             compressed_size,
@@ -191,7 +191,7 @@ impl<E: std::fmt::Display> std::fmt::Display for PkaWriteError<E> {
         match self {
             PkaWriteError::IO(e) => write!(f, "IO error: {e}"),
             PkaWriteError::Metadata(s) => write!(f, "metadata error: {s}"),
-            PkaWriteError::Missing(hash) => write!(f, "hash {} is present in metadata, but there is no such blob", hex::encode(hash)),
+            PkaWriteError::Missing(hash) => write!(f, "hash {} is present in metadata, but there is no such blob", hexhex::Hex::new(hash)),
             PkaWriteError::Blob(e) => write!(f, "blob read error: {e}"),
             PkaWriteError::Compression(e) => write!(f, "decompression error: {e}"),
         }
@@ -265,7 +265,7 @@ pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<It
                 compression: blob.compression,
             };
             if file_data_list.insert(blob.hash, entry).is_some() {
-                return Err(PkaWriteError::Metadata(format!("Duplicate metadata for blob with hash {}", hex::encode(blob.hash))));
+                return Err(PkaWriteError::Metadata(format!("Duplicate metadata for blob with hash {}", hexhex::Hex::new(blob.hash))));
             }
             off = off
                 .checked_add(blob.compressed_size.into())
@@ -309,7 +309,7 @@ pub fn write_pka_from_compressed_data<E, X: Borrow<[u8]>, I: FallibleIterator<It
                 file.seek(std::io::SeekFrom::Start(*offset)).map_err(PkaWriteError::IO)?;
             }
         } else {
-            return Err(PkaWriteError::Metadata(format!("File metadata is missing blob with hash '{}'", hex::encode(hash))));
+            return Err(PkaWriteError::Metadata(format!("File metadata is missing blob with hash '{}'", hexhex::Hex::new(hash))));
         }
     }
 

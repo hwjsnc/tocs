@@ -524,7 +524,7 @@ fn pka_ls<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
                     blob.compression
                 );
             } else {
-                println!("  {}: no corresponding blob (hash = {})!", filename, hex::encode(file.hash));
+                println!("  {}: no corresponding blob (hash = {})!", filename, hexhex::Hex::new(file.hash));
             }
         }
     }
@@ -553,7 +553,7 @@ fn pka_stats<P: AsRef<std::path::Path>>(path: P, force: bool) -> anyhow::Result<
         let pkgname = tocs::pkg::PaddedAsciiName::try_from(pkg.name)?.to_string();
         for file in pkg.files.iter() {
             let filename = tocs::pkg::PaddedAsciiName::try_from(&file.name)?.to_string();
-            csv.write_record([&pkgname, &filename, &hex::encode(file.hash)])
+            csv.write_record([&pkgname, &filename, &hexhex::Hex::new(file.hash).to_string()])
                 .with_context(|| String::from("couldn't write record"))?;
         }
     }
@@ -564,7 +564,7 @@ fn pka_stats<P: AsRef<std::path::Path>>(path: P, force: bool) -> anyhow::Result<
         .with_context(|| String::from("couldn't write csv header to stdout"))?;
     for blob in blobs {
         csv.write_record(&[
-            hex::encode(blob.hash),
+            hexhex::Hex::new(blob.hash).to_string(),
             blob.offset.to_string(),
             blob.compressed_size.to_string(),
             blob.decompressed_size.to_string(),
@@ -598,10 +598,10 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     let blob_hashes: std::collections::HashSet<_> = blobs.iter().map(|blob| blob.hash).collect();
     let file_hashes: std::collections::HashSet<_> = pkgs.iter().flat_map(|pkg| pkg.files.iter().map(|file| file.hash)).collect();
     for hash in blob_hashes.difference(&file_hashes) {
-        panic!("blob hash with no associated file: {}", hex::encode(hash));
+        panic!("blob hash with no associated file: {}", hexhex::Hex::new(hash));
     }
     for hash in file_hashes.difference(&blob_hashes) {
-        panic!("file hash with no associated data: {}", hex::encode(hash));
+        panic!("file hash with no associated data: {}", hexhex::Hex::new(hash));
     }
 
     // check that file names are sorted
@@ -634,7 +634,7 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     for blob in blobs.iter() {
         match prev_hash {
             Some(prev) if prev >= blob.hash => {
-                panic!("blob hash {} is not greater than previous ({})", hex::encode(blob.hash), hex::encode(prev));
+                panic!("blob hash {} is not greater than previous ({})", hexhex::Hex::new(blob.hash), hexhex::Hex::new(prev));
             }
             _ => {}
         }
@@ -647,9 +647,9 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     let blobs = blobs;
     let mut expected_start: u64 = offset_after_metadata;
     for blob in blobs.iter() {
-        log::debug!("checking offset of blob {}", hex::encode(blob.hash));
+        log::debug!("checking offset of blob {}", hexhex::Hex::new(blob.hash));
         if blob.offset != expected_start {
-            panic!("{}: unexpected start ({} rather than {})", hex::encode(blob.hash), blob.offset, expected_start);
+            panic!("{}: unexpected start ({} rather than {})", hexhex::Hex::new(blob.hash), blob.offset, expected_start);
         }
         expected_start += <u32 as Into<u64>>::into(blob.compressed_size);
     }
@@ -673,10 +673,10 @@ fn pka_test_blob<F: std::io::Read + std::io::Seek>(io_mutex: &std::sync::Mutex<F
         .lock()
         .map_err(|e| e.to_string())
         .map_err(anyhow::Error::msg)
-        .with_context(|| format!("blob {}: failed to read data", hex::encode(blob.hash)))?;
-    log::debug!("Testing {}", hex::encode(blob.hash));
-    let compressed_data = tocs::pka::get_blob_data_raw(guard.deref_mut(), blob).with_context(|| format!("blob {}: failed to read data", hex::encode(blob.hash)))?;
-    let decompressed_data = tocs::pka::get_blob_data(guard.deref_mut(), blob).with_context(|| format!("blob {}: failed to read data", hex::encode(blob.hash)))?;
+        .with_context(|| format!("blob {}: failed to read data", hexhex::Hex::new(blob.hash)))?;
+    log::debug!("Testing {}", hexhex::Hex::new(blob.hash));
+    let compressed_data = tocs::pka::get_blob_data_raw(guard.deref_mut(), blob).with_context(|| format!("blob {}: failed to read data", hexhex::Hex::new(blob.hash)))?;
+    let decompressed_data = tocs::pka::get_blob_data(guard.deref_mut(), blob).with_context(|| format!("blob {}: failed to read data", hexhex::Hex::new(blob.hash)))?;
     drop(guard);
 
     // recompressing is the bit that really takes time
@@ -684,22 +684,22 @@ fn pka_test_blob<F: std::io::Read + std::io::Seek>(io_mutex: &std::sync::Mutex<F
         .compression
         .compress(&decompressed_data)
         .map_err(anyhow::Error::msg)
-        .with_context(|| format!("blob {}: failed to recompress data", hex::encode(blob.hash)))?;
+        .with_context(|| format!("blob {}: failed to recompress data", hexhex::Hex::new(blob.hash)))?;
     let redecompressed_data = blob
         .compression
         .decompress_with_exact_output_size(&recompressed_data, blob.decompressed_size.try_into().expect("32 bits please"))
         .map_err(anyhow::Error::msg)
-        .with_context(|| format!("blob {}: failed to decompress the recompressed data", hex::encode(blob.hash)))?;
+        .with_context(|| format!("blob {}: failed to decompress the recompressed data", hexhex::Hex::new(blob.hash)))?;
     let hash = tocs::pka::hash_data(&decompressed_data);
     if blob.hash != hash {
         return Err(anyhow::Error::msg(format!(
             "blob {}: hash does not match sha256 of decompressed data {}",
-            hex::encode(blob.hash),
-            hex::encode(hash)
+            hexhex::Hex::new(blob.hash),
+            hexhex::Hex::new(hash)
         )));
     }
     if decompressed_data != redecompressed_data {
-        return Err(anyhow::Error::msg(format!("blob {}: recompress->decompress changes data", hex::encode(blob.hash))));
+        return Err(anyhow::Error::msg(format!("blob {}: recompress->decompress changes data", hexhex::Hex::new(blob.hash))));
     }
 
     let delta = (recompressed_data.len() as f64 - compressed_data.len() as f64).abs() / std::cmp::max(recompressed_data.len(), compressed_data.len()) as f64;
@@ -708,7 +708,7 @@ fn pka_test_blob<F: std::io::Read + std::io::Seek>(io_mutex: &std::sync::Mutex<F
         // exact equality is unrealistic
         log::warn!(
             "blob {}: recompressing data changes size significantly ({} instead of {} bytes)",
-            hex::encode(blob.hash),
+            hexhex::Hex::new(blob.hash),
             recompressed_data.len(),
             compressed_data.len()
         );
@@ -769,7 +769,7 @@ fn pka_unpack_single_pkg<F: std::io::Read + std::io::Seek>(
         let name = tocs::pkg::PaddedAsciiName::try_from(&file.name).with_context(|| format!("couldn't extract pkg '{}'", pkgname))?;
         let blob = blobs_by_hash
             .get(&file.hash)
-            .ok_or_else(|| anyhow::Error::msg(format!("no data for file '{}/{}' (hash {})", pkgname, name, hex::encode(file.hash))))?;
+            .ok_or_else(|| anyhow::Error::msg(format!("no data for file '{}/{}' (hash {})", pkgname, name, hexhex::Hex::new(file.hash))))?;
         let compressed_data = tocs::pka::get_blob_data_raw(pka, blob).with_context(|| format!("couldn't read data for file '{}/{}'", pkgname, name))?;
         pkg_files.push(tocs::pkg::CompressedFile {
             name,
@@ -827,14 +827,14 @@ fn pka_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
             for file in pkg.files.iter() {
                 let name = tocs::pkg::PaddedAsciiName::try_from(&file.name).map_err(anyhow::Error::msg)?;
                 if name.as_bytes_excluding_terminator_and_padding().is_empty() {
-                    if file.hash == hex_literal::hex!("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855") {
-                        log::warn!("ignoring empty file with empty name (blob hash {})", hex::encode(file.hash));
+                    if &file.hash == hexhex::hex_literal!("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855") {
+                        log::warn!("ignoring empty file with empty name (blob hash {})", hexhex::Hex::new(file.hash));
                     } else {
-                        log::warn!("ignoring non-empty file with empty name (blob hash {})", hex::encode(file.hash));
+                        log::warn!("ignoring non-empty file with empty name (blob hash {})", hexhex::Hex::new(file.hash));
                     }
                     continue;
                 }
-                log::debug!("unpacking {} (blob {})", name, hex::encode(file.hash));
+                log::debug!("unpacking {} (blob {})", name, hexhex::Hex::new(file.hash));
                 let filename = std::path::Path::join(&pkgpath, name.as_path());
                 let mut outfile = std::io::BufWriter::new(
                     open_options
@@ -915,7 +915,7 @@ fn write_blob_order_file(blobs: &[tocs::pka::FileDataEntry], open_options: &std:
             .context("couldn't open blob order file for writing")?,
     );
     for blob in blobs.iter() {
-        writeln!(f, "{}", hex::encode(blob.hash)).context("couldn't write blob order file")?;
+        writeln!(f, "{}", hexhex::Hex::new(blob.hash)).context("couldn't write blob order file")?;
     }
     f.into_inner().context("couldn't close blob order file after writing")?;
     Ok(())
@@ -927,9 +927,9 @@ fn read_blob_order_file(base_dir: &std::path::Path) -> anyhow::Result<std::vec::
     let mut hashes = vec![];
     for line in std::io::BufReader::new(std::fs::File::open(&filename)?).lines() {
         let line = line?;
-        let hash: [u8; 32] = hex::decode(&line)
+        let mut hash = [0u8; 32];
+        hexhex::decode_to_buf_exact(&line, &mut hash)
             .map_err(anyhow::Error::msg)
-            .and_then(|data| (&data[..]).try_into().map_err(anyhow::Error::msg))
             .with_context(|| format!("invalid line '{}', expected a (hex encoded) SHA-256 hash", &line))?;
         hashes.push(hash);
     }
@@ -986,7 +986,7 @@ fn pka_pack_pkgs<P: AsRef<std::path::Path>>(force: bool, dir: P, out: P) -> anyh
                 };
                 if let Some(old) = blob_info.insert(hash, blobinfo) {
                     if old != blobinfo {
-                        log::warn!("same blob ({}) appears with different sizes/compression", hex::encode(hash));
+                        log::warn!("same blob ({}) appears with different sizes/compression", hexhex::Hex::new(hash));
                     }
                 } else {
                     blobs_that_need_to_be_read
