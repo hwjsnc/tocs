@@ -158,10 +158,12 @@ pub fn parse_all(fix_data: bool) {
 }
 
 pub fn roundtrip_cs1(path: &std::path::Path, fix_data: bool) {
-    let original = if fix_data {
-        tocs::cs1::tbl::fix(&std::fs::read(path).unwrap())
-    } else {
-        std::fs::read(path).unwrap()
+    let original = {
+        let mut data = std::fs::read(path).unwrap();
+        if fix_data {
+            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS1, &mut data);
+        }
+        data
     };
     let mut log = tocs::tbl::WarningLogger::new();
     match tocs::tbl::deserialize_tbl_v1::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS1_ATOMIC) {
@@ -178,8 +180,14 @@ pub fn roundtrip_cs1(path: &std::path::Path, fix_data: bool) {
     }
 }
 
-pub fn roundtrip_cs2(path: &std::path::Path, _fix_data: bool) {
-    let original = std::fs::read(path).unwrap();
+pub fn roundtrip_cs2(path: &std::path::Path, fix_data: bool) {
+    let original = {
+        let mut data = std::fs::read(path).unwrap();
+        if fix_data {
+            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS2, &mut data);
+        }
+        data
+    };
     let mut log = tocs::tbl::WarningLogger::new();
     match tocs::tbl::deserialize_tbl_v2::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS2_ATOMIC) {
         Ok((header_counts, entries)) => {
@@ -197,10 +205,12 @@ pub fn roundtrip_cs2(path: &std::path::Path, _fix_data: bool) {
 }
 
 pub fn roundtrip_cs3(path: &std::path::Path, fix_data: bool) {
-    let original = if fix_data {
-        tocs::cs3::tbl::fix(&std::fs::read(path).unwrap())
-    } else {
-        std::fs::read(path).unwrap()
+    let original = {
+        let mut data = std::fs::read(path).unwrap();
+        if fix_data {
+            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS3, &mut data);
+        }
+        data
     };
     let mut log = tocs::tbl::WarningLogger::new();
     match tocs::tbl::deserialize_tbl_v2::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS3_ATOMIC) {
@@ -218,8 +228,14 @@ pub fn roundtrip_cs3(path: &std::path::Path, fix_data: bool) {
     }
 }
 
-pub fn roundtrip_cs4(path: &std::path::Path, _fix_data: bool) {
-    let original = std::fs::read(path).unwrap();
+pub fn roundtrip_cs4(path: &std::path::Path, fix_data: bool) {
+    let original = {
+        let mut data = std::fs::read(path).unwrap();
+        if fix_data {
+            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS4, &mut data);
+        }
+        data
+    };
     let mut log = tocs::tbl::WarningLogger::new();
     match tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS4_ATOMIC) {
         Ok((header_counts, entries)) => {
@@ -236,8 +252,14 @@ pub fn roundtrip_cs4(path: &std::path::Path, _fix_data: bool) {
     }
 }
 
-pub fn roundtrip_cs5(path: &std::path::Path, _fix_data: bool) {
-    let original = std::fs::read(path).unwrap();
+pub fn roundtrip_cs5(path: &std::path::Path, fix_data: bool) {
+    let original = {
+        let mut data = std::fs::read(path).unwrap();
+        if fix_data {
+            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS5, &mut data);
+        }
+        data
+    };
     let mut log = tocs::tbl::WarningLogger::new();
     match tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS5_ATOMIC) {
         Ok((header_counts, entries)) => {

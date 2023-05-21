@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+anyhow = "1.0.66"
 clap = { version = "4.0.26", features = ["derive"] }
 tocs = { path = "../tocs" }
 walkdir = "2.3.2"

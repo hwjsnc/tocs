@@ -20,7 +20,7 @@ enum Args {
         db_path: std::path::PathBuf,
         /// game (CS1/CS2/CS3)
         #[arg(long)]
-        game: Game,
+        game: tocs::tbl::Version<'static>,
     },
     /// Read data from a sqlite database and generate corresponding tbl files
     To_Tbl {
@@ -30,9 +30,9 @@ enum Args {
         /// path to the directory that the tbls should be written to
         #[arg(long)]
         tbl_path: std::path::PathBuf,
-        /// game (CS1/CS2/CS3/CS4/CS5)
+        /// game (CS1/CS2/CS3/CS4)
         #[arg(long)]
-        game: Game,
+        game: tocs::tbl::Version<'static>,
         /// overwrite any existing tbl files
         #[arg(short, long)]
         force: bool,
@@ -48,36 +48,6 @@ enum Args {
         #[arg(long)]
         db_path: std::path::PathBuf,
     },
-}
-
-#[derive(Clone, Copy, Debug)]
-enum Game {
-    CS1,
-    CS2,
-    CS3,
-    CS4,
-    CS5,
-}
-
-impl std::str::FromStr for Game {
-    type Err = &'static str;
-    fn from_str(s: &str) -> Result<Self, &'static str> {
-        match s {
-            "cs1" => Ok(Game::CS1),
-            "CS1" => Ok(Game::CS1),
-            "cs2" => Ok(Game::CS2),
-            "CS2" => Ok(Game::CS2),
-            "cs3" => Ok(Game::CS3),
-            "CS3" => Ok(Game::CS3),
-            "cs4" => Ok(Game::CS4),
-            "CS4" => Ok(Game::CS4),
-            "cs5" => Ok(Game::CS5),
-            "CS5" => Ok(Game::CS5),
-            "reverie" => Ok(Game::CS5),
-            "Reverie" => Ok(Game::CS5),
-            _ => Err("invalid/unknown game"),
-        }
-    }
 }
 
 pub fn main() {
@@ -96,21 +66,13 @@ pub fn main() {
     }
 }
 
-fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: Game) {
+fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: tocs::tbl::Version) {
     if dbpath.as_ref().exists() {
         panic!("database output path {} exists, refusing to overwrite.", dbpath.as_ref().display());
     }
 
     let mut db = rusqlite::Connection::open(dbpath).expect("opening new database file");
     db.execute("pragma foreign_keys = on", []).unwrap();
-
-    let schemas = match tbl_version {
-        Game::CS1 => &*tocs::tbl::schemas::CS1_ATOMIC,
-        Game::CS2 => &*tocs::tbl::schemas::CS2_ATOMIC,
-        Game::CS3 => &*tocs::tbl::schemas::CS3_ATOMIC,
-        Game::CS4 => &*tocs::tbl::schemas::CS4_ATOMIC,
-        Game::CS5 => &*tocs::tbl::schemas::CS5_ATOMIC,
-    };
 
     let tx = db.transaction().unwrap();
 
@@ -120,7 +82,7 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
             .into_iter()
             .collect();
         sqlite_recreate_table_destroy_if_exists_unsafe(&tx, "generic", &generic_schema)?;
-        for (table, schema) in schemas.iter() {
+        for (table, schema) in tbl_version.schemas().iter() {
             sqlite_recreate_table_destroy_if_exists_unsafe(&tx, table.as_str(), schema)?;
         }
         Ok(())
@@ -133,40 +95,12 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
             log::info!("reading file {}", path.display());
             let path_for_db = path.strip_prefix(tblpath.as_ref()).expect("child path should have parent as prefix").display().to_string();
-            let data = std::fs::read(path).map_err(|e| format!("couldn't read tbl file: {e}")).unwrap();
-            let mut logger = tocs::tbl::WarningLogger::new();
-            let entries = match tbl_version {
-                // TODO: use generic parser code
-                Game::CS1 => tocs::tbl::deserialize_tbl_v1::<_, /*STRICT=*/ true, /*LOG=*/ false>(&mut std::io::Cursor::new(&tocs::cs1::tbl::fix(&data)), &mut logger, schemas)
-                    .map_err(|e| format!("couldn't parse tbl file: {e}"))
-                    .unwrap(),
-                Game::CS2 => {
-                    tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ false>(&mut std::io::Cursor::new(&data), &mut logger, schemas)
-                        .map_err(|e| format!("couldn't parse tbl file: {e}"))
-                        .unwrap()
-                        .1
-                }
-                Game::CS3 => {
-                    tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ false>(&mut std::io::Cursor::new(&tocs::cs3::tbl::fix(&data)), &mut logger, schemas)
-                        .map_err(|e| format!("couldn't parse tbl file: {e}"))
-                        .unwrap()
-                        .1
-                }
-                Game::CS4 => {
-                    tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ false>(&mut std::io::Cursor::new(&data), &mut logger, schemas)
-                        .map_err(|e| format!("couldn't parse tbl file: {e}"))
-                        .unwrap()
-                        .1
-                }
-                Game::CS5 => {
-                    tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ false>(&mut std::io::Cursor::new(&data), &mut logger, schemas)
-                        .map_err(|e| format!("couldn't parse tbl file: {e}"))
-                        .unwrap()
-                        .1
-                }
-            };
-            for (n, entry) in entries.iter().enumerate() {
-                let insert_result = if schemas.contains_key(&entry.header) {
+            let tbl = tocs::tbl::read_file(path, tbl_version)
+                .ignore_warnings()
+                .map_err(|e| format!("couldn't parse tbl file {}: {}", path.display(), e))
+                .unwrap();
+            for (n, entry) in tbl.get_entries().iter().enumerate() {
+                let insert_result = if tbl_version.schemas().contains_key(&entry.header) {
                     sqlite_insert_unsafe(&tx, entry.header.as_str(), &path_for_db, &entry.values)
                 } else {
                     let mut values_with_header = IndexMap::new();
@@ -176,7 +110,9 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
                     }
                     sqlite_insert_unsafe(&tx, "generic", &path_for_db, &values_with_header)
                 };
-                insert_result.map_err(|e| format!("couldn't insert entry {} of {} into table: {}", n + 1, entries.len(), e)).unwrap();
+                insert_result
+                    .map_err(|e| format!("couldn't insert entry {} of {} into table: {}", n + 1, tbl_version.schemas().len(), e))
+                    .unwrap();
             }
         }
     }

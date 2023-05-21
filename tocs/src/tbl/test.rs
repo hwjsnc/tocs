@@ -103,7 +103,11 @@ fn test_roundtrip_cs1_strict() {
         }
         if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
             log::info!("{}", path.display());
-            let fixed = crate::cs1::tbl::fix(&std::fs::read(path).unwrap());
+            let fixed = {
+                let mut raw = std::fs::read(path).unwrap();
+                _ = crate::tbl::fixes::fix_in_place(crate::tbl::fixes::GameVersion::CS1, &mut raw);
+                raw
+            };
             let mut logger = WarningLogger::<DeserializeError>::new();
             let entries = deserialize_tbl_v1::<_, /*STRICT =*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&fixed), &mut logger, &schemas::CS1_ATOMIC).unwrap();
             assert!(!logger.has_warnings());
@@ -161,7 +165,11 @@ fn test_roundtrip_cs3_strict() {
         let path = entry.path();
         if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
             log::info!("{}", path.display());
-            let fixed = crate::cs3::tbl::fix(&std::fs::read(path).unwrap());
+            let fixed = {
+                let mut raw = std::fs::read(path).unwrap();
+                _ = crate::tbl::fixes::fix_in_place(crate::tbl::fixes::GameVersion::CS3, &mut raw);
+                raw
+            };
             let mut logger = WarningLogger::<DeserializeError>::new();
             let (headers_with_counts, entries) = deserialize_tbl_v2::<_, /*STRICT =*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&fixed), &mut logger, &schemas::CS3_ATOMIC).unwrap();
             assert!(!logger.has_warnings());

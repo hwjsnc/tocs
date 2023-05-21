@@ -3,6 +3,8 @@ pub mod schemas;
 mod ser;
 pub mod value_conversion;
 
+pub mod fixes;
+
 use indexmap::IndexMap;
 use smallvec::SmallVec;
 
@@ -712,6 +714,16 @@ pub enum ReadTblResult {
     Ok(Tbl),
     Warn { tbl: Tbl, warnings: std::vec::Vec<DeserializeError> },
     Err(DeserializeError),
+}
+
+impl ReadTblResult {
+    pub fn ignore_warnings(self) -> Result<Tbl, DeserializeError> {
+        match self {
+            ReadTblResult::Ok(tbl) => Ok(tbl),
+            ReadTblResult::Warn { tbl, .. } => Ok(tbl),
+            ReadTblResult::Err(e) => Err(e),
+        }
+    }
 }
 
 fn try_read<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(f: &mut F, logger: &mut WarningLogger<DeserializeError>, version: Version) -> Result<Tbl, DeserializeError> {
