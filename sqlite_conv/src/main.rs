@@ -1,11 +1,8 @@
-extern crate clap;
-extern crate rusqlite;
-extern crate tocs;
-extern crate walkdir;
-
 use clap::Parser;
 use indexmap::IndexMap;
 use smol_str::SmolStr;
+
+use anyhow::Context as _;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Parser)]
@@ -87,17 +84,17 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
         }
         Ok(())
     };
-    create_tables().map_err(|e| format!("couldn't create tables: {e}")).unwrap();
+    create_tables().context("couldn't create tables").unwrap();
 
     for direntry in walkdir::WalkDir::new(tblpath.as_ref()).into_iter() {
-        let direntry = direntry.map_err(|e| format!("error walking directory: {e}")).unwrap();
+        let direntry = direntry.context("error walking directory").unwrap();
         let path = direntry.path();
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
             log::info!("reading file {}", path.display());
             let path_for_db = path.strip_prefix(tblpath.as_ref()).expect("child path should have parent as prefix").display().to_string();
             let tbl = tocs::tbl::read_file(path, tbl_version)
                 .ignore_warnings()
-                .map_err(|e| format!("couldn't parse tbl file {}: {}", path.display(), e))
+                .with_context(|| format!("couldn't parse tbl file {}", path.display()))
                 .unwrap();
             for (n, entry) in tbl.get_entries().iter().enumerate() {
                 let insert_result = if tbl_version.schemas().contains_key(&entry.header) {
@@ -111,13 +108,13 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
                     sqlite_insert_unsafe(&tx, "generic", &path_for_db, &values_with_header)
                 };
                 insert_result
-                    .map_err(|e| format!("couldn't insert entry {} of {} into table: {}", n + 1, tbl_version.schemas().len(), e))
+                    .with_context(|| format!("couldn't insert entry {} of {} into table", n + 1, tbl_version.schemas().len()))
                     .unwrap();
             }
         }
     }
 
-    tx.commit().map_err(|e| format!("couldn't commit database transaction: {e}")).unwrap();
+    tx.commit().context("couldn't commit database transaction").unwrap();
 }
 
 // WARNING: The following functions could be extremely dangerous in a general settings:
@@ -147,115 +144,6 @@ fn sqlite_insert_unsafe(tx: &rusqlite::Transaction, table: &str, filename: &str,
     let mut insert = tx.prepare_cached(&s)?;
     insert.execute(&*vals)
 }
-
-/*
-TODO
-fn sqlite_read_table_unsafe_or_panic(tx: &rusqlite::Transaction, table: &str) -> std::vec::Vec<(String, T)> {
-    assert_eq!(table, T::sqlite_table());
-    let mut columns = vec![("file".to_string(), "text")];
-    columns.extend(T::sqlite_columns());
-    let s = format!(
-        "select\n{}\nfrom {}",
-        columns.iter().map(|(cname, _ctype)| format!("  [{cname}]")).collect::<std::vec::Vec<String>>().join(",\n"),
-        T::sqlite_table()
-    );
-    let mut stmt = match tx.prepare(&s) {
-        Ok(x) => x,
-        Err(e) => panic!("couldn't prepare select statement (incorrect schema / version?): {e}"),
-    };
-    let rows = stmt
-        .query_map([], |row| {
-            let file = row.get::<usize, String>(0)?;
-            let (entry, next_column_index) = T::sqlite_row_read(row, 1)?;
-            row.get::<usize, rusqlite::types::Value>(next_column_index).expect_err("select statement ensures matching schema");
-            Ok((file, entry))
-        })
-        .expect("query");
-    rows.enumerate()
-        .map(|(n, row)| match row {
-            Ok(x) => x,
-            Err(e) => panic!("Error reading {}'th row: {}", n + 1, e),
-        })
-        .collect()
-}
-
-fn to_tbl_cs3(dbpath: &std::path::Path, output_path: &std::path::Path, force: bool) {
-    // load data from db
-    let mut db = match rusqlite::Connection::open(dbpath) {
-        Ok(x) => x,
-        Err(e) => panic!("couldn't open db file: {e}"),
-    };
-    db.execute("pragma foreign_keys = on", []).unwrap();
-    let tx = db.transaction().unwrap();
-    let mut all_entries = std::collections::HashMap::<String, std::vec::Vec<CS3Entry>>::new();
-    let mut stmt = tx.prepare("select name from sqlite_schema").expect("sqlite_schema query");
-    let tables: std::vec::Vec<String> = stmt
-        .query_map([], |row| row.get::<usize, String>(0))
-        .expect("sqlite_schema contents")
-        .map(|row| row.expect("sqlite_schema row"))
-        .collect();
-    for table in tables.iter() {
-        log::info!("Reading table {table}");
-        match table.as_str() {
-        }
-    }
-    drop(stmt);
-    drop(tx);
-    drop(db);
-
-    // serialize data
-    let mut serialized = std::collections::HashMap::<std::path::PathBuf, std::vec::Vec<u8>>::new();
-    for (filename, entries) in all_entries.into_iter() {
-        let headers = entries
-            .iter()
-            .map(|e| e.header_name())
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect::<std::vec::Vec<_>>();
-        let tbl = cs3_tbl::Tbl { headers, entries };
-        let data = match cs3_tbl::store(&tbl) {
-            Ok(x) => x,
-            Err(e) => panic!("couldn't generate tbl {}: {:?}", filename, e), // TODO: non-debug error message
-        };
-        let relpath = std::path::PathBuf::from_str(&filename).expect("infallible");
-        if relpath.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
-            panic!("file {} has a parent component. bailing out to avoid accidently clobbering random files.", filename);
-        };
-        let path = output_path.join(relpath);
-        serialized.insert(path, data);
-    }
-
-    // write the tbls
-    for (filename, data) in serialized.into_iter() {
-        log::info!("Writing {}", filename.display());
-        if let Some(parent) = filename.parent() {
-            match std::fs::create_dir_all(parent) {
-                Ok(()) => (),
-                Err(e) => panic!("Couldn't create parent path of tbl {}: {}", filename.display(), e),
-            };
-        }
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true);
-        if force {
-            options.create(true).truncate(true)
-        } else {
-            options.create_new(true)
-        };
-        let mut file = match options.open(&filename) {
-            Ok(f) => f,
-            Err(e) => panic!("couldn't open file {}: {}", filename.display(), e),
-        };
-        match file.write_all(&data) {
-            Ok(()) => (),
-            Err(e) => panic!("Couldn't write data to {}: {}", filename.display(), e),
-        };
-    }
-
-    // note: we're not getting bit-exact roundtrips because we drop headers without entries and we may reorder entries
-    // it remains to be seen if this leads to problems or not (i very much hope it doesn't).
-}
-*/
 
 fn pka_metadata_to_new_db<P: AsRef<std::path::Path>>(pkapath: P, dbpath: P) {
     if dbpath.as_ref().exists() {
@@ -307,5 +195,5 @@ fn pka_metadata_to_new_db<P: AsRef<std::path::Path>>(pkapath: P, dbpath: P) {
         .unwrap();
     }
 
-    tx.commit().map_err(|e| format!("couldn't commit database transaction: {e}")).unwrap();
+    tx.commit().context("couldn't commit database transaction").unwrap();
 }
