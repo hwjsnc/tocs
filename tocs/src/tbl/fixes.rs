@@ -2,15 +2,7 @@ use hexhex::hex_literal;
 
 use blake2::Digest as _;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum GameVersion {
-    Unknown,
-    CS1,
-    CS2,
-    CS3,
-    CS4,
-    CS5,
-}
+use super::Version;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MaybeFixed {
@@ -41,7 +33,7 @@ impl<'a> MaybeFixedCow<'a> {
     }
 }
 
-pub fn fix_in_place(version: GameVersion, data: &mut std::vec::Vec<u8>) -> MaybeFixed {
+pub fn fix_in_place(version: Version, data: &mut std::vec::Vec<u8>) -> MaybeFixed {
     match get_fix_for(version, data) {
         Some(fix) => {
             fix(data);
@@ -51,7 +43,7 @@ pub fn fix_in_place(version: GameVersion, data: &mut std::vec::Vec<u8>) -> Maybe
     }
 }
 
-pub fn fix(version: GameVersion, data: &[u8]) -> MaybeFixedCow<'_> {
+pub fn fix<'a>(version: Version, data: &'a [u8]) -> MaybeFixedCow<'a> {
     match get_fix_for(version, data) {
         Some(fix) => {
             let mut copy = data.to_owned();
@@ -88,26 +80,33 @@ macro_rules! fix_fun {
     };
 }
 
-fn get_fix_for(version: GameVersion, data: &[u8]) -> Option<&'static FixFun> {
+fn get_fix_for(version: Version, data: &[u8]) -> Option<&'static FixFun> {
+    use Version::{CS1En, CS2En, CS3, CS4};
+
+    if matches!(version, CS2En | CS4) {
+        // no fixes for these games
+        return None;
+    }
+
     let hash: [u8; 64] = blake2::Blake2b512::digest(data).try_into().unwrap();
 
-    static FIXES: &[(GameVersion, [u8; 64], &FixFun)] = &[
+    static FIXES: &[(Version<'static>, [u8; 64], &FixFun)] = &[
         fix_fun!(
-            GameVersion::CS1,
+            Version::CS1En,
             *hex_literal!("e3a75ea6c0902da1f8da0d052305a4db98839a8a3c4403cf129144177a3910504a4c8b11ce8aa177db3a7554c58575e86a41655fb8414a90ce2c3083ecef88d5"),
             "Trails of Cold Steel PC version 1.6",
             "data/text/dat_us/t_main.tbl",
             |data| replace_bytes(data, &[(127310, 0x54, 0x47), (128670, 0xa4, 0x53)])
         ),
         fix_fun!(
-            GameVersion::CS3,
+            Version::CS3,
             *hex_literal!("711db0f9f27f55cfbd99b0b2b556b94d5fe428efe2e4fb34a0f217fd5a08b40d68b6c959870a95a16336f5e05312742fb39dbb0e4ca921e0c3652aacbff81f41"),
             "Trails of Cold Steel III PC version 1.05",
             "data/text/dat_en/t_name.tbl",
             |data| replace_bytes(data, &[(22392, 0x57, 0x55), (22493, 0x57, 0x55), (23898, 0x55, 0x53), (23997, 0x54, 0x52)])
         ),
         fix_fun!(
-            GameVersion::CS3,
+            Version::CS3,
             *hex_literal!("6467d5835a0197ef06bf585cbc66d735aa808f6d1029c999c719cfc53ce3832dec92ce25845fb4f27c2ec5c0030020571e2e1a4b3977dba8fee4e413dd64f4fa"),
             "Trails of Cold Steel III PC version 1.05",
             "data/text/dat_en/t_quest.tbl",
@@ -160,7 +159,7 @@ fn get_fix_for(version: GameVersion, data: &[u8]) -> Option<&'static FixFun> {
             )
         ),
         fix_fun!(
-            GameVersion::CS3,
+            Version::CS3,
             *hex_literal!("7db08a20e3e887e7ad94f5ee1023e7c0130ebaca23f4e9715f5517192b6ab57dfbb60826e12e9e22e4293f9d28c6150189d14ea946b19a640e969958c88b87d3"),
             "Trails of Cold Steel III PC version 1.05",
             "data/text/dat_fr/t_quest.tbl",
@@ -214,7 +213,10 @@ fn get_fix_for(version: GameVersion, data: &[u8]) -> Option<&'static FixFun> {
         ),
     ];
 
-    FIXES
-        .iter()
-        .find_map(|(v, h, fun)| if (v == &version || version == GameVersion::Unknown) && h == &hash { Some(*fun) } else { None })
+    let is_same_version = |v1, v2| match (v1, v2) {
+        (CS1En, CS1En) | (CS2En, CS2En) | (CS3, CS3) | (CS4, CS4) => true,
+        _ => false, // this intentionally includes (V1(_), V1(_)), (V2(_), V2(_)): we don't want to assume anything with custom schemas
+    };
+
+    FIXES.iter().find_map(|(v, h, fun)| if is_same_version(*v, version) && h == &hash { Some(*fun) } else { None })
 }

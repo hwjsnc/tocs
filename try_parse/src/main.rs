@@ -19,7 +19,7 @@ enum Subcommand {
     ///
     /// Print information about all the files
     Tbl {
-        game: GameVersion,
+        game: tocs::tbl::Version<'static>,
         path: std::path::PathBuf,
         /// Don't attempt to fix game data with hardcoded values
         #[arg(short, long)]
@@ -41,57 +41,26 @@ enum Subcommand {
     DdsConvertBC7 { source: std::path::PathBuf, target: std::path::PathBuf },
 }
 
-// TODO: use generic parser in tocs?
-#[derive(Clone, Copy, Debug)]
-enum GameVersion {
-    CS1,
-    CS2,
-    CS3,
-    CS4,
-    CS5,
-}
-
-impl std::str::FromStr for GameVersion {
-    type Err = &'static str;
-    fn from_str(s: &str) -> Result<Self, &'static str> {
-        match s {
-            "cs1" => Ok(GameVersion::CS1),
-            "CS1" => Ok(GameVersion::CS1),
-            "cs2" => Ok(GameVersion::CS2),
-            "CS2" => Ok(GameVersion::CS2),
-            "cs3" => Ok(GameVersion::CS3),
-            "CS3" => Ok(GameVersion::CS3),
-            "cs4" => Ok(GameVersion::CS4),
-            "CS4" => Ok(GameVersion::CS4),
-            "cs5" => Ok(GameVersion::CS5),
-            "CS5" => Ok(GameVersion::CS5),
-            "reverie" => Ok(GameVersion::CS5),
-            "Reverie" => Ok(GameVersion::CS5),
-            _ => Err("invalid/unknown game"),
-        }
-    }
-}
-
 pub fn main() {
     simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
 
     match Subcommand::parse() {
         Subcommand::All { raw } => parse_all(!raw),
         Subcommand::Tbl { game, path, raw } => match game {
-            GameVersion::CS1 => {
+            tocs::tbl::Version::CS1En => {
                 roundtrip_cs1(&path, !raw);
             }
-            GameVersion::CS2 => {
+            tocs::tbl::Version::CS2En => {
                 roundtrip_cs2(&path, !raw);
             }
-            GameVersion::CS3 => {
+            tocs::tbl::Version::CS3 => {
                 roundtrip_cs3(&path, !raw);
             }
-            GameVersion::CS4 => {
+            tocs::tbl::Version::CS4 => {
                 roundtrip_cs4(&path, !raw);
             }
-            GameVersion::CS5 => {
-                roundtrip_cs5(&path, !raw);
+            _ => {
+                unreachable!()
             }
         },
         Subcommand::Pkg { path } => parse_pkg(&path),
@@ -146,24 +115,13 @@ pub fn parse_all(fix_data: bool) {
             roundtrip_cs4(path, fix_data);
         }
     }
-
-    let cwd = std::env::current_dir().unwrap();
-    let base_path = cwd.join(std::path::Path::new("private-test-data/cs5/data/text/"));
-    for entry in walkdir::WalkDir::new(base_path) {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            log::info!("trying file {}", path.display());
-            roundtrip_cs5(path, fix_data);
-        }
-    }
 }
 
 pub fn roundtrip_cs1(path: &std::path::Path, fix_data: bool) {
     let original = {
         let mut data = std::fs::read(path).unwrap();
         if fix_data {
-            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS1, &mut data);
+            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::Version::CS1En, &mut data);
         }
         data
     };
@@ -186,7 +144,7 @@ pub fn roundtrip_cs2(path: &std::path::Path, fix_data: bool) {
     let original = {
         let mut data = std::fs::read(path).unwrap();
         if fix_data {
-            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS2, &mut data);
+            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::Version::CS2En, &mut data);
         }
         data
     };
@@ -210,7 +168,7 @@ pub fn roundtrip_cs3(path: &std::path::Path, fix_data: bool) {
     let original = {
         let mut data = std::fs::read(path).unwrap();
         if fix_data {
-            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS3, &mut data);
+            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::Version::CS3, &mut data);
         }
         data
     };
@@ -234,36 +192,12 @@ pub fn roundtrip_cs4(path: &std::path::Path, fix_data: bool) {
     let original = {
         let mut data = std::fs::read(path).unwrap();
         if fix_data {
-            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS4, &mut data);
+            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::Version::CS4, &mut data);
         }
         data
     };
     let mut log = tocs::tbl::WarningLogger::new();
     match tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS4_ATOMIC) {
-        Ok((header_counts, entries)) => {
-            let mut serialized: std::vec::Vec<u8> = vec![];
-            let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
-            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
-                Ok(_written) => compare(&original, &serialized, path),
-                Err(err) => log::error!("serialize failed: {err}"),
-            }
-        }
-        Err(err) => {
-            log::error!("deserialize failed: {err}");
-        }
-    }
-}
-
-pub fn roundtrip_cs5(path: &std::path::Path, fix_data: bool) {
-    let original = {
-        let mut data = std::fs::read(path).unwrap();
-        if fix_data {
-            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::fixes::GameVersion::CS5, &mut data);
-        }
-        data
-    };
-    let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS5_ATOMIC) {
         Ok((header_counts, entries)) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();

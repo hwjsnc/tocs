@@ -105,7 +105,7 @@ fn test_roundtrip_cs1_strict() {
             log::info!("{}", path.display());
             let fixed = {
                 let mut raw = std::fs::read(path).unwrap();
-                _ = crate::tbl::fixes::fix_in_place(crate::tbl::fixes::GameVersion::CS1, &mut raw);
+                _ = crate::tbl::fixes::fix_in_place(crate::tbl::Version::CS1En, &mut raw);
                 raw
             };
             let mut logger = WarningLogger::<DeserializeError>::new();
@@ -167,7 +167,7 @@ fn test_roundtrip_cs3_strict() {
             log::info!("{}", path.display());
             let fixed = {
                 let mut raw = std::fs::read(path).unwrap();
-                _ = crate::tbl::fixes::fix_in_place(crate::tbl::fixes::GameVersion::CS3, &mut raw);
+                _ = crate::tbl::fixes::fix_in_place(crate::tbl::Version::CS3, &mut raw);
                 raw
             };
             let mut logger = WarningLogger::<DeserializeError>::new();
