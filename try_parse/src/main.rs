@@ -19,11 +19,18 @@ enum Subcommand {
     ///
     /// Print information about all the files
     Tbl {
+        /// Game that the file belongs to (CS1-5)
         game: tocs::tbl::Version<'static>,
+        /// .tbl path
         path: std::path::PathBuf,
-        /// Don't attempt to fix game data with hardcoded values
-        #[arg(short, long)]
+        /// Don't attempt to fix game data with hardcoded values.
+        /// Cannot be used together with the --lenient option
+        #[arg(short, long, group = "parse options")]
         raw: bool,
+        /// If strict parsing fails, try again with lax consistency checks
+        /// Cannot be used together with the --raw option
+        #[arg(long, group = "parse options")]
+        lenient: bool,
     },
     /// Try to parse a specific pkg file
     ///
@@ -46,7 +53,11 @@ pub fn main() {
 
     match Subcommand::parse() {
         Subcommand::All { raw } => parse_all(!raw),
-        Subcommand::Tbl { game, path, raw } => check_tbl_roundtrip(&path, game, !raw),
+        Subcommand::Tbl { game, path, raw, lenient: true } => {
+            assert!(!raw);
+            read_tbl(&path, game)
+        }
+        Subcommand::Tbl { game, path, raw, .. } => check_tbl_roundtrip(&path, game, !raw),
         Subcommand::Pkg { path } => parse_pkg(&path),
         Subcommand::Pka { path } => parse_pka(&path),
         Subcommand::ParseDds { path } => parse_dds(&path),
@@ -74,6 +85,26 @@ pub fn parse_all(fix_data: bool) {
                 check_tbl_roundtrip(path, version, fix_data);
             }
             // TODO: parse .pkgs
+        }
+    }
+}
+
+pub fn read_tbl(path: &std::path::Path, version: tocs::tbl::Version) {
+    let original = {
+        let mut data = std::fs::read(path).unwrap();
+        _ = tocs::tbl::fixes::fix_in_place(version, &mut data);
+        data
+    };
+    // TODO: integrate fixes into tbl::read
+    match tocs::tbl::read(&mut std::io::Cursor::new(original), version) {
+        tocs::tbl::ReadTblResult::Ok(_) => {
+            log::info!("file read successfully");
+        }
+        tocs::tbl::ReadTblResult::Warn { .. } => {
+            log::warn!("file read successfully with warnings");
+        }
+        tocs::tbl::ReadTblResult::Err(e) => {
+            log::error!("Couldn't read tbl: {}", e);
         }
     }
 }
