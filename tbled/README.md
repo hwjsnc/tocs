@@ -92,6 +92,7 @@ Releases (downloads & changelogs)
 
 ### v0.6 (in development)
 
+- Warnings are no longer issued when opening a file with a known fix.
 - Improved search:
   - allow restricting substring search to a single attribute
   - add comparison search (specific attribute value has to equal/exceed/subceed search value)

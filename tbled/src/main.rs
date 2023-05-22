@@ -278,8 +278,8 @@ impl App {
                 *tbl_version = *version;
                 warnings.clear();
                 // try loading data from file
-                match tocs::tbl::read_file(&new_path, *version) {
-                    tocs::tbl::ReadTblResult::Ok(tbl) => {
+                match tocs::tbl::read_file_with_fixes(&new_path, *version) {
+                    tocs::tbl::ReadTblResult::Ok(tbl) | tocs::tbl::ReadTblResult::KnownFixApplied(tbl) => {
                         *tbl_history = TblStateHistory::new(tbl);
                         *path = new_path;
                     }
@@ -566,8 +566,8 @@ fn main() {
         (Some(version), Some(path)) => {
             log::debug!("parsing {} as a {:?} file", path.display(), version);
             // try loading data from file
-            match tocs::tbl::read_file(&path, version) {
-                tocs::tbl::ReadTblResult::Ok(tbl) => AppData {
+            match tocs::tbl::read_file_with_fixes(&path, version) {
+                tocs::tbl::ReadTblResult::Ok(tbl) | tocs::tbl::ReadTblResult::KnownFixApplied(tbl) => AppData {
                     tbl_history: TblStateHistory::new(tbl),
                     active_entry_type: None,
                     selected_attributes: version.schemas().iter().map(|(hdr, schema)| (hdr.clone(), schema.keys().cloned().collect())).collect(),

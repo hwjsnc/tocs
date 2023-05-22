@@ -90,15 +90,12 @@ pub fn parse_all(fix_data: bool) {
 }
 
 pub fn read_tbl(path: &std::path::Path, version: tocs::tbl::Version) {
-    let original = {
-        let mut data = std::fs::read(path).unwrap();
-        _ = tocs::tbl::fixes::fix_in_place(version, &mut data);
-        data
-    };
-    // TODO: integrate fixes into tbl::read
-    match tocs::tbl::read(&mut std::io::Cursor::new(original), version) {
+    match tocs::tbl::read_file_with_fixes(path, version) {
         tocs::tbl::ReadTblResult::Ok(_) => {
             log::info!("file read successfully");
+        }
+        tocs::tbl::ReadTblResult::KnownFixApplied(_) => {
+            log::info!("file read successfully with known fix");
         }
         tocs::tbl::ReadTblResult::Warn { .. } => {
             log::warn!("file read successfully with warnings");

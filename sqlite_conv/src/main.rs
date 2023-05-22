@@ -94,7 +94,7 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
             log::info!("reading file {}", path.display());
             let path_for_db = path.strip_prefix(tblpath.as_ref()).expect("child path should have parent as prefix").display().to_string();
-            let tbl = tocs::tbl::read_file(path, tbl_version)
+            let tbl = tocs::tbl::read_file_with_fixes(path, tbl_version)
                 .ignore_warnings()
                 .with_context(|| format!("couldn't parse tbl file {}", path.display()))
                 .unwrap();

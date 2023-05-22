@@ -714,6 +714,7 @@ impl Tbl {
 
 pub enum ReadTblResult {
     Ok(Tbl),
+    KnownFixApplied(Tbl),
     Warn { tbl: Tbl, warnings: std::vec::Vec<DeserializeError> },
     Err(DeserializeError),
 }
@@ -722,6 +723,7 @@ impl ReadTblResult {
     pub fn ignore_warnings(self) -> Result<Tbl, DeserializeError> {
         match self {
             ReadTblResult::Ok(tbl) => Ok(tbl),
+            ReadTblResult::KnownFixApplied(tbl) => Ok(tbl),
             ReadTblResult::Warn { tbl, .. } => Ok(tbl),
             ReadTblResult::Err(e) => Err(e),
         }
@@ -856,14 +858,24 @@ pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, Serialize
     Ok(written)
 }
 
-pub fn read_file<P: AsRef<std::path::Path>>(path: P, version: Version) -> ReadTblResult {
-    match std::fs::File::open(path.as_ref()) {
-        Ok(f) => read(&mut std::io::BufReader::new(f), version),
-        Err(e) => ReadTblResult::Err(DeserializeError {
-            detail: DeserializeErrorDetail::Io(e),
-            position: None,
-            context: vec![DeserializeErrorPosition::Start],
-        }),
+/// Read a tbl file into memory, apply known fixes, and attempt to parse it.
+pub fn read_file_with_fixes<P: AsRef<std::path::Path>>(path: P, version: Version) -> ReadTblResult {
+    let mut data = match std::fs::read(path) {
+        Ok(data) => data,
+        Err(err) => {
+            return ReadTblResult::Err(DeserializeError {
+                detail: DeserializeErrorDetail::Io(err),
+                position: None,
+                context: vec![],
+            });
+        }
+    };
+    if fixes::fix_in_place(version, &mut data).was_fixed() {
+        let mut logger = WarningLogger::new();
+        let tbl = try_read_once::<_, /* strict = */ true, /* log = */ false>(&mut std::io::Cursor::new(data.as_slice()), &mut logger, version).expect("we applied fixes so parsing should succeed");
+        ReadTblResult::KnownFixApplied(tbl)
+    } else {
+        read(&mut std::io::Cursor::new(data.as_slice()), version)
     }
 }
 

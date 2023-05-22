@@ -47,7 +47,7 @@ fn test_read_all() {
                 let original = std::fs::read(path).unwrap();
                 let tbl = match read(&mut std::io::Cursor::new(&original), *version) {
                     ReadTblResult::Ok(tbl) => tbl,
-                    ReadTblResult::Warn { tbl, .. } => {
+                    ReadTblResult::Warn { tbl, .. } | ReadTblResult::KnownFixApplied(tbl) => {
                         if *strict {
                             panic!("There shouldn't be any warnings, but there are!");
                         } else {
@@ -281,8 +281,9 @@ fn test_file_rw() {
     {
         log::info!("tbl version 1 write/read");
         crate::tbl::write_file(&tmp_file_1, &Tbl::new(Version::V1(&schemas), vec![], original_rows.clone())).unwrap();
-        let read_rows = match crate::tbl::read_file(&tmp_file_1, Version::V1(&schemas)) {
+        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_1, Version::V1(&schemas)) {
             ReadTblResult::Ok(tbl) => tbl.into_entries(),
+            ReadTblResult::KnownFixApplied(_) => unreachable!("no fixes for custom schemas"),
             ReadTblResult::Warn { warnings, .. } => {
                 for warning in warnings {
                     log::error!("error reading tbl: {}", warning);
@@ -307,8 +308,9 @@ fn test_file_rw() {
             ),
         )
         .unwrap();
-        let read_rows = match crate::tbl::read_file(&tmp_file_2, Version::V2(&schemas)) {
+        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_2, Version::V2(&schemas)) {
             ReadTblResult::Ok(tbl) => tbl.into_entries(),
+            ReadTblResult::KnownFixApplied(_) => unreachable!("no fixes for custom schemas"),
             ReadTblResult::Warn { warnings, .. } => {
                 for warning in warnings {
                     log::error!("error reading tbl: {}", warning);
@@ -339,8 +341,9 @@ fn test_file_rw() {
     {
         log::info!("tbl version 1 write/read");
         crate::tbl::write_file(&tmp_file_1, &Tbl::new(Version::V1(&schemas), vec![], original_rows.clone())).unwrap();
-        let read_rows = match crate::tbl::read_file(&tmp_file_1, Version::V1(&schemas)) {
+        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_1, Version::V1(&schemas)) {
             ReadTblResult::Ok(tbl) => tbl.into_entries(),
+            ReadTblResult::KnownFixApplied(_) => unreachable!("no fixes for custom schemas"),
             ReadTblResult::Warn { warnings, .. } => {
                 for warning in warnings {
                     log::error!("error reading tbl: {}", warning);
@@ -365,8 +368,9 @@ fn test_file_rw() {
             ),
         )
         .unwrap();
-        let read_rows = match crate::tbl::read_file(&tmp_file_2, Version::V2(&schemas)) {
+        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_2, Version::V2(&schemas)) {
             ReadTblResult::Ok(tbl) => tbl.into_entries(),
+            ReadTblResult::KnownFixApplied(_) => unreachable!("no fixes for custom schemas"),
             ReadTblResult::Warn { warnings, .. } => {
                 for warning in warnings {
                     log::error!("error reading tbl: {}", warning);
