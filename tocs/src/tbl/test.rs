@@ -1,7 +1,4 @@
-use super::{
-    deserialize_tbl_v1, deserialize_tbl_v2, read, schemas, serialize_tbl_v1, serialize_tbl_v2, write, AtomicSchemas, AtomicType, AtomicValue, Attribute, DeserializeError, Entry, Header,
-    ReadTblResult, Tbl, Version, WarningLogger,
-};
+use super::{read, write, AtomicSchemas, AtomicType, AtomicValue, Attribute, DeserializeError, Entry, Header, ReadTblResult, Tbl, Version, WarningLogger};
 
 static INIT_LOG: std::sync::Once = std::sync::Once::new();
 
@@ -86,18 +83,22 @@ fn test_read_all() {
     }
 }
 
-#[test]
-fn test_roundtrip_cs1_strict() {
-    INIT_LOG.call_once(|| {
-        simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
-    });
+fn test_strict_roundtrip_for_game(version: crate::tbl::Version) {
+    let (skip_jp, relative_path) = match version {
+        crate::tbl::Version::CS1En => (true, "private-test-data/cs1/nisa-pc-1.6/data/text/"),
+        crate::tbl::Version::CS2En => (true, "private-test-data/cs2/nisa-pc-1.4.1/data/text/"),
+        crate::tbl::Version::CS3 => (false, "private-test-data/cs3/nisa-pc-1.0.5/data/text/"),
+        crate::tbl::Version::CS4 => (false, "private-test-data/cs4/nisa-switch-1.0.0/text/"),
+        crate::tbl::Version::V1(_) | crate::tbl::Version::V2(_) => unreachable!("v1/v2 makes no sense here"),
+    };
     let cwd = std::env::current_dir().unwrap();
-    let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs1/nisa-pc-1.6/data/text/"));
+    let base_path = cwd.to_path_buf().join(relative_path);
+
     for entry in walkdir::WalkDir::new(base_path) {
         let entry = entry.unwrap();
         let path = entry.path();
         if let Some(parent) = path.parent() {
-            if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) {
+            if skip_jp && parent.file_name() == Some(&std::ffi::OsStr::new("dat")) {
                 continue; // TODO: SJIS support for jp files would be nice
             }
         }
@@ -105,20 +106,28 @@ fn test_roundtrip_cs1_strict() {
             log::info!("{}", path.display());
             let fixed = {
                 let mut raw = std::fs::read(path).unwrap();
-                _ = crate::tbl::fixes::fix_in_place(crate::tbl::Version::CS1En, &mut raw);
+                _ = crate::tbl::fixes::fix_in_place(version, &mut raw);
                 raw
             };
             let mut logger = WarningLogger::<DeserializeError>::new();
-            let entries = deserialize_tbl_v1::<_, /*STRICT =*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&fixed), &mut logger, &schemas::CS1_ATOMIC).unwrap();
+            let tbl = crate::tbl::try_read_once::<_, /*STRICT =*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&fixed), &mut logger, version).unwrap();
             assert!(!logger.has_warnings());
             let serialized = {
                 let mut serialized = std::io::Cursor::new(vec![]);
-                let _ = serialize_tbl_v1(&mut serialized, &entries).unwrap();
+                let _ = write(&mut serialized, &tbl).unwrap();
                 serialized.into_inner()
             };
             compare_data(&fixed, &serialized);
         }
     }
+}
+
+#[test]
+fn test_roundtrip_cs1_strict() {
+    INIT_LOG.call_once(|| {
+        simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
+    });
+    test_strict_roundtrip_for_game(crate::tbl::Version::CS1En);
 }
 
 #[test]
@@ -126,31 +135,7 @@ fn test_roundtrip_cs2_strict() {
     INIT_LOG.call_once(|| {
         simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
     });
-    let cwd = std::env::current_dir().unwrap();
-    let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs2/nisa-pc-1.4.1/data/text/"));
-    for entry in walkdir::WalkDir::new(base_path) {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if let Some(parent) = path.parent() {
-            if parent.file_name() == Some(&std::ffi::OsStr::new("dat")) {
-                continue; // TODO: SJIS support for jp files would be nice
-            }
-        }
-        if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-            log::info!("{}", path.display());
-            let fixed = std::fs::read(path).unwrap();
-            let mut logger = WarningLogger::<DeserializeError>::new();
-            let (headers_with_counts, entries) = deserialize_tbl_v2::<_, /*STRICT =*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&fixed), &mut logger, &schemas::CS2_ATOMIC).unwrap();
-            assert!(!logger.has_warnings());
-            let serialized = {
-                let mut serialized = std::io::Cursor::new(vec![]);
-                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, &entries).unwrap();
-                serialized.into_inner()
-            };
-            compare_data(&fixed, &serialized);
-        }
-    }
+    test_strict_roundtrip_for_game(crate::tbl::Version::CS2En);
 }
 
 #[test]
@@ -158,30 +143,7 @@ fn test_roundtrip_cs3_strict() {
     INIT_LOG.call_once(|| {
         simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
     });
-    let cwd = std::env::current_dir().unwrap();
-    let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs3/nisa-pc-1.0.5/data/text/"));
-    for entry in walkdir::WalkDir::new(base_path) {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-            log::info!("{}", path.display());
-            let fixed = {
-                let mut raw = std::fs::read(path).unwrap();
-                _ = crate::tbl::fixes::fix_in_place(crate::tbl::Version::CS3, &mut raw);
-                raw
-            };
-            let mut logger = WarningLogger::<DeserializeError>::new();
-            let (headers_with_counts, entries) = deserialize_tbl_v2::<_, /*STRICT =*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&fixed), &mut logger, &schemas::CS3_ATOMIC).unwrap();
-            assert!(!logger.has_warnings());
-            let serialized = {
-                let mut serialized = std::io::Cursor::new(vec![]);
-                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, &entries).unwrap();
-                serialized.into_inner()
-            };
-            compare_data(&fixed, &serialized);
-        }
-    }
+    test_strict_roundtrip_for_game(crate::tbl::Version::CS3);
 }
 
 #[test]
@@ -189,26 +151,7 @@ fn test_roundtrip_cs4_strict() {
     INIT_LOG.call_once(|| {
         simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
     });
-    let cwd = std::env::current_dir().unwrap();
-    let base_path = cwd.to_path_buf().join(std::path::Path::new("private-test-data/cs4/nisa-switch-1.0.0/text/"));
-    for entry in walkdir::WalkDir::new(base_path) {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if entry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
-            log::info!("{}", path.display());
-            let fixed = std::fs::read(path).unwrap();
-            let mut logger = WarningLogger::<DeserializeError>::new();
-            let (headers_with_counts, entries) = deserialize_tbl_v2::<_, /*STRICT =*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&fixed), &mut logger, &schemas::CS4_ATOMIC).unwrap();
-            assert!(!logger.has_warnings());
-            let serialized = {
-                let mut serialized = std::io::Cursor::new(vec![]);
-                let headers: std::vec::Vec<_> = headers_with_counts.keys().map(|s| s.clone()).collect();
-                let _ = serialize_tbl_v2(&mut serialized, &headers, &entries).unwrap();
-                serialized.into_inner()
-            };
-            compare_data(&fixed, &serialized);
-        }
-    }
+    test_strict_roundtrip_for_game(crate::tbl::Version::CS4);
 }
 
 fn to_entry(schemas: &AtomicSchemas, (header, data): (&str, std::vec::Vec<(&str, &str)>)) -> Entry {
