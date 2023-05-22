@@ -46,23 +46,7 @@ pub fn main() {
 
     match Subcommand::parse() {
         Subcommand::All { raw } => parse_all(!raw),
-        Subcommand::Tbl { game, path, raw } => match game {
-            tocs::tbl::Version::CS1En => {
-                roundtrip_cs1(&path, !raw);
-            }
-            tocs::tbl::Version::CS2En => {
-                roundtrip_cs2(&path, !raw);
-            }
-            tocs::tbl::Version::CS3 => {
-                roundtrip_cs3(&path, !raw);
-            }
-            tocs::tbl::Version::CS4 => {
-                roundtrip_cs4(&path, !raw);
-            }
-            _ => {
-                unreachable!()
-            }
-        },
+        Subcommand::Tbl { game, path, raw } => check_tbl_roundtrip(&path, game, !raw),
         Subcommand::Pkg { path } => parse_pkg(&path),
         Subcommand::Pka { path } => parse_pka(&path),
         Subcommand::ParseDds { path } => parse_dds(&path),
@@ -72,136 +56,41 @@ pub fn main() {
 
 pub fn parse_all(fix_data: bool) {
     let cwd = std::env::current_dir().unwrap();
-    let base_path = cwd.join(std::path::Path::new("private-test-data/cs1/data/text/"));
-    for entry in walkdir::WalkDir::new(base_path) {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            log::info!("trying file {}", path.display());
-            roundtrip_cs1(path, fix_data);
-        }
-        // TODO: parse .pkgs
-    }
 
-    let cwd = std::env::current_dir().unwrap();
-    let base_path = cwd.join(std::path::Path::new("private-test-data/cs2/data/text/"));
-    for entry in walkdir::WalkDir::new(base_path) {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            log::info!("trying file {}", path.display());
-            roundtrip_cs2(path, fix_data);
-        }
-    }
-
-    let cwd = std::env::current_dir().unwrap();
-    let base_path = cwd.join(std::path::Path::new("private-test-data/cs3/data/text/"));
-    for entry in walkdir::WalkDir::new(base_path) {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            log::info!("trying file {}", path.display());
-            roundtrip_cs3(path, fix_data);
-        }
-    }
-
-    let cwd = std::env::current_dir().unwrap();
-    let base_path = cwd.join(std::path::Path::new("private-test-data/cs4/nsw-1.0.0/text"));
-    for entry in walkdir::WalkDir::new(base_path) {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
-            log::info!("trying file {}", path.display());
-            roundtrip_cs4(path, fix_data);
-        }
-    }
-}
-
-pub fn roundtrip_cs1(path: &std::path::Path, fix_data: bool) {
-    let original = {
-        let mut data = std::fs::read(path).unwrap();
-        if fix_data {
-            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::Version::CS1En, &mut data);
-        }
-        data
-    };
-    let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v1::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS1_ATOMIC) {
-        Ok(entries) => {
-            let mut serialized: std::vec::Vec<u8> = vec![];
-            match tocs::tbl::serialize_tbl_v1(&mut std::io::Cursor::new(&mut serialized), &entries) {
-                Ok(_written) => compare(&original, &serialized, path),
-                Err(err) => log::error!("serialize failed: {err}"),
+    for (rel_path, version) in [
+        ("private-test-data/cs1/nisa-pc-1.6/data/text/dat_us", tocs::tbl::Version::CS1En),
+        ("private-test-data/cs2/nisa-pc-1.4.1/data/text/dat_us", tocs::tbl::Version::CS2En),
+        ("private-test-data/cs3/nisa-pc-1.0.5/data/text/", tocs::tbl::Version::CS3),
+        ("private-test-data/cs4/nisa-switch-1.0.0/text/", tocs::tbl::Version::CS4),
+    ]
+    .into_iter()
+    {
+        let base_path = cwd.join(rel_path);
+        for entry in walkdir::WalkDir::new(base_path) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
+                log::info!("trying file {}", path.display());
+                check_tbl_roundtrip(path, version, fix_data);
             }
-        }
-        Err(err) => {
-            log::error!("deserialize failed: {err}");
+            // TODO: parse .pkgs
         }
     }
 }
 
-pub fn roundtrip_cs2(path: &std::path::Path, fix_data: bool) {
+pub fn check_tbl_roundtrip(path: &std::path::Path, version: tocs::tbl::Version, fix_data: bool) {
     let original = {
         let mut data = std::fs::read(path).unwrap();
         if fix_data {
-            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::Version::CS2En, &mut data);
+            _ = tocs::tbl::fixes::fix_in_place(version, &mut data);
         }
         data
     };
-    let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v2::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS2_ATOMIC) {
-        Ok((header_counts, entries)) => {
+    let mut logger = tocs::tbl::WarningLogger::new();
+    match tocs::tbl::try_read_once::<_, /* strict = */ true, /* log = */ true>(&mut std::io::Cursor::new(&original), &mut logger, version) {
+        Ok(tbl) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
-            let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
-            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
-                Ok(_written) => compare(&original, &serialized, path),
-                Err(err) => log::error!("serialize failed: {err}"),
-            }
-        }
-        Err(err) => {
-            log::error!("deserialize failed: {err}");
-        }
-    }
-}
-
-pub fn roundtrip_cs3(path: &std::path::Path, fix_data: bool) {
-    let original = {
-        let mut data = std::fs::read(path).unwrap();
-        if fix_data {
-            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::Version::CS3, &mut data);
-        }
-        data
-    };
-    let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v2::<_, /*Strict=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS3_ATOMIC) {
-        Ok((header_counts, entries)) => {
-            let mut serialized: std::vec::Vec<u8> = vec![];
-            let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
-            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
-                Ok(_written) => compare(&original, &serialized, path),
-                Err(err) => log::error!("serialize failed: {err}"),
-            }
-        }
-        Err(err) => {
-            log::error!("deserialize failed: {err}");
-        }
-    }
-}
-
-pub fn roundtrip_cs4(path: &std::path::Path, fix_data: bool) {
-    let original = {
-        let mut data = std::fs::read(path).unwrap();
-        if fix_data {
-            _ = tocs::tbl::fixes::fix_in_place(tocs::tbl::Version::CS4, &mut data);
-        }
-        data
-    };
-    let mut log = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::deserialize_tbl_v2::<_, /*STRICT=*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&original), &mut log, &tocs::tbl::schemas::CS4_ATOMIC) {
-        Ok((header_counts, entries)) => {
-            let mut serialized: std::vec::Vec<u8> = vec![];
-            let headers: std::vec::Vec<_> = header_counts.keys().cloned().collect();
-            match tocs::tbl::serialize_tbl_v2(&mut std::io::Cursor::new(&mut serialized), &headers, &entries) {
+            match tocs::tbl::write(&mut std::io::Cursor::new(&mut serialized), &tbl) {
                 Ok(_written) => compare(&original, &serialized, path),
                 Err(err) => log::error!("serialize failed: {err}"),
             }

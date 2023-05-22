@@ -728,7 +728,11 @@ impl ReadTblResult {
     }
 }
 
-fn try_read<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(f: &mut F, logger: &mut WarningLogger<DeserializeError>, version: Version) -> Result<Tbl, DeserializeError> {
+pub fn try_read_once<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
+    f: &mut F,
+    logger: &mut WarningLogger<DeserializeError>,
+    version: Version,
+) -> Result<Tbl, DeserializeError> {
     match version.without_schema() {
         VersionWithoutSchema::V1 => deserialize_tbl_v1::<_, STRICT, LOG>(f, logger, version.schemas()).map(|entries| Tbl {
             version: version.without_schema(),
@@ -813,7 +817,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
 pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> ReadTblResult {
     log::debug!("Generic tbl read");
     let mut logger = WarningLogger::new();
-    let first_error = match try_read::<_, /*STRICT =*/ true, /*LOG=*/ false>(f, &mut logger, version) {
+    let first_error = match try_read_once::<_, /*STRICT =*/ true, /*LOG=*/ false>(f, &mut logger, version) {
         Ok(tbl) => {
             return ReadTblResult::Ok(tbl);
         }
@@ -831,7 +835,7 @@ pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> Re
     }
     logger.clear();
     log::debug!("Rereading the tbl non-strictly");
-    if let Ok(tbl) = try_read::<_, /*STRICT =*/ false, /*LOG=*/ true>(f, &mut logger, version) {
+    if let Ok(tbl) = try_read_once::<_, /*STRICT =*/ false, /*LOG=*/ true>(f, &mut logger, version) {
         let warnings = logger.into_warnings();
         // do all entries in the file for which there are warnings have known schemas?
         if warnings_are_likely_fine(&tbl, version.schemas(), &warnings) {
