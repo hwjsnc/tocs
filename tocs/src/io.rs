@@ -160,16 +160,7 @@ impl<const PADDING: usize> PaddedAsciiString<PADDING> {
     }
 
     pub fn as_str(&self) -> &str {
-        #[cfg(debug_assertions)]
-        {
-            std::str::from_utf8(self.as_bytes_excluding_terminator_and_padding()).expect("creation is only possible with valid ASCII strings")
-        }
-
-        #[cfg(not(debug_assertions))]
-        unsafe {
-            // creation is only possible with valid ASCII
-            std::str::from_utf8_unchecked(self.as_bytes_excluding_terminator_and_padding())
-        }
+        std::str::from_utf8(self.as_bytes_excluding_terminator_and_padding()).expect("creation is only possible with valid ASCII strings")
     }
 }
 
@@ -217,16 +208,7 @@ impl<const PADDING: usize> PaddedUtf8String<PADDING> {
     }
 
     pub fn as_str(&self) -> &str {
-        #[cfg(debug_assertions)]
-        {
-            std::str::from_utf8(self.as_bytes_excluding_terminator_and_padding()).expect("creation is only possible with valid UTF-8 strings")
-        }
-
-        #[cfg(not(debug_assertions))]
-        unsafe {
-            // creation is only possible with valid UTF-8
-            std::str::from_utf8_unchecked(self.as_bytes_excluding_terminator_and_padding())
-        }
+        std::str::from_utf8(self.as_bytes_excluding_terminator_and_padding()).expect("creation is only possible with valid UTF-8 strings")
     }
 }
 

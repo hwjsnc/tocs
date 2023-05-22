@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use fallible_iterator::FallibleIterator;
 
 use anyhow::Context as _;

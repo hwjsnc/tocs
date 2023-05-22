@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 #![windows_subsystem = "windows"] // don't open terminal on windows
 
 mod filter;

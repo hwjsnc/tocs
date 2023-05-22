@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use clap::Parser;
 use indexmap::IndexMap;
 use smol_str::SmolStr;
