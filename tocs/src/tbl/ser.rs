@@ -50,20 +50,19 @@ impl std::error::Error for SerializeError {}
 impl AtomicValue {
     fn write<F: std::io::Write>(&self, f: &mut F) -> Result<usize, std::io::Error> {
         match self {
-            // TODO: write_all?
-            AtomicValue::I8(x) => f.write(&x.to_le_bytes()),
-            AtomicValue::I16(x) => f.write(&x.to_le_bytes()),
-            AtomicValue::I32(x) => f.write(&x.to_le_bytes()),
-            AtomicValue::U8(x) => f.write(&x.to_le_bytes()),
-            AtomicValue::U16(x) => f.write(&x.to_le_bytes()),
-            AtomicValue::U32(x) => f.write(&x.to_le_bytes()),
-            AtomicValue::F32(x) => f.write(&x.to_le_bytes()),
+            AtomicValue::I8(x) => f.write_all(&x.to_le_bytes()).map(|()| 1),
+            AtomicValue::I16(x) => f.write_all(&x.to_le_bytes()).map(|()| 2),
+            AtomicValue::I32(x) => f.write_all(&x.to_le_bytes()).map(|()| 4),
+            AtomicValue::U8(x) => f.write_all(&x.to_le_bytes()).map(|()| 1),
+            AtomicValue::U16(x) => f.write_all(&x.to_le_bytes()).map(|()| 2),
+            AtomicValue::U32(x) => f.write_all(&x.to_le_bytes()).map(|()| 4),
+            AtomicValue::F32(x) => f.write_all(&x.to_le_bytes()).map(|()| 4),
             AtomicValue::CUtf8(s) => {
-                let mut written = f.write(s.as_bytes())?;
-                written += f.write(&[0])?;
-                Ok(written)
+                f.write_all(s.as_bytes())?;
+                f.write_all(&[0])?;
+                Ok(1 + s.len())
             }
-            AtomicValue::X(data) => f.write(data),
+            AtomicValue::X(data) => f.write_all(data).map(|()| data.len()),
         }
     }
 }

@@ -29,7 +29,7 @@ impl<'a> Bc7BlockSlice<'a> {
     }
 
     fn mode(&self) -> u8 {
-        std::cmp::min(self.data.leading_zeros(), 8) as u8 // TODO: make sure to only consider the first byte (even if it's all zero)
+        std::cmp::min(self.data[..8].leading_zeros(), 8) as u8
     }
 }
 
