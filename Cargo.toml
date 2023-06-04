@@ -4,6 +4,9 @@ members = ["misc", "pkgtool", "sqlite_conv", "tbled", "tocs", "try_fix", "try_pa
 
 [profile.release]
 strip = true
-opt-level = "z"
+opt-level = "s"
 lto = true
 #codegen-units=1
+
+[profile.dev]
+opt-level = 1
