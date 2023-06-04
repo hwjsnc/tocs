@@ -1195,7 +1195,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74212e6bbe9a4352329b2f68ba3130c15a3f26fe88ff22dbdc6cdd58fa85e99c"
 
 [[package]]
-name = "sql_conv"
+name = "sqlite_conv"
 version = "0.2.0"
 dependencies = [
  "anyhow",
