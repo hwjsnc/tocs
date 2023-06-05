@@ -6,15 +6,15 @@ packages:
 sources:
   - https://git.sr.ht/~quf/tocs
 artifacts:
-  - tocs/target/x86_64-pc-windows-gnu/release/tbled.exe
-  - tocs/target/x86_64-pc-windows-gnu/release/pkgtool.exe
-  - tocs/target/x86_64-pc-windows-gnu/release/sql_conv.exe
-  - tocs/target/x86_64-pc-windows-gnu/release/try_fix.exe
+  - tocs/tbled/target/x86_64-pc-windows-gnu/release/tbled.exe
+  - tocs/pkgtool/target/x86_64-pc-windows-gnu/release/pkgtool.exe
 tasks:
  - install-install-toolchain: |
     rustup install stable
-    #rustup toolchain install --force-non-host stable-x86_64-pc-windows-gnu
     rustup target add x86_64-pc-windows-gnu
- - build: |
-    cd tocs
+ - build-tbled: |
+    cd tocs/tbled
+    cargo build --release --locked --target x86_64-pc-windows-gnu
+ - build-pkgtool: |
+    cd tocs/pkgtool
     cargo build --release --locked --target x86_64-pc-windows-gnu

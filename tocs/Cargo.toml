@@ -8,6 +8,9 @@ publish = false
 name = "tocs"
 path = "src/lib.rs"
 
+[profile.dev]
+opt-level = 1
+
 [features]
 default = ["private-tests", "pkg"]
 private-tests = ["dep:simple_logger"]
