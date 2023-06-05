@@ -8,7 +8,8 @@ pub type SmallBuf = SmallVec<[u8; 16]>;
 
 /// Types as they appear in the schema definition
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-#[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields, rename_all = "snake_case"))]
 pub enum Type {
     I8,
     I16,
@@ -22,7 +23,9 @@ pub enum Type {
     //F64,
     CUtf8, // null terminated UTF-8 string
     //C_SJIS, // null terminated Shift-JIS string
+    #[cfg_attr(feature = "serde", serde(rename = "bytes", serialize_with = "serde_serialize_type_x"))]
     X(usize),
+    #[cfg_attr(feature = "serde", serde(serialize_with = "serde_serialize_type_repeat"))]
     Repeat(usize, Box<Type>),
     Ref(Header),
 }
@@ -71,13 +74,18 @@ pub enum AtomicValue {
     X(SmallBuf),
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Schemas {
     pub entries: IndexMap<Header, Schema>,
     pub common: IndexMap<Header, Schema>,
 }
 
 // useful type definitions
-pub type Header = crate::io::PaddedAsciiString<1>;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Header {
+    name: crate::io::PaddedAsciiString<1>,
+}
 pub type Attribute = SmolStr; // attributes do not need to be serialized or deserialized
 
 pub type Schema = IndexMap<Attribute, Type>;
@@ -87,7 +95,65 @@ pub type AtomicSchema = IndexMap<Attribute, AtomicType>;
 pub type AtomicSchemas = IndexMap<Header, AtomicSchema>;
 pub type AtomicAttributeValues = IndexMap<Attribute, AtomicValue>;
 
-// Convert schema Type to Atomic Type (by unrolling sequences and dereferencing common structures such as effects)
+// header
+
+impl Header {
+    pub fn new(s: &str) -> Result<Self, crate::io::PaddedStringError> {
+        crate::io::PaddedAsciiString::<1>::new(s).map(|name| Self { name })
+    }
+
+    pub fn write_with_terminator<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
+        self.name.write_to(f)
+    }
+}
+
+impl From<crate::io::PaddedAsciiString<1>> for Header {
+    fn from(name: crate::io::PaddedAsciiString<1>) -> Self {
+        Self { name }
+    }
+}
+
+impl TryFrom<crate::io::PaddedByteString<1>> for Header {
+    type Error = crate::io::PaddedStringError;
+    fn try_from(s: crate::io::PaddedByteString<1>) -> Result<Self, Self::Error> {
+        crate::io::PaddedAsciiString::<1>::try_from(s).map(|name| Self { name })
+    }
+}
+
+impl core::fmt::Display for Header {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        self.name.fmt(f)
+        //write!(f, "{}", self.name)
+    }
+}
+
+// serialize schemas with serde
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Header {
+    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        ser.serialize_str(self.name.as_str())
+    }
+}
+
+#[cfg(feature = "serde")]
+fn serde_serialize_type_x<S: serde::Serializer>(len: &usize, ser: S) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeStruct as _;
+    let mut s = ser.serialize_struct("bytes", 1)?;
+    s.serialize_field("count", len)?;
+    s.end()
+}
+
+#[cfg(feature = "serde")]
+fn serde_serialize_type_repeat<S: serde::Serializer>(count: &usize, ty: &Type, ser: S) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeStruct as _;
+    let mut s = ser.serialize_struct("repeat", 2)?;
+    s.serialize_field("count", count)?;
+    s.serialize_field("type", ty)?;
+    s.end()
+}
+
+// convert schema type to atomic type (by unrolling sequences and dereferencing common structures such as effects)
 
 #[derive(Clone, Debug)]
 pub enum NF1ErrorDetail {
@@ -143,63 +209,6 @@ impl std::fmt::Display for NF1Error {
             }
         }
         Ok(())
-    }
-}
-
-#[cfg(feature = "serde")]
-impl serde::Serialize for Type {
-    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStructVariant as _;
-
-        match self {
-            Type::I8 => ser.serialize_unit_variant("type", 0, "i8"),
-            Type::I16 => ser.serialize_unit_variant("type", 1, "i16"),
-            Type::I32 => ser.serialize_unit_variant("type", 2, "i32"),
-            Type::U8 => ser.serialize_unit_variant("type", 3, "u8"),
-            Type::U16 => ser.serialize_unit_variant("type", 4, "u16"),
-            Type::U32 => ser.serialize_unit_variant("type", 5, "u32"),
-            Type::F32 => ser.serialize_unit_variant("type", 6, "f32"),
-            Type::CUtf8 => ser.serialize_unit_variant("type", 7, "c_utf8"),
-            Type::X(n) => {
-                let mut tv = ser.serialize_struct_variant("type", 8, "bytes", 1)?;
-                tv.serialize_field("length", n)?;
-                tv.end()
-            }
-            Type::Repeat(n, ty) => {
-                let mut sv = ser.serialize_struct_variant("type", 9, "repeat", 2)?;
-                sv.serialize_field("count", n)?;
-                sv.serialize_field("type", ty)?;
-                sv.end()
-            }
-            Type::Ref(hdr) => {
-                let mut tv = ser.serialize_struct_variant("type", 10, "ref", 1)?;
-                tv.serialize_field("header", hdr.as_str())?;
-                tv.end()
-            }
-        }
-    }
-}
-
-#[cfg(feature = "serde")]
-impl serde::Serialize for Schemas {
-    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::{SerializeMap, SerializeStruct};
-        struct SchemaSerializer<'a>(&'a indexmap::IndexMap<Header, indexmap::IndexMap<Attribute, Type>>);
-        impl<'a> serde::Serialize for SchemaSerializer<'a> {
-            fn serialize<S2: serde::Serializer>(&self, ser: S2) -> Result<S2::Ok, S2::Error> {
-                let mut map = ser.serialize_map(Some(self.0.len()))?;
-                for (hdr, schema) in self.0.iter() {
-                    map.serialize_key(hdr.as_str())?;
-                    map.serialize_value(schema)?;
-                }
-                map.end()
-            }
-        }
-
-        let mut s = ser.serialize_struct("schemas", 2)?;
-        s.serialize_field("entries", &SchemaSerializer(&self.entries))?;
-        s.serialize_field("common", &SchemaSerializer(&self.common))?;
-        s.end()
     }
 }
 

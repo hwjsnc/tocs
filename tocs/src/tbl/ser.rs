@@ -69,7 +69,7 @@ impl AtomicValue {
 
 pub fn nf1_schema_serialize<F: std::io::Write>(f: &mut F, header: &Header, attributes: &AtomicAttributeValues) -> Result<usize, SerializeError> {
     let mut written = 0;
-    written += header.write_to(f).map_err(SerializeError::IoError)?;
+    written += header.write_with_terminator(f).map_err(SerializeError::IoError)?;
     let length = atomic_attributes_serialization_length(attributes).ok_or(SerializeError::EntryDataTooLong)?;
     written += f.write(&length.to_le_bytes()).map_err(SerializeError::IoError)?;
     for (_, v) in attributes.iter() {
@@ -112,7 +112,7 @@ pub fn serialize_tbl_v2<F: std::io::Write>(f: &mut F, headers: &[Header], entrie
     written += f.write(&number_of_headers.to_le_bytes()).map_err(SerializeError::IoError)?;
     for header in headers.iter() {
         let n: u32 = entries.iter().filter(|e| &e.header == header).count().try_into().expect("total number of entries fits in a u16");
-        written += header.write_to(f).map_err(SerializeError::IoError)?;
+        written += header.write_with_terminator(f).map_err(SerializeError::IoError)?;
         written += f.write(&n.to_le_bytes()).map_err(SerializeError::IoError)?;
     }
     for entry in entries {
