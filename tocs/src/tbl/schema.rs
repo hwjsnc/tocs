@@ -89,7 +89,6 @@ pub struct Header {
 pub type Attribute = SmolStr; // attributes do not need to be serialized or deserialized
 
 pub type Schema = IndexMap<Attribute, Type>;
-pub type AttributeValues = IndexMap<Attribute, Value>;
 
 pub type AtomicSchema = IndexMap<Attribute, AtomicType>;
 pub type AtomicSchemas = IndexMap<Header, AtomicSchema>;
@@ -104,6 +103,10 @@ impl Header {
 
     pub fn write_with_terminator<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
         self.name.write_to(f)
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.name.as_str()
     }
 }
 
@@ -349,7 +352,19 @@ pub fn get_nf1(schema_name: &Header, schemas: &indexmap::IndexMap<Header, Schema
 
 pub fn get_nf1_for_all(schemas: &Schemas) -> Result<AtomicSchemas, NF1Error> {
     let mut joint = schemas.entries.clone();
-    joint.extend(schemas.common.clone().into_iter());
+    for (header, schema) in schemas.common.iter() {
+        match joint.entry(header.clone()) {
+            indexmap::map::Entry::Vacant(entry) => {
+                entry.insert(schema.clone());
+            }
+            indexmap::map::Entry::Occupied(entry) => {
+                return Err(NF1Error {
+                    detail: NF1ErrorDetail::Duplicate(entry.key().clone()),
+                    context: vec![],
+                });
+            }
+        }
+    }
     let joint = joint;
     let mut res = IndexMap::new();
     for name in schemas.entries.keys() {
@@ -377,6 +392,7 @@ mod test {
             let copy: Schemas = serde_json::from_slice(json.as_bytes()).unwrap();
             assert_eq!(copy.entries, schemas.entries);
             assert_eq!(copy.common, schemas.common);
+            assert!(super::get_nf1_for_all(&copy).is_ok());
         }
     }
 }
