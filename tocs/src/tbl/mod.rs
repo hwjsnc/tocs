@@ -46,12 +46,7 @@ impl<W> WarningLogger<W> {
         }
     }
 
-    pub fn ignore(mut self) -> Self {
-        self.ignore = true;
-        self
-    }
-
-    pub fn log(&mut self, warning: W) {
+    fn log(&mut self, warning: W) {
         let Self { ignore, warnings } = self;
         if !*ignore {
             warnings.push(warning);
@@ -59,24 +54,16 @@ impl<W> WarningLogger<W> {
     }
 
     #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.warnings.len()
     }
 
-    pub fn ignores_warnings(&self) -> bool {
-        self.ignore
-    }
-
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.warnings.clear();
     }
 
     pub fn has_warnings(&self) -> bool {
         !self.warnings.is_empty()
-    }
-
-    pub fn warnings(&self) -> impl Iterator<Item = &W> {
-        self.warnings.iter()
     }
 
     fn into_warnings(self) -> std::vec::Vec<W> {
@@ -288,7 +275,7 @@ fn deserialize_header_name<F: std::io::Read + std::io::Seek, const LOG: bool>(f:
     })
 }
 
-pub fn deserialize_atomic_value<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
+fn deserialize_atomic_value<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
     f: &mut F,
     log: &mut WarningLogger<DeserializeError>,
     t: &AtomicType,
