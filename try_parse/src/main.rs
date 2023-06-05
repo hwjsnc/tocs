@@ -46,10 +46,15 @@ enum Subcommand {
     ParseDds { path: std::path::PathBuf },
     /// Convert a .dds with BC7-encoded texture data to r8g8b8a8
     DdsConvertBC7 { source: std::path::PathBuf, target: std::path::PathBuf },
-    /// Serialize builtin tbl schemas
+    /// Serialize builtin tbl schemas to json
     SerializeBuiltinTblSchemas {
         /// Game version for which the schemas should be serialized
         version: tocs::tbl::Version<'static>,
+    },
+    /// Parse json as tbl schemas
+    ParseTblSchemas {
+        /// Path to the .json
+        path: std::path::PathBuf,
     },
 }
 
@@ -68,6 +73,7 @@ pub fn main() {
         Subcommand::ParseDds { path } => parse_dds(&path),
         Subcommand::DdsConvertBC7 { source, target } => convert_bc7(&source, &target),
         Subcommand::SerializeBuiltinTblSchemas { version } => serialize_builtin_schemas(version),
+        Subcommand::ParseTblSchemas { path } => parse_tbl_schemas(&path),
     }
 }
 
@@ -407,4 +413,11 @@ fn serialize_builtin_schemas(version: tocs::tbl::Version) {
         tocs::tbl::Version::V2(_) => unreachable!(),
     };
     println!("{}", serde_json::to_string(schemas).unwrap())
+}
+
+fn parse_tbl_schemas(path: &std::path::Path) {
+    let data = std::fs::read(path).unwrap();
+    let schemas: tocs::tbl::Schemas = serde_json::from_slice(&data).unwrap();
+    let _atomic = tocs::tbl::get_nf1_for_all(&schemas).unwrap();
+    log::info!("ok");
 }

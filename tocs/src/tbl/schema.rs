@@ -8,7 +8,7 @@ pub type SmallBuf = SmallVec<[u8; 16]>;
 
 /// Types as they appear in the schema definition
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields, rename_all = "snake_case"))]
 pub enum Type {
     I8,
@@ -23,9 +23,9 @@ pub enum Type {
     //F64,
     CUtf8, // null terminated UTF-8 string
     //C_SJIS, // null terminated Shift-JIS string
-    #[cfg_attr(feature = "serde", serde(rename = "bytes", serialize_with = "serde_serialize_type_x"))]
+    #[cfg_attr(feature = "serde", serde(rename = "bytes", serialize_with = "serde_serialize_type_x", deserialize_with = "serde_deserialize_type_x"))]
     X(usize),
-    #[cfg_attr(feature = "serde", serde(serialize_with = "serde_serialize_type_repeat"))]
+    #[cfg_attr(feature = "serde", serde(serialize_with = "serde_serialize_type_repeat", deserialize_with = "serde_deserialize_type_repeat"))]
     Repeat(usize, Box<Type>),
     Ref(Header),
 }
@@ -74,7 +74,7 @@ pub enum AtomicValue {
     X(SmallBuf),
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Schemas {
     pub entries: IndexMap<Header, Schema>,
@@ -82,7 +82,7 @@ pub struct Schemas {
 }
 
 // useful type definitions
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Header {
     name: crate::io::PaddedAsciiString<1>,
 }
@@ -137,6 +137,17 @@ impl serde::Serialize for Header {
 }
 
 #[cfg(feature = "serde")]
+impl<'a> serde::Deserialize<'a> for Header {
+    fn deserialize<D: serde::Deserializer<'a>>(des: D) -> Result<Self, D::Error> {
+        use serde::de::Error as _;
+        let s = <&str>::deserialize(des)?;
+        crate::io::PaddedAsciiString::<1>::new(s)
+            .map(Self::from)
+            .map_err(|err| D::Error::custom(format!("invalid header name: {err}")))
+    }
+}
+
+#[cfg(feature = "serde")]
 fn serde_serialize_type_x<S: serde::Serializer>(len: &usize, ser: S) -> Result<S::Ok, S::Error> {
     use serde::ser::SerializeStruct as _;
     let mut s = ser.serialize_struct("bytes", 1)?;
@@ -151,6 +162,27 @@ fn serde_serialize_type_repeat<S: serde::Serializer>(count: &usize, ty: &Type, s
     s.serialize_field("count", count)?;
     s.serialize_field("type", ty)?;
     s.end()
+}
+
+#[cfg(feature = "serde")]
+fn serde_deserialize_type_x<'a, D: serde::Deserializer<'a>>(des: D) -> Result<usize, D::Error> {
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    struct TypeX {
+        count: usize,
+    }
+    TypeX::deserialize(des).map(|x| x.count)
+}
+
+#[cfg(feature = "serde")]
+fn serde_deserialize_type_repeat<'a, D: serde::Deserializer<'a>>(des: D) -> Result<(usize, Box<Type>), D::Error> {
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    struct TypeRepeat {
+        count: usize,
+        r#type: Box<Type>,
+    }
+    TypeRepeat::deserialize(des).map(|x| (x.count, x.r#type))
 }
 
 // convert schema type to atomic type (by unrolling sequences and dereferencing common structures such as effects)
@@ -324,4 +356,27 @@ pub fn get_nf1_for_all(schemas: &Schemas) -> Result<AtomicSchemas, NF1Error> {
         res.insert(name.clone(), get_nf1(name, &joint)?);
     }
     Ok(res)
+}
+
+#[cfg(all(test, feature = "serde"))]
+mod test {
+    use super::Schemas;
+
+    #[test]
+    fn roundtrip_schemas_json() {
+        let game_schemas: [&Schemas; 5] = [
+            &crate::tbl::schemas::CS1 as &Schemas,
+            &crate::tbl::schemas::CS2,
+            &crate::tbl::schemas::CS3,
+            &crate::tbl::schemas::CS4,
+            &crate::tbl::schemas::CS4,
+        ];
+
+        for schemas in game_schemas {
+            let json = serde_json::to_string(schemas).unwrap();
+            let copy: Schemas = serde_json::from_slice(json.as_bytes()).unwrap();
+            assert_eq!(copy.entries, schemas.entries);
+            assert_eq!(copy.common, schemas.common);
+        }
+    }
 }
