@@ -46,6 +46,11 @@ enum Subcommand {
     ParseDds { path: std::path::PathBuf },
     /// Convert a .dds with BC7-encoded texture data to r8g8b8a8
     DdsConvertBC7 { source: std::path::PathBuf, target: std::path::PathBuf },
+    /// Serialize builtin tbl schemas
+    SerializeBuiltinTblSchemas {
+        /// Game version for which the schemas should be serialized
+        version: tocs::tbl::Version<'static>,
+    },
 }
 
 pub fn main() {
@@ -62,6 +67,7 @@ pub fn main() {
         Subcommand::Pka { path } => parse_pka(&path),
         Subcommand::ParseDds { path } => parse_dds(&path),
         Subcommand::DdsConvertBC7 { source, target } => convert_bc7(&source, &target),
+        Subcommand::SerializeBuiltinTblSchemas { version } => serialize_builtin_schemas(version),
     }
 }
 
@@ -389,4 +395,16 @@ fn convert_bc7(source: &std::path::Path, target: &std::path::Path) {
             }
         }
     }
+}
+
+fn serialize_builtin_schemas(version: tocs::tbl::Version) {
+    let schemas: &tocs::tbl::Schemas = match version {
+        tocs::tbl::Version::CS1En => &tocs::tbl::schemas::CS1,
+        tocs::tbl::Version::CS2En => &tocs::tbl::schemas::CS2,
+        tocs::tbl::Version::CS3 => &tocs::tbl::schemas::CS3,
+        tocs::tbl::Version::CS4 => &tocs::tbl::schemas::CS4,
+        tocs::tbl::Version::V1(_) => unreachable!(),
+        tocs::tbl::Version::V2(_) => unreachable!(),
+    };
+    println!("{}", serde_json::to_string(schemas).unwrap())
 }

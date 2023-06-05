@@ -8,6 +8,7 @@ pub type SmallBuf = SmallVec<[u8; 16]>;
 
 /// Types as they appear in the schema definition
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[repr(u8)]
 pub enum Type {
     I8,
     I16,
@@ -70,12 +71,16 @@ pub enum AtomicValue {
     X(SmallBuf),
 }
 
+pub struct Schemas {
+    pub entries: IndexMap<Header, Schema>,
+    pub common: IndexMap<Header, Schema>,
+}
+
 // useful type definitions
 pub type Header = crate::io::PaddedAsciiString<1>;
 pub type Attribute = SmolStr; // attributes do not need to be serialized or deserialized
 
 pub type Schema = IndexMap<Attribute, Type>;
-pub type Schemas = IndexMap<Header, Schema>;
 pub type AttributeValues = IndexMap<Attribute, Value>;
 
 pub type AtomicSchema = IndexMap<Attribute, AtomicType>;
@@ -141,6 +146,63 @@ impl std::fmt::Display for NF1Error {
     }
 }
 
+#[cfg(feature = "serde")]
+impl serde::Serialize for Type {
+    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStructVariant as _;
+
+        match self {
+            Type::I8 => ser.serialize_unit_variant("type", 0, "i8"),
+            Type::I16 => ser.serialize_unit_variant("type", 1, "i16"),
+            Type::I32 => ser.serialize_unit_variant("type", 2, "i32"),
+            Type::U8 => ser.serialize_unit_variant("type", 3, "u8"),
+            Type::U16 => ser.serialize_unit_variant("type", 4, "u16"),
+            Type::U32 => ser.serialize_unit_variant("type", 5, "u32"),
+            Type::F32 => ser.serialize_unit_variant("type", 6, "f32"),
+            Type::CUtf8 => ser.serialize_unit_variant("type", 7, "c_utf8"),
+            Type::X(n) => {
+                let mut tv = ser.serialize_struct_variant("type", 8, "bytes", 1)?;
+                tv.serialize_field("length", n)?;
+                tv.end()
+            }
+            Type::Repeat(n, ty) => {
+                let mut sv = ser.serialize_struct_variant("type", 9, "repeat", 2)?;
+                sv.serialize_field("count", n)?;
+                sv.serialize_field("type", ty)?;
+                sv.end()
+            }
+            Type::Ref(hdr) => {
+                let mut tv = ser.serialize_struct_variant("type", 10, "ref", 1)?;
+                tv.serialize_field("header", hdr.as_str())?;
+                tv.end()
+            }
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Schemas {
+    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{SerializeMap, SerializeStruct};
+        struct SchemaSerializer<'a>(&'a indexmap::IndexMap<Header, indexmap::IndexMap<Attribute, Type>>);
+        impl<'a> serde::Serialize for SchemaSerializer<'a> {
+            fn serialize<S2: serde::Serializer>(&self, ser: S2) -> Result<S2::Ok, S2::Error> {
+                let mut map = ser.serialize_map(Some(self.0.len()))?;
+                for (hdr, schema) in self.0.iter() {
+                    map.serialize_key(hdr.as_str())?;
+                    map.serialize_value(schema)?;
+                }
+                map.end()
+            }
+        }
+
+        let mut s = ser.serialize_struct("schemas", 2)?;
+        s.serialize_field("entries", &SchemaSerializer(&self.entries))?;
+        s.serialize_field("common", &SchemaSerializer(&self.common))?;
+        s.end()
+    }
+}
+
 impl Type {
     pub fn try_to_atomic_type(&self) -> Option<AtomicType> {
         match self {
@@ -203,7 +265,7 @@ impl AtomicValue {
 }
 
 // "Flatten" the schema by unrolling sequences and dereferencing references
-pub fn get_nf1(schema_name: &Header, schemas: &Schemas) -> Result<AtomicSchema, NF1Error> {
+pub fn get_nf1(schema_name: &Header, schemas: &indexmap::IndexMap<Header, Schema>) -> Result<AtomicSchema, NF1Error> {
     // TODO: check duplicates
     let schema = schemas.get(schema_name).ok_or_else(|| NF1Error {
         detail: NF1ErrorDetail::NoSuchSchema(schema_name.clone()),
@@ -244,12 +306,12 @@ pub fn get_nf1(schema_name: &Header, schemas: &Schemas) -> Result<AtomicSchema, 
     Ok(nf1)
 }
 
-pub fn get_nf1_for_all(schemas: &Schemas, common: &Schemas) -> Result<AtomicSchemas, NF1Error> {
-    let mut joint = schemas.clone();
-    joint.extend(common.clone().into_iter());
+pub fn get_nf1_for_all(schemas: &Schemas) -> Result<AtomicSchemas, NF1Error> {
+    let mut joint = schemas.entries.clone();
+    joint.extend(schemas.common.clone().into_iter());
     let joint = joint;
     let mut res = IndexMap::new();
-    for name in schemas.keys() {
+    for name in schemas.entries.keys() {
         res.insert(name.clone(), get_nf1(name, &joint)?);
     }
     Ok(res)
