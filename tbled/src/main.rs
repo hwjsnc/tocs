@@ -600,11 +600,13 @@ impl App {
 
         // if there are warnings, show button to display them
         let mut warning_menu = self.widgets.menu.find_item("&File/Show warnings...\t").unwrap();
-        if warnings.is_empty() {
+        let show_warnings = if warnings.is_empty() {
             warning_menu.deactivate();
+            false
         } else {
             warning_menu.activate();
-        }
+            true
+        };
 
         // reset header selector
         let previously_active_entry_type = active_entry_type.clone();
@@ -627,6 +629,10 @@ impl App {
         self.update_table();
 
         self.widgets.table.auto_size_cells();
+
+        if show_warnings {
+            warn_diag::WarningDialog::new(self.state.warnings.iter());
+        }
     }
 
     fn update_undo_redo_menu(&mut self) {

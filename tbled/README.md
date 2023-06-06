@@ -104,7 +104,8 @@ Releases (downloads & changelogs)
 
 ### v0.6 (in development)
 
-- Support for custom schemas
+- Show warning dialog automatically (if there are warnings) when a file is loaded.
+- Support for user-provided schemas
 - Menu and workflow reorganization
 - Warnings are no longer issued when opening a file with a known fix.
 - Improved search:
