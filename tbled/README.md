@@ -28,9 +28,12 @@ Other versions you'll have to test yourself.
 Usage
 -----
 
-To load a file, select one of the options under "Load" and select a `.tbl` file.
+First off, load a set of tbl schemas from the "Schemas" menu.
+You can select one of the builtin schemas (one for each supported game), or import your own (see more below).
+Make sure to select the right version or loading the `.tbl` files will likely fail.
+
+Then, load a tbl file under "Load" and select a `.tbl` file.
 These files are located in the `data\text` folders relative to the installation path.
-Make sure to choose the correct game version, or loading the data will likely fail.
 If loading was successful, choose an entry type on the right to see all entries of that type in the loaded file.
 
 Editing works via the edit field:
@@ -76,6 +79,15 @@ For example:
 Combining searches is not possible and no further extensions are planned.
 If you need more complex searches, you can convert the data to a sqlite database using the `sqlite_conv` utility and query that database using SQL.
 
+Custom schemas
+--------------
+
+The format for custom schemas is a subset of JSON.
+The recommended way to make custom schemas is to export one of the builtins via the "Schemas" menu, edit the file, and then load the edited Schemas from the "Schemas" menu.
+The exact format is not documented, but it should be easy enough to figure out.
+If you find out something about fields which are unknown/opaque in the builtin schemas, do let me know so I can amend the builtins.
+
+
 Warnings
 --------
 
@@ -92,6 +104,8 @@ Releases (downloads & changelogs)
 
 ### v0.6 (in development)
 
+- Support for custom schemas
+- Menu and workflow reorganization
 - Warnings are no longer issued when opening a file with a known fix.
 - Improved search:
   - allow restricting substring search to a single attribute

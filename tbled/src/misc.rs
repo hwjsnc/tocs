@@ -107,6 +107,21 @@ pub fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::V
     Ok(result)
 }
 
+pub fn export_schemas(path: &std::path::Path, schemas: &tocs::tbl::Schemas) -> Result<(), std::io::Error> {
+    let file = std::fs::File::create(path)?;
+    let mut writer = std::io::BufWriter::new(file);
+    serde_json::to_writer_pretty(&mut writer, schemas).map_err(std::io::Error::from)?;
+    let _ = writer.into_inner().map_err(|err| err.into_error())?;
+    Ok(())
+}
+
+pub fn import_schemas(path: &std::path::Path) -> Result<tocs::tbl::AtomicSchemas, std::io::Error> {
+    let data = std::fs::read(path)?;
+    let schemas: tocs::tbl::Schemas = serde_json::from_slice(data.as_slice()).map_err(std::io::Error::from)?;
+    let atomic_schemas = tocs::tbl::get_nf1_for_all(&schemas).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+    Ok(atomic_schemas)
+}
+
 pub fn schema_for_header<'a>(header: &Header, schemas: &'a indexmap::IndexMap<Header, Schema>) -> &'a Schema {
     lazy_static::lazy_static! {
         pub static ref GENERIC : Schema = [

@@ -247,6 +247,8 @@ impl std::fmt::Display for NF1Error {
     }
 }
 
+impl std::error::Error for NF1Error {}
+
 impl Type {
     pub fn try_to_atomic_type(&self) -> Option<AtomicType> {
         match self {

@@ -26,7 +26,7 @@ struct CliArgs {
     file: Option<std::path::PathBuf>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SchemaVersion {
     CS1En,
     CS2En,
@@ -38,24 +38,42 @@ pub enum SchemaVersion {
 
 #[derive(Clone, Debug)]
 enum Msg {
-    SetVersion(SchemaVersion),    // user wants to change schema version
-    ExportSchemas(SchemaVersion), // user wants to export a builtin schema
-    LoadFile,                     // user wants to load a file
-    SaveFile,                     // user wants to save to the same file
-    SelectAndSaveFile,            // user wants to save a file
-    ExportCSV,                    // user wants to export file to csv
-    ImportCSV,                    // user wants to import table from csv
-    ShowWarnings,                 // user wants to see warnings
-    DifferentHeaderSelected,      // user selected a different header; update the table widget
-    Undo,                         // user wants to undo last action
-    Redo,                         // user wants to redo last action
-    DuplicateEntry,               // user wants to duplicate the current row
-    DeleteEntry,                  // user wants to delete the current row
-    AutoSizeTable,                // user wants to automatically size cells to fit content
-    SelectAttributes,             // User wants to select/reorder attributes/columns
-    TableEvent,                   // an arbitrary event on the table
-    DoneEditing,                  // user is done editing, now the value should be updated
-    UpdateSearch,                 // user changed the quick search/filter
+    /// user wants to change schemas
+    SetVersion(SchemaVersion),
+    /// user wants to export a builtin schema
+    ExportSchemas(SchemaVersion),
+    /// user wants to load a file
+    LoadFile,
+    /// user wants to save to the same file
+    SaveFile,
+    /// user wants to save a file
+    SelectAndSaveFile,
+    /// user wants to export file to csv
+    ExportCSV,
+    /// user wants to import table from csv
+    ImportCSV,
+    /// user wants to see warnings
+    ShowWarnings,
+    /// user selected a different header; update the table widget
+    DifferentHeaderSelected,
+    /// user wants to undo last action
+    Undo,
+    /// user wants to redo last action
+    Redo,
+    /// user wants to duplicate the current row
+    DuplicateEntry,
+    /// user wants to delete the current row
+    DeleteEntry,
+    /// user wants to automatically size cells to fit content
+    AutoSizeTable,
+    /// User wants to select/reorder attributes/columns
+    SelectAttributes,
+    /// an arbitrary event on the table
+    TableEvent,
+    /// user is done editing, now the value should be updated
+    DoneEditing,
+    /// user changed the quick search/filter
+    UpdateSearch,
 }
 
 struct Widgets {
@@ -168,6 +186,22 @@ impl App {
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
             Msg::ExportSchemas(SchemaVersion::CS4),
+        );
+
+        menu.add_emit(
+            "&Schemas/Import/Schemas without entry types in header headers (CS1)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::SetVersion(SchemaVersion::CustomV1),
+        );
+
+        menu.add_emit(
+            "&Schemas/Import/Schemas with entry types in header (CS2 onward)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::SetVersion(SchemaVersion::CustomV2),
         );
 
         menu.add_emit(
@@ -358,7 +392,18 @@ impl App {
                     SchemaVersion::CS2En => tocs::tbl::Version::CS2En,
                     SchemaVersion::CS3 => tocs::tbl::Version::CS3,
                     SchemaVersion::CS4 => tocs::tbl::Version::CS4,
-                    SchemaVersion::CustomV1 | SchemaVersion::CustomV2 => todo!("load schema"),
+                    SchemaVersion::CustomV1 | SchemaVersion::CustomV2 => {
+                        let Some(path) = misc::load_file_dialog("json") else { return };
+                        match misc::import_schemas(&path) {
+                            Ok(schema) if v == SchemaVersion::CustomV1 => tocs::tbl::Version::V1(schema),
+                            Ok(schema) if v == SchemaVersion::CustomV2 => tocs::tbl::Version::V2(schema),
+                            Ok(_) => unreachable!(),
+                            Err(e) => {
+                                fltk::dialog::alert_default(&format!("error importing schema {}: {}", path.display(), e));
+                                return;
+                            }
+                        }
+                    }
                 };
                 self.state.tbl_version = new_version;
                 self.state.tbl_history.clear_all(); // we don't want a file incompatible with the new schema
@@ -372,10 +417,8 @@ impl App {
                     SchemaVersion::CS4 => ("cs4.json", &tocs::tbl::schemas::CS4),
                     SchemaVersion::CustomV1 | SchemaVersion::CustomV2 => unreachable!("not present in menu"),
                 };
-
                 let Some(path) = misc::save_file_dialog("json", name) else { return };
-                let result = std::fs::File::create(&path).and_then(|f| serde_json::to_writer_pretty(std::io::BufWriter::new(f), schemas).map_err(|err| err.into()));
-                match result {
+                match misc::export_schemas(&path, schemas) {
                     Ok(()) => {} // ok
                     Err(e) => {
                         fltk::dialog::alert_default(&format!("error saving to {}: {:?}", path.display(), e));
