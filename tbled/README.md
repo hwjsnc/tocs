@@ -94,7 +94,7 @@ Warnings
 The tool does certain checks to detect discrepancies in the data it loads.
 In some cases, these checks can be too aggressive and reject data which would work perfectly well when loaded by the game.
 Files with known schemas can be read under certain circumstances even when these checks fail.
-For those cases, a list of warnings will be available under the "Warnings" menu option.
+For those cases, a list of warnings will be shown when loading the file.
 If there are warnings, it is your responsibility to check every warning and decide whether or not to fix the detected problem, as well as how to fix it.
 
 If there are warnings when loading files that have previously been written with this tool, that's a bug.
@@ -102,7 +102,9 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
-### v0.6 (in development)
+### [v1.0-rc1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc1/tbled-v1.0-rc1.exe)
+
+- Warning: This release has not been tested as thoroughly as the others.
 
 - Show warning dialog automatically (if there are warnings) when a file is loaded.
 - Support for user-provided schemas
@@ -162,5 +164,4 @@ Planned features
 
 - schemas for Trails into Reverie (NISA PC)
   - planned for the 7th or 8th of July
-- make a solid manual test plan for the gui, preferably before ^
-- importing user-provided schemas at runtime
+- make a solid manual test plan for the gui before 1.0
