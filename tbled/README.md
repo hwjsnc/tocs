@@ -105,7 +105,6 @@ Releases (downloads & changelogs)
 ### [v1.0-rc1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc1/tbled-v1.0-rc1.exe)
 
 - Warning: This release has not been tested as thoroughly as the others.
-
 - Show warning dialog automatically (if there are warnings) when a file is loaded.
 - Support for user-provided schemas
 - Menu and workflow reorganization
