@@ -26,24 +26,35 @@ struct CliArgs {
     file: Option<std::path::PathBuf>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum SchemaVersion {
+    CS1En,
+    CS2En,
+    CS3,
+    CS4,
+    CustomV1,
+    CustomV2,
+}
+
 #[derive(Clone, Debug)]
 enum Msg {
-    SetVersionAndLoadFile(tocs::tbl::Version), // user wants to load a file
-    SaveFile,                                  // user wants to save to the same file
-    SelectAndSaveFile,                         // user wants to save a file
-    ExportCSV,                                 // user wants to export file to csv
-    ImportCSV,                                 // user wants to import table from csv
-    ShowWarnings,                              // user wants to see warnings
-    DifferentHeaderSelected,                   // user selected a different header; update the table widget
-    Undo,                                      // user wants to undo last action
-    Redo,                                      // user wants to redo last action
-    DuplicateEntry,                            // user wants to duplicate the current row
-    DeleteEntry,                               // user wants to delete the current row
-    AutoSizeTable,                             // user wants to automatically size cells to fit content
-    SelectAttributes,                          // User wants to select/reorder attributes/columns
-    TableEvent,                                // an arbitrary event on the table
-    DoneEditing,                               // user is done editing, now the value should be updated
-    UpdateSearch,                              // user changed the quick search/filter
+    SetVersion(SchemaVersion), // user wants to change schema version
+    LoadFile,                  // user wants to load a file
+    SaveFile,                  // user wants to save to the same file
+    SelectAndSaveFile,         // user wants to save a file
+    ExportCSV,                 // user wants to export file to csv
+    ImportCSV,                 // user wants to import table from csv
+    ShowWarnings,              // user wants to see warnings
+    DifferentHeaderSelected,   // user selected a different header; update the table widget
+    Undo,                      // user wants to undo last action
+    Redo,                      // user wants to redo last action
+    DuplicateEntry,            // user wants to duplicate the current row
+    DeleteEntry,               // user wants to delete the current row
+    AutoSizeTable,             // user wants to automatically size cells to fit content
+    SelectAttributes,          // User wants to select/reorder attributes/columns
+    TableEvent,                // an arbitrary event on the table
+    DoneEditing,               // user is done editing, now the value should be updated
+    UpdateSearch,              // user changed the quick search/filter
 }
 
 struct Widgets {
@@ -95,54 +106,56 @@ impl App {
 
         let mut menu = fltk::menu::SysMenuBar::default();
         menu.add_emit(
-            "&Load/Load CS1 tbl (XSeed PC version, English)\t",
+            "&Schemas/Use builtin schemas for CS1 (XSeed PC version, English)\t",
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersionAndLoadFile(tocs::tbl::Version::CS1En),
+            Msg::SetVersion(SchemaVersion::CS1En),
         );
 
         menu.add_emit(
-            "&Load/Load CS2 tbl (XSeed PC version, English)\t",
+            "&Schemas/Use builtin schemas for CS2 (XSeed PC version, English)\t",
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersionAndLoadFile(tocs::tbl::Version::CS2En),
+            Msg::SetVersion(SchemaVersion::CS2En),
         );
 
         menu.add_emit(
-            "&Load/Load CS3 tbl (NISA PC version)\t",
+            "&Schemas/Use builtin schemas for CS3 (NISA PC version)\t",
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersionAndLoadFile(tocs::tbl::Version::CS3),
+            Msg::SetVersion(SchemaVersion::CS3),
         );
 
         menu.add_emit(
-            "&Load/Load CS4 tbl (NISA Switch version)\t",
+            "&Schemas/Use builtin schemas for CS4 (NISA Switch version)\t",
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersionAndLoadFile(tocs::tbl::Version::CS4),
+            Msg::SetVersion(SchemaVersion::CS4),
         );
 
-        menu.add_emit("&Save/Save\t", fltk::enums::Shortcut::Ctrl | 's', fltk::menu::MenuFlag::Normal, sender.clone(), Msg::SaveFile);
+        menu.add_emit(
+            "&File/Load tbl with current schema\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::LoadFile,
+        );
+
+        menu.add_emit("&File/Save\t", fltk::enums::Shortcut::Ctrl | 's', fltk::menu::MenuFlag::Normal, sender.clone(), Msg::SaveFile);
 
         menu.add_emit(
-            "&Save/Save as...\t",
+            "&File/Save as...\t",
             fltk::enums::Shortcut::Ctrl | fltk::enums::Shortcut::Shift | 's',
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
             Msg::SelectAndSaveFile,
         );
 
-        menu.add_emit(
-            "&Warnings/Show warnings...\t",
-            fltk::enums::Shortcut::None,
-            fltk::menu::MenuFlag::Normal,
-            sender.clone(),
-            Msg::ShowWarnings,
-        );
+        menu.add_emit("&File/Show warnings...\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Normal, sender.clone(), Msg::ShowWarnings);
 
         menu.add_emit("&Export/Export to csv...\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Normal, sender.clone(), Msg::ExportCSV);
 
@@ -261,7 +274,7 @@ impl App {
     pub fn update(&mut self, msg: Option<Msg>) {
         log::debug!("update: {msg:?}");
         match msg {
-            Some(Msg::SetVersionAndLoadFile(version)) => {
+            Some(Msg::LoadFile) => {
                 // open a file browser dialog to select the file
                 let Some(new_path) = misc::load_file_dialog("tbl") else { return };
                 // reset state related to tbl data
@@ -275,7 +288,6 @@ impl App {
                 } = &mut self.state;
                 tbl_history.clear_all();
                 selected_attributes.clear();
-                *tbl_version = version;
                 warnings.clear();
                 // try loading data from file
                 match tocs::tbl::read_file_with_fixes(&new_path, tbl_version) {
@@ -305,6 +317,18 @@ impl App {
                     }
                 }
                 // we need to update other ui elements
+                self.update_after_file_reload();
+            }
+            Some(Msg::SetVersion(v)) => {
+                let new_version = match v {
+                    SchemaVersion::CS1En => tocs::tbl::Version::CS1En,
+                    SchemaVersion::CS2En => tocs::tbl::Version::CS2En,
+                    SchemaVersion::CS3 => tocs::tbl::Version::CS3,
+                    SchemaVersion::CS4 => tocs::tbl::Version::CS4,
+                    SchemaVersion::CustomV1 | SchemaVersion::CustomV2 => todo!("load schema"),
+                };
+                self.state.tbl_version = new_version;
+                self.state.tbl_history.clear_all(); // we don't want a file incompatible with the new schema
                 self.update_after_file_reload();
             }
             Some(Msg::SaveFile) => {
@@ -481,7 +505,7 @@ impl App {
         } = &mut self.state;
 
         // if there are warnings, show button to display them
-        let mut warning_menu = self.widgets.menu.find_item("&Warnings/Show warnings...\t").unwrap();
+        let mut warning_menu = self.widgets.menu.find_item("&File/Show warnings...\t").unwrap();
         if warnings.is_empty() {
             warning_menu.deactivate();
         } else {
