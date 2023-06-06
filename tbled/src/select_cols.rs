@@ -271,7 +271,7 @@ pub fn select_cols(all: indexmap::IndexSet<Attribute>, visible: &indexmap::Index
         for i in 1..=browser_visible.size() {
             v.insert(Attribute::from(browser_visible.text(i).expect("i < size")));
         }
-        assert_eq!(all.len(), (browser_hidden.size() + browser_visible.size()).try_into().unwrap());
+        assert_eq!(all.len(), usize::try_from(browser_hidden.size() + browser_visible.size()).unwrap());
         assert_eq!(v, all);
     }
 

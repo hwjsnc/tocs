@@ -38,23 +38,24 @@ pub enum SchemaVersion {
 
 #[derive(Clone, Debug)]
 enum Msg {
-    SetVersion(SchemaVersion), // user wants to change schema version
-    LoadFile,                  // user wants to load a file
-    SaveFile,                  // user wants to save to the same file
-    SelectAndSaveFile,         // user wants to save a file
-    ExportCSV,                 // user wants to export file to csv
-    ImportCSV,                 // user wants to import table from csv
-    ShowWarnings,              // user wants to see warnings
-    DifferentHeaderSelected,   // user selected a different header; update the table widget
-    Undo,                      // user wants to undo last action
-    Redo,                      // user wants to redo last action
-    DuplicateEntry,            // user wants to duplicate the current row
-    DeleteEntry,               // user wants to delete the current row
-    AutoSizeTable,             // user wants to automatically size cells to fit content
-    SelectAttributes,          // User wants to select/reorder attributes/columns
-    TableEvent,                // an arbitrary event on the table
-    DoneEditing,               // user is done editing, now the value should be updated
-    UpdateSearch,              // user changed the quick search/filter
+    SetVersion(SchemaVersion),    // user wants to change schema version
+    ExportSchemas(SchemaVersion), // user wants to export a builtin schema
+    LoadFile,                     // user wants to load a file
+    SaveFile,                     // user wants to save to the same file
+    SelectAndSaveFile,            // user wants to save a file
+    ExportCSV,                    // user wants to export file to csv
+    ImportCSV,                    // user wants to import table from csv
+    ShowWarnings,                 // user wants to see warnings
+    DifferentHeaderSelected,      // user selected a different header; update the table widget
+    Undo,                         // user wants to undo last action
+    Redo,                         // user wants to redo last action
+    DuplicateEntry,               // user wants to duplicate the current row
+    DeleteEntry,                  // user wants to delete the current row
+    AutoSizeTable,                // user wants to automatically size cells to fit content
+    SelectAttributes,             // User wants to select/reorder attributes/columns
+    TableEvent,                   // an arbitrary event on the table
+    DoneEditing,                  // user is done editing, now the value should be updated
+    UpdateSearch,                 // user changed the quick search/filter
 }
 
 struct Widgets {
@@ -135,6 +136,38 @@ impl App {
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
             Msg::SetVersion(SchemaVersion::CS4),
+        );
+
+        menu.add_emit(
+            "&Schemas/Export/Builtin schemas for CS1 (XSeed PC version, English)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ExportSchemas(SchemaVersion::CS1En),
+        );
+
+        menu.add_emit(
+            "&Schemas/Export/Builtin schemas for CS2 (XSeed PC version, English)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ExportSchemas(SchemaVersion::CS2En),
+        );
+
+        menu.add_emit(
+            "&Schemas/Export/Builtin schemas for CS3 (NISA PC version)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ExportSchemas(SchemaVersion::CS3),
+        );
+
+        menu.add_emit(
+            "&Schemas/Export/Builtin schemas for CS4 (NISA Switch version)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ExportSchemas(SchemaVersion::CS4),
         );
 
         menu.add_emit(
@@ -330,6 +363,24 @@ impl App {
                 self.state.tbl_version = new_version;
                 self.state.tbl_history.clear_all(); // we don't want a file incompatible with the new schema
                 self.update_after_file_reload();
+            }
+            Some(Msg::ExportSchemas(v)) => {
+                let (name, schemas): (&str, &tocs::tbl::Schemas) = match v {
+                    SchemaVersion::CS1En => ("cs1.json", &tocs::tbl::schemas::CS1),
+                    SchemaVersion::CS2En => ("cs2.json", &tocs::tbl::schemas::CS2),
+                    SchemaVersion::CS3 => ("cs3.json", &tocs::tbl::schemas::CS3),
+                    SchemaVersion::CS4 => ("cs4.json", &tocs::tbl::schemas::CS4),
+                    SchemaVersion::CustomV1 | SchemaVersion::CustomV2 => unreachable!("not present in menu"),
+                };
+
+                let Some(path) = misc::save_file_dialog("json", name) else { return };
+                let result = std::fs::File::create(&path).and_then(|f| serde_json::to_writer_pretty(std::io::BufWriter::new(f), schemas).map_err(|err| err.into()));
+                match result {
+                    Ok(()) => {} // ok
+                    Err(e) => {
+                        fltk::dialog::alert_default(&format!("error saving to {}: {:?}", path.display(), e));
+                    }
+                }
             }
             Some(Msg::SaveFile) => {
                 self.save_tbl_to_file(None);
