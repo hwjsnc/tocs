@@ -19,7 +19,7 @@ enum Args {
         db_path: std::path::PathBuf,
         /// game (CS1/CS2/CS3)
         #[arg(long)]
-        game: tocs::tbl::Version<'static>,
+        game: tocs::tbl::Version,
     },
     /// Read data from a sqlite database and generate corresponding tbl files
     To_Tbl {
@@ -31,7 +31,7 @@ enum Args {
         tbl_path: std::path::PathBuf,
         /// game (CS1/CS2/CS3/CS4)
         #[arg(long)]
-        game: tocs::tbl::Version<'static>,
+        game: tocs::tbl::Version,
         /// overwrite any existing tbl files
         #[arg(short, long)]
         force: bool,
@@ -54,7 +54,7 @@ pub fn main() {
 
     match Args::parse() {
         Args::Tbl_to_Sql { tbl_path, db_path, game } => {
-            tbl_to_new_db(&tbl_path, &db_path, game);
+            tbl_to_new_db(&tbl_path, &db_path, &game);
         }
         Args::To_Tbl { .. } => {
             todo!()
@@ -65,7 +65,7 @@ pub fn main() {
     }
 }
 
-fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: tocs::tbl::Version) {
+fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: &tocs::tbl::Version) {
     if dbpath.as_ref().exists() {
         panic!("database output path {} exists, refusing to overwrite.", dbpath.as_ref().display());
     }

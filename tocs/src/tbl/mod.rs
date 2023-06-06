@@ -611,17 +611,17 @@ enum VersionWithoutSchema {
     V2, // with header counts: CS2 onwards
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Version<'a> {
+#[derive(Clone, Debug)]
+pub enum Version {
     CS1En,
     CS2En,
     CS3,
     CS4,
-    V1(&'a AtomicSchemas), // generic version with custom schema (no header counts / CS1 version)
-    V2(&'a AtomicSchemas), // generic version with custom schema (with header counts / CS2 onward)
+    V1(AtomicSchemas), // generic version with custom schema (no header counts / CS1 version)
+    V2(AtomicSchemas), // generic version with custom schema (with header counts / CS2 onward)
 }
 
-impl std::str::FromStr for Version<'static> {
+impl std::str::FromStr for Version {
     type Err = &'static str;
     fn from_str(s: &str) -> Result<Self, &'static str> {
         match s {
@@ -633,14 +633,14 @@ impl std::str::FromStr for Version<'static> {
             "CS3" => Ok(Version::CS3),
             "cs4" => Ok(Version::CS4),
             "CS4" => Ok(Version::CS4),
-            "v1" => Ok(Version::V1(&schemas::EMPTY)),
-            "v2" => Ok(Version::V2(&schemas::EMPTY)),
+            "v1" => Ok(Version::V1(schemas::EMPTY.clone())),
+            "v2" => Ok(Version::V2(schemas::EMPTY.clone())),
             _ => Err("invalid/unknown tbl version"),
         }
     }
 }
 
-impl<'a> Version<'a> {
+impl Version {
     fn without_schema(&self) -> VersionWithoutSchema {
         match self {
             Version::CS1En => VersionWithoutSchema::V1,
@@ -652,7 +652,7 @@ impl<'a> Version<'a> {
         }
     }
 
-    pub fn schemas(&self) -> &'a AtomicSchemas {
+    pub fn schemas(&self) -> &AtomicSchemas {
         match self {
             Version::CS1En => &schemas::CS1_ATOMIC,
             Version::CS2En => &schemas::CS2_ATOMIC,
@@ -672,7 +672,7 @@ pub struct Tbl {
 }
 
 impl Tbl {
-    pub fn new<I: IntoIterator<Item = Header>, J: IntoIterator<Item = Entry>>(version: Version, headers: I, entries: J) -> Self {
+    pub fn new<I: IntoIterator<Item = Header>, J: IntoIterator<Item = Entry>>(version: &Version, headers: I, entries: J) -> Self {
         Self {
             version: version.without_schema(),
             headers: headers.into_iter().collect(),
@@ -720,7 +720,7 @@ impl ReadTblResult {
 pub fn try_read_once<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
     f: &mut F,
     logger: &mut WarningLogger<DeserializeError>,
-    version: Version,
+    version: &Version,
 ) -> Result<Tbl, DeserializeError> {
     match version.without_schema() {
         VersionWithoutSchema::V1 => deserialize_tbl_v1::<_, STRICT, LOG>(f, logger, version.schemas()).map(|entries| Tbl {
@@ -803,7 +803,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
     true
 }
 
-pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: Version) -> ReadTblResult {
+pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: &Version) -> ReadTblResult {
     log::debug!("Generic tbl read");
     let mut logger = WarningLogger::new();
     let first_error = match try_read_once::<_, /*STRICT =*/ true, /*LOG=*/ false>(f, &mut logger, version) {
@@ -846,7 +846,7 @@ pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, Serialize
 }
 
 /// Read a tbl file into memory, apply known fixes, and attempt to parse it.
-pub fn read_file_with_fixes<P: AsRef<std::path::Path>>(path: P, version: Version) -> ReadTblResult {
+pub fn read_file_with_fixes<P: AsRef<std::path::Path>>(path: P, version: &Version) -> ReadTblResult {
     let mut data = match std::fs::read(path) {
         Ok(data) => data,
         Err(err) => {

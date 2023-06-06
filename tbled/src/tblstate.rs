@@ -370,7 +370,7 @@ mod test {
         .map(to_entry)
         .collect();
 
-        let mut tbl_history = TblStateHistory::new(tocs::tbl::Tbl::new(tocs::tbl::Version::V2(&SCHEMAS), [], original_data));
+        let mut tbl_history = TblStateHistory::new(tocs::tbl::Tbl::new(&tocs::tbl::Version::V2(SCHEMAS.clone()), [], original_data));
 
         // Now we make some changes
         tbl_history.change(Change::UpdateCell {
@@ -585,7 +585,11 @@ mod test {
         .map(to_entry)
         .collect();
 
-        let mut tbl_history = TblStateHistory::new(tocs::tbl::Tbl::new(tocs::tbl::Version::V1(&SCHEMAS), [].into_iter().map(|s| Header::new(s).unwrap()), state_0.clone()));
+        let mut tbl_history = TblStateHistory::new(tocs::tbl::Tbl::new(
+            &tocs::tbl::Version::V1(SCHEMAS.clone()),
+            [].into_iter().map(|s| Header::new(s).unwrap()),
+            state_0.clone(),
+        ));
         compare_entries(&tbl_history.all_current_rows().cloned().collect::<std::vec::Vec<_>>(), &state_0);
 
         tbl_history.change(Change::UpdateCell {

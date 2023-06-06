@@ -20,7 +20,7 @@ enum Subcommand {
     /// Print information about all the files
     Tbl {
         /// Game that the file belongs to (CS1-5)
-        game: tocs::tbl::Version<'static>,
+        game: tocs::tbl::Version,
         /// .tbl path
         path: std::path::PathBuf,
         /// Don't attempt to fix game data with hardcoded values.
@@ -49,7 +49,7 @@ enum Subcommand {
     /// Serialize builtin tbl schemas to json
     SerializeBuiltinTblSchemas {
         /// Game version for which the schemas should be serialized
-        version: tocs::tbl::Version<'static>,
+        version: tocs::tbl::Version,
     },
     /// Parse json as tbl schemas
     ParseTblSchemas {
@@ -65,14 +65,14 @@ pub fn main() {
         Subcommand::All { raw } => parse_all(!raw),
         Subcommand::Tbl { game, path, raw, lenient: true } => {
             assert!(!raw);
-            read_tbl(&path, game)
+            read_tbl(&path, &game)
         }
-        Subcommand::Tbl { game, path, raw, .. } => check_tbl_roundtrip(&path, game, !raw),
+        Subcommand::Tbl { game, path, raw, .. } => check_tbl_roundtrip(&path, &game, !raw),
         Subcommand::Pkg { path } => parse_pkg(&path),
         Subcommand::Pka { path } => parse_pka(&path),
         Subcommand::ParseDds { path } => parse_dds(&path),
         Subcommand::DdsConvertBC7 { source, target } => convert_bc7(&source, &target),
-        Subcommand::SerializeBuiltinTblSchemas { version } => serialize_builtin_schemas(version),
+        Subcommand::SerializeBuiltinTblSchemas { version } => serialize_builtin_schemas(&version),
         Subcommand::ParseTblSchemas { path } => parse_tbl_schemas(&path),
     }
 }
@@ -94,14 +94,14 @@ pub fn parse_all(fix_data: bool) {
             let path = entry.path();
             if entry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
                 log::info!("trying file {}", path.display());
-                check_tbl_roundtrip(path, version, fix_data);
+                check_tbl_roundtrip(path, &version, fix_data);
             }
             // TODO: parse .pkgs
         }
     }
 }
 
-pub fn read_tbl(path: &std::path::Path, version: tocs::tbl::Version) {
+pub fn read_tbl(path: &std::path::Path, version: &tocs::tbl::Version) {
     match tocs::tbl::read_file_with_fixes(path, version) {
         tocs::tbl::ReadTblResult::Ok(_) => {
             log::info!("file read successfully");
@@ -118,7 +118,7 @@ pub fn read_tbl(path: &std::path::Path, version: tocs::tbl::Version) {
     }
 }
 
-pub fn check_tbl_roundtrip(path: &std::path::Path, version: tocs::tbl::Version, fix_data: bool) {
+pub fn check_tbl_roundtrip(path: &std::path::Path, version: &tocs::tbl::Version, fix_data: bool) {
     let original = {
         let mut data = std::fs::read(path).unwrap();
         if fix_data {
@@ -403,7 +403,7 @@ fn convert_bc7(source: &std::path::Path, target: &std::path::Path) {
     }
 }
 
-fn serialize_builtin_schemas(version: tocs::tbl::Version) {
+fn serialize_builtin_schemas(version: &tocs::tbl::Version) {
     let schemas: &tocs::tbl::Schemas = match version {
         tocs::tbl::Version::CS1En => &tocs::tbl::schemas::CS1,
         tocs::tbl::Version::CS2En => &tocs::tbl::schemas::CS2,

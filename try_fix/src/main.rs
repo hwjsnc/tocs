@@ -38,7 +38,7 @@ fn try_fix(path: &std::path::Path) -> anyhow::Result<()> {
     // TODO: parse with fixes, then reserialize (if parse was successful)
     // this is also unnecessarily inefficient since the file is getting hashed over and over for every game version
     for version in [Version::CS1En, Version::CS2En, Version::CS3, Version::CS4] {
-        if tocs::tbl::fixes::fix_in_place(version, &mut data).was_fixed() {
+        if tocs::tbl::fixes::fix_in_place(&version, &mut data).was_fixed() {
             std::fs::write(path, &data).with_context(|| format!("couldn't write fixed data: {}", path.display()))?;
             println!("{} - fixed!", path.display());
             return Ok(());

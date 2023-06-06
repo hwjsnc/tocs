@@ -42,7 +42,7 @@ fn test_read_all() {
             if direntry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
                 log::info!("READING FILE {}", path.display());
                 let original = std::fs::read(path).unwrap();
-                let tbl = match read(&mut std::io::Cursor::new(&original), *version) {
+                let tbl = match read(&mut std::io::Cursor::new(&original), version) {
                     ReadTblResult::Ok(tbl) => tbl,
                     ReadTblResult::Warn { tbl, .. } | ReadTblResult::KnownFixApplied(tbl) => {
                         if *strict {
@@ -83,7 +83,7 @@ fn test_read_all() {
     }
 }
 
-fn test_strict_roundtrip_for_game(version: crate::tbl::Version) {
+fn test_strict_roundtrip_for_game(version: &crate::tbl::Version) {
     let (skip_jp, relative_path) = match version {
         crate::tbl::Version::CS1En => (true, "private-test-data/cs1/nisa-pc-1.6/data/text/"),
         crate::tbl::Version::CS2En => (true, "private-test-data/cs2/nisa-pc-1.4.1/data/text/"),
@@ -127,7 +127,7 @@ fn test_roundtrip_cs1_strict() {
     INIT_LOG.call_once(|| {
         simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
     });
-    test_strict_roundtrip_for_game(crate::tbl::Version::CS1En);
+    test_strict_roundtrip_for_game(&crate::tbl::Version::CS1En);
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn test_roundtrip_cs2_strict() {
     INIT_LOG.call_once(|| {
         simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
     });
-    test_strict_roundtrip_for_game(crate::tbl::Version::CS2En);
+    test_strict_roundtrip_for_game(&crate::tbl::Version::CS2En);
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn test_roundtrip_cs3_strict() {
     INIT_LOG.call_once(|| {
         simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
     });
-    test_strict_roundtrip_for_game(crate::tbl::Version::CS3);
+    test_strict_roundtrip_for_game(&crate::tbl::Version::CS3);
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn test_roundtrip_cs4_strict() {
     INIT_LOG.call_once(|| {
         simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init().unwrap();
     });
-    test_strict_roundtrip_for_game(crate::tbl::Version::CS4);
+    test_strict_roundtrip_for_game(&crate::tbl::Version::CS4);
 }
 
 fn to_entry(schemas: &AtomicSchemas, (header, data): (&str, std::vec::Vec<(&str, &str)>)) -> Entry {
@@ -221,10 +221,13 @@ fn test_file_rw() {
     log::info!("file 1: {}", tmp_file_1.display());
     log::info!("file 2: {}", tmp_file_2.display());
 
+    let v1 = Version::V1(schemas.clone());
+    let v2 = Version::V2(schemas.clone());
+
     {
         log::info!("tbl version 1 write/read");
-        crate::tbl::write_file(&tmp_file_1, &Tbl::new(Version::V1(&schemas), vec![], original_rows.clone())).unwrap();
-        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_1, Version::V1(&schemas)) {
+        crate::tbl::write_file(&tmp_file_1, &Tbl::new(&v1, vec![], original_rows.clone())).unwrap();
+        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_1, &v1) {
             ReadTblResult::Ok(tbl) => tbl.into_entries(),
             ReadTblResult::KnownFixApplied(_) => unreachable!("no fixes for custom schemas"),
             ReadTblResult::Warn { warnings, .. } => {
@@ -245,13 +248,13 @@ fn test_file_rw() {
         crate::tbl::write_file(
             &tmp_file_2,
             &Tbl::new(
-                Version::V2(&schemas),
+                &v2,
                 ["foo", "foobar", "bar", "baz"].into_iter().map(|s| Header::new(s).unwrap()).collect::<std::vec::Vec<_>>(),
                 original_rows.clone(),
             ),
         )
         .unwrap();
-        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_2, Version::V2(&schemas)) {
+        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_2, &v2) {
             ReadTblResult::Ok(tbl) => tbl.into_entries(),
             ReadTblResult::KnownFixApplied(_) => unreachable!("no fixes for custom schemas"),
             ReadTblResult::Warn { warnings, .. } => {
@@ -283,8 +286,8 @@ fn test_file_rw() {
     // the old data should be overwritten
     {
         log::info!("tbl version 1 write/read");
-        crate::tbl::write_file(&tmp_file_1, &Tbl::new(Version::V1(&schemas), vec![], original_rows.clone())).unwrap();
-        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_1, Version::V1(&schemas)) {
+        crate::tbl::write_file(&tmp_file_1, &Tbl::new(&v1, vec![], original_rows.clone())).unwrap();
+        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_1, &v1) {
             ReadTblResult::Ok(tbl) => tbl.into_entries(),
             ReadTblResult::KnownFixApplied(_) => unreachable!("no fixes for custom schemas"),
             ReadTblResult::Warn { warnings, .. } => {
@@ -305,13 +308,13 @@ fn test_file_rw() {
         crate::tbl::write_file(
             &tmp_file_2,
             &Tbl::new(
-                Version::V2(&schemas),
+                &v2,
                 ["foo", "foobar", "bar", "baz"].into_iter().map(|s| Header::new(s).unwrap()).collect::<std::vec::Vec<_>>(),
                 original_rows.clone(),
             ),
         )
         .unwrap();
-        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_2, Version::V2(&schemas)) {
+        let read_rows = match crate::tbl::read_file_with_fixes(&tmp_file_2, &v2) {
             ReadTblResult::Ok(tbl) => tbl.into_entries(),
             ReadTblResult::KnownFixApplied(_) => unreachable!("no fixes for custom schemas"),
             ReadTblResult::Warn { warnings, .. } => {

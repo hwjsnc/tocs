@@ -21,29 +21,29 @@ use tblstate::{Change, TblStateHistory};
 #[derive(Debug, Parser)]
 struct CliArgs {
     #[arg(short, long)]
-    game_version: Option<tocs::tbl::Version<'static>>,
+    game_version: Option<tocs::tbl::Version>,
     #[arg(short, long)]
     file: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, Debug)]
 enum Msg {
-    SelectAndLoadFile(tocs::tbl::Version<'static>), // user wants to load a file
-    SaveFile,                                       // user wants to save to the same file
-    SelectAndSaveFile,                              // user wants to save a file
-    ExportCSV,                                      // user wants to export file to csv
-    ImportCSV,                                      // user wants to import table from csv
-    ShowWarnings,                                   // user wants to see warnings
-    DifferentHeaderSelected,                        // user selected a different header; update the table widget
-    Undo,                                           // user wants to undo last action
-    Redo,                                           // user wants to redo last action
-    DuplicateEntry,                                 // user wants to duplicate the current row
-    DeleteEntry,                                    // user wants to delete the current row
-    AutoSizeTable,                                  // user wants to automatically size cells to fit content
-    SelectAttributes,                               // User wants to select/reorder attributes/columns
-    TableEvent,                                     // an arbitrary event on the table
-    DoneEditing,                                    // user is done editing, now the value should be updated
-    UpdateSearch,                                   // user changed the quick search/filter
+    SetVersionAndLoadFile(tocs::tbl::Version), // user wants to load a file
+    SaveFile,                                  // user wants to save to the same file
+    SelectAndSaveFile,                         // user wants to save a file
+    ExportCSV,                                 // user wants to export file to csv
+    ImportCSV,                                 // user wants to import table from csv
+    ShowWarnings,                              // user wants to see warnings
+    DifferentHeaderSelected,                   // user selected a different header; update the table widget
+    Undo,                                      // user wants to undo last action
+    Redo,                                      // user wants to redo last action
+    DuplicateEntry,                            // user wants to duplicate the current row
+    DeleteEntry,                               // user wants to delete the current row
+    AutoSizeTable,                             // user wants to automatically size cells to fit content
+    SelectAttributes,                          // User wants to select/reorder attributes/columns
+    TableEvent,                                // an arbitrary event on the table
+    DoneEditing,                               // user is done editing, now the value should be updated
+    UpdateSearch,                              // user changed the quick search/filter
 }
 
 struct Widgets {
@@ -56,7 +56,7 @@ struct Widgets {
 
 pub struct AppData {
     tbl_history: TblStateHistory,
-    tbl_version: tocs::tbl::Version<'static>,
+    tbl_version: tocs::tbl::Version,
     path: std::path::PathBuf,
     active_entry_type: Option<tocs::tbl::Header>,
     selected_attributes: std::collections::HashMap<tocs::tbl::Header, indexmap::IndexSet<tocs::tbl::Attribute>>, // which attributes should be shown in which order for a given header?
@@ -99,7 +99,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SelectAndLoadFile(tocs::tbl::Version::CS1En),
+            Msg::SetVersionAndLoadFile(tocs::tbl::Version::CS1En),
         );
 
         menu.add_emit(
@@ -107,7 +107,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SelectAndLoadFile(tocs::tbl::Version::CS2En),
+            Msg::SetVersionAndLoadFile(tocs::tbl::Version::CS2En),
         );
 
         menu.add_emit(
@@ -115,7 +115,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SelectAndLoadFile(tocs::tbl::Version::CS3),
+            Msg::SetVersionAndLoadFile(tocs::tbl::Version::CS3),
         );
 
         menu.add_emit(
@@ -123,7 +123,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SelectAndLoadFile(tocs::tbl::Version::CS4),
+            Msg::SetVersionAndLoadFile(tocs::tbl::Version::CS4),
         );
 
         menu.add_emit("&Save/Save\t", fltk::enums::Shortcut::Ctrl | 's', fltk::menu::MenuFlag::Normal, sender.clone(), Msg::SaveFile);
@@ -253,15 +253,15 @@ impl App {
         while self.app.wait() {
             let msg = self.receiver.recv();
             if msg.is_some() {
-                self.update(&msg);
+                self.update(msg);
             }
         }
     }
 
-    pub fn update(&mut self, msg: &Option<Msg>) {
+    pub fn update(&mut self, msg: Option<Msg>) {
         log::debug!("update: {msg:?}");
         match msg {
-            Some(Msg::SelectAndLoadFile(version)) => {
+            Some(Msg::SetVersionAndLoadFile(version)) => {
                 // open a file browser dialog to select the file
                 let Some(new_path) = misc::load_file_dialog("tbl") else { return };
                 // reset state related to tbl data
@@ -275,10 +275,10 @@ impl App {
                 } = &mut self.state;
                 tbl_history.clear_all();
                 selected_attributes.clear();
-                *tbl_version = *version;
+                *tbl_version = version;
                 warnings.clear();
                 // try loading data from file
-                match tocs::tbl::read_file_with_fixes(&new_path, *version) {
+                match tocs::tbl::read_file_with_fixes(&new_path, tbl_version) {
                     tocs::tbl::ReadTblResult::Ok(tbl) | tocs::tbl::ReadTblResult::KnownFixApplied(tbl) => {
                         *tbl_history = TblStateHistory::new(tbl);
                         *path = new_path;
@@ -538,7 +538,7 @@ impl App {
 
     fn save_tbl_to_file(&mut self, path: Option<std::path::PathBuf>) {
         // try saving data to file
-        let version = self.state.tbl_version;
+        let version = &self.state.tbl_version;
         let headers = self.state.tbl_history.headers().iter().cloned();
         let rows = self.state.tbl_history.all_current_rows().cloned();
         let tbl = tocs::tbl::Tbl::new(version, headers, rows);
@@ -566,7 +566,7 @@ fn main() {
         (Some(version), Some(path)) => {
             log::debug!("parsing {} as a {:?} file", path.display(), version);
             // try loading data from file
-            match tocs::tbl::read_file_with_fixes(&path, version) {
+            match tocs::tbl::read_file_with_fixes(&path, &version) {
                 tocs::tbl::ReadTblResult::Ok(tbl) | tocs::tbl::ReadTblResult::KnownFixApplied(tbl) => AppData {
                     tbl_history: TblStateHistory::new(tbl),
                     active_entry_type: None,

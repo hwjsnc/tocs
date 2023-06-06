@@ -33,7 +33,7 @@ impl<'a> MaybeFixedCow<'a> {
     }
 }
 
-pub fn fix_in_place(version: Version, data: &mut std::vec::Vec<u8>) -> MaybeFixed {
+pub fn fix_in_place(version: &Version, data: &mut std::vec::Vec<u8>) -> MaybeFixed {
     match get_fix_for(version, data) {
         Some(fix) => {
             fix(data);
@@ -43,7 +43,7 @@ pub fn fix_in_place(version: Version, data: &mut std::vec::Vec<u8>) -> MaybeFixe
     }
 }
 
-pub fn fix<'a>(version: Version, data: &'a [u8]) -> MaybeFixedCow<'a> {
+pub fn fix<'a>(version: &Version, data: &'a [u8]) -> MaybeFixedCow<'a> {
     match get_fix_for(version, data) {
         Some(fix) => {
             let mut copy = data.to_owned();
@@ -80,7 +80,7 @@ macro_rules! fix_fun {
     };
 }
 
-fn get_fix_for(version: Version, data: &[u8]) -> Option<&'static FixFun> {
+fn get_fix_for(version: &Version, data: &[u8]) -> Option<&'static FixFun> {
     use Version::{CS1En, CS2En, CS3, CS4};
 
     if matches!(version, CS2En | CS4) {
@@ -90,7 +90,7 @@ fn get_fix_for(version: Version, data: &[u8]) -> Option<&'static FixFun> {
 
     let hash: [u8; 64] = blake2::Blake2b512::digest(data).try_into().unwrap();
 
-    static FIXES: &[(Version<'static>, [u8; 64], &FixFun)] = &[
+    static FIXES: &[(Version, [u8; 64], &FixFun)] = &[
         fix_fun!(
             Version::CS1En,
             *hex_literal!("e3a75ea6c0902da1f8da0d052305a4db98839a8a3c4403cf129144177a3910504a4c8b11ce8aa177db3a7554c58575e86a41655fb8414a90ce2c3083ecef88d5"),
@@ -214,9 +214,9 @@ fn get_fix_for(version: Version, data: &[u8]) -> Option<&'static FixFun> {
     ];
 
     let is_same_version = |v1, v2| match (v1, v2) {
-        (CS1En, CS1En) | (CS2En, CS2En) | (CS3, CS3) | (CS4, CS4) => true,
+        (&CS1En, &CS1En) | (&CS2En, &CS2En) | (&CS3, &CS3) | (&CS4, &CS4) => true,
         _ => false, // this intentionally includes (V1(_), V1(_)), (V2(_), V2(_)): we don't want to assume anything with custom schemas
     };
 
-    FIXES.iter().find_map(|(v, h, fun)| if is_same_version(*v, version) && h == &hash { Some(*fun) } else { None })
+    FIXES.iter().find_map(|(v, h, fun)| if is_same_version(v, version) && h == &hash { Some(*fun) } else { None })
 }
