@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[profile.dev]
+opt-level = 1
+
 [dependencies]
 clap = { version = "4.0.26", features = ["derive"] }
 hexhex = { git = "https://git.sr.ht/~quf/hexhex", version = "1.0.0" }

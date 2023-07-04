@@ -5,6 +5,9 @@ edition = "2021"
 description = "pkgtool handles .pkg and .pka files from the Trails of Cold Steel games"
 publish = false
 
+[profile.dev]
+opt-level = 1
+
 [profile.release]
 strip = true
 opt-level = 3
