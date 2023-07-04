@@ -488,7 +488,7 @@ pub fn decode_block(block: &Bc7BlockSlice) -> DecodedBlock {
                 }
                 // note: raw_bits > 4 except when alpha_bits = 0, in which case the values don't matter
                 let x = endpoints[i as usize][j as usize][c as usize];
-                endpoints[i as usize][j as usize][c as usize] = (x << (8 - raw_bits)) | (x >> (2 * raw_bits - 8));
+                endpoints[i as usize][j as usize][c as usize] = x.wrapping_shl(u32::from(8 - raw_bits)) | x.wrapping_shr(2 * u32::from(raw_bits.wrapping_sub(8)));
             }
         }
     }
