@@ -85,6 +85,7 @@ pub fn parse_all(fix_data: bool) {
         ("private-test-data/cs2/nisa-pc-1.4.1/data/text/dat_us", tocs::tbl::Version::CS2En),
         ("private-test-data/cs3/nisa-pc-1.0.5/data/text/", tocs::tbl::Version::CS3),
         ("private-test-data/cs4/nisa-switch-1.0.0/text/", tocs::tbl::Version::CS4),
+        ("private-test-data/cs5/nisa-pc-1.0.2/text/", tocs::tbl::Version::CS5),
     ]
     .into_iter()
     {
@@ -409,6 +410,7 @@ fn serialize_builtin_schemas(version: &tocs::tbl::Version) {
         tocs::tbl::Version::CS2En => &tocs::tbl::schemas::CS2,
         tocs::tbl::Version::CS3 => &tocs::tbl::schemas::CS3,
         tocs::tbl::Version::CS4 => &tocs::tbl::schemas::CS4,
+        tocs::tbl::Version::CS5 => &tocs::tbl::schemas::CS5,
         tocs::tbl::Version::V1(_) => unreachable!(),
         tocs::tbl::Version::V2(_) => unreachable!(),
     };

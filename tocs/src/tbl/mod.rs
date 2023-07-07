@@ -617,6 +617,7 @@ pub enum Version {
     CS2En,
     CS3,
     CS4,
+    CS5,
     V1(AtomicSchemas), // generic version with custom schema (no header counts / CS1 version)
     V2(AtomicSchemas), // generic version with custom schema (with header counts / CS2 onward)
 }
@@ -633,6 +634,10 @@ impl std::str::FromStr for Version {
             "CS3" => Ok(Version::CS3),
             "cs4" => Ok(Version::CS4),
             "CS4" => Ok(Version::CS4),
+            "cs5" => Ok(Version::CS5),
+            "CS5" => Ok(Version::CS5),
+            "reverie" => Ok(Version::CS5),
+            "Reverie" => Ok(Version::CS5),
             "v1" => Ok(Version::V1(schemas::EMPTY.clone())),
             "v2" => Ok(Version::V2(schemas::EMPTY.clone())),
             _ => Err("invalid/unknown tbl version"),
@@ -647,6 +652,7 @@ impl Version {
             Version::CS2En => VersionWithoutSchema::V2,
             Version::CS3 => VersionWithoutSchema::V2,
             Version::CS4 => VersionWithoutSchema::V2,
+            Version::CS5 => VersionWithoutSchema::V2,
             Version::V1(_) => VersionWithoutSchema::V1,
             Version::V2(_) => VersionWithoutSchema::V2,
         }
@@ -658,6 +664,7 @@ impl Version {
             Version::CS2En => &schemas::CS2_ATOMIC,
             Version::CS3 => &schemas::CS3_ATOMIC,
             Version::CS4 => &schemas::CS4_ATOMIC,
+            Version::CS5 => &schemas::CS5_ATOMIC,
             Version::V1(schema) => schema,
             Version::V2(schema) => schema,
         }

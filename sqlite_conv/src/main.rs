@@ -29,7 +29,7 @@ enum Args {
         /// path to the directory that the tbls should be written to
         #[arg(long)]
         tbl_path: std::path::PathBuf,
-        /// game (CS1/CS2/CS3/CS4)
+        /// game (CS1/CS2/CS3/CS4/CS5)
         #[arg(long)]
         game: tocs::tbl::Version,
         /// overwrite any existing tbl files

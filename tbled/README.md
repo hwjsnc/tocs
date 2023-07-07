@@ -13,11 +13,13 @@ If you notice any issues with data integrity, please do report them.
 - Trails of Cold Steel II (XSeed PC version, English language only)
 - Trails of Cold Steel III (NISA PC version)
 - Trails of Cold Steel IV (NISA Switch version)
+- Trails into Reverie (NISA PC version)
 
 The following versions are untested but likely work:
 
-- Trails of Cold Steel III (NISA Switch version)
-- Trails of Cold Steel IV (NISA PC version)
+- Trails of Cold Steel III (other NISA ports)
+- Trails of Cold Steel IV (other NISA ports)
+- Trails into Reverie (other NISA ports)
 
 The following versions are explicitely not supported at this time:
 - Trails of Cold Steel (XSeed PC version, Japanese language)
@@ -102,6 +104,10 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
+### [v1.0-rc2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc2/tbled-v1.0-rc2.exe)
+
+- Preliminary support for Trails into Reverie
+
 ### [v1.0-rc1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc1/tbled-v1.0-rc1.exe)
 
 - Warning: This release has not been tested as thoroughly as the others.
@@ -161,6 +167,5 @@ Releases (downloads & changelogs)
 Planned features
 ----------------
 
-- schemas for Trails into Reverie (NISA PC)
-  - planned for the 7th or 8th of July
+- better (and tested) schemas for Trails into Reverie
 - make a solid manual test plan for the gui before 1.0

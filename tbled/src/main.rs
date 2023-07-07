@@ -32,6 +32,7 @@ pub enum SchemaVersion {
     CS2En,
     CS3,
     CS4,
+    CS5,
     CustomV1,
     CustomV2,
 }
@@ -157,6 +158,14 @@ impl App {
         );
 
         menu.add_emit(
+            "&Schemas/Use builtin schemas for Reverie (NISA PC version)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::SetVersion(SchemaVersion::CS5),
+        );
+
+        menu.add_emit(
             "&Schemas/Export/Builtin schemas for CS1 (XSeed PC version, English)\t",
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
@@ -186,6 +195,14 @@ impl App {
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
             Msg::ExportSchemas(SchemaVersion::CS4),
+        );
+
+        menu.add_emit(
+            "&Schemas/Export/Builtin schemas for Reverie (NISA Switch version)\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ExportSchemas(SchemaVersion::CS5),
         );
 
         menu.add_emit(
@@ -392,6 +409,7 @@ impl App {
                     SchemaVersion::CS2En => tocs::tbl::Version::CS2En,
                     SchemaVersion::CS3 => tocs::tbl::Version::CS3,
                     SchemaVersion::CS4 => tocs::tbl::Version::CS4,
+                    SchemaVersion::CS5 => tocs::tbl::Version::CS5,
                     SchemaVersion::CustomV1 | SchemaVersion::CustomV2 => {
                         let Some(path) = misc::load_file_dialog("json") else { return };
                         match misc::import_schemas(&path) {
@@ -415,6 +433,7 @@ impl App {
                     SchemaVersion::CS2En => ("cs2.json", &tocs::tbl::schemas::CS2),
                     SchemaVersion::CS3 => ("cs3.json", &tocs::tbl::schemas::CS3),
                     SchemaVersion::CS4 => ("cs4.json", &tocs::tbl::schemas::CS4),
+                    SchemaVersion::CS5 => ("cs5.json", &tocs::tbl::schemas::CS5),
                     SchemaVersion::CustomV1 | SchemaVersion::CustomV2 => unreachable!("not present in menu"),
                 };
                 let Some(path) = misc::save_file_dialog("json", name) else { return };
