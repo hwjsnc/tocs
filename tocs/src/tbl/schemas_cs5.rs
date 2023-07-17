@@ -449,7 +449,12 @@
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("QSCook"), [
         ("regular_name", Type::CUtf8),
-        ("unknown_data", Type::X(94)),
+        ("id", Type::U16),
+        ("ingredients", Type::Repeat(8, Box::new(Type::Ref(Header::new("QSCook_ingredient").unwrap())))),
+        ("superb_id", Type::U32),
+        ("regular_id", Type::U32),
+        ("peculiar_id", Type::U32),
+        ("skill_level", Type::Repeat(48, Box::new(Type::U8))), // TODO: characters
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("QSFish"), [
         ("id", Type::U16),
