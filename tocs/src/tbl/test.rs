@@ -15,6 +15,7 @@ const TBL_TEST_FOLDERS: &[(
     ("private-test-data/cs4/nisa-switch-1.0.0/text/", Version::CS4, true, true),
     ("private-test-data/cs4/softbrilliant-mod-1.0.7/data/text/", Version::CS4, false, false),
     ("private-test-data/cs5/nisa-pc-1.0.2/text/", Version::CS5, true, true),
+    ("private-test-data/cs5/nisa-pc-1.0.4/text/", Version::CS5, true, true),
 ];
 
 fn compare_data(expected: &[u8], actual: &[u8]) {
@@ -90,7 +91,7 @@ fn test_strict_roundtrip_for_game(version: &crate::tbl::Version) {
         crate::tbl::Version::CS2En => (true, "private-test-data/cs2/nisa-pc-1.4.1/data/text/"),
         crate::tbl::Version::CS3 => (false, "private-test-data/cs3/nisa-pc-1.0.5/data/text/"),
         crate::tbl::Version::CS4 => (false, "private-test-data/cs4/nisa-switch-1.0.0/text/"),
-        crate::tbl::Version::CS5 => (true, "private-test-data/cs5/nisa-pc-1.0.2/text/"),
+        crate::tbl::Version::CS5 => (true, "private-test-data/cs5/nisa-pc-1.0.4/text/"),
         crate::tbl::Version::V1(_) | crate::tbl::Version::V2(_) => unreachable!("v1/v2 makes no sense here"),
     };
     let cwd = std::env::current_dir().unwrap();
