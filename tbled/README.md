@@ -104,6 +104,10 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
+### v1.0-rc3 (in development)
+
+- improved schemas for Trails into Reverie
+
 ### [v1.0-rc2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc2/tbled-v1.0-rc2.exe)
 
 - Preliminary support for Trails into Reverie
