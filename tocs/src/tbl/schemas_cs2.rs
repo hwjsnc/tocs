@@ -46,6 +46,10 @@
         ("unknown_float_3", Type::F32),
         ("unknown_string", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("condition"), [
+        ("id", Type::U16),
+        ("effects", Type::Repeat(5, Box::new(Type::Ref(Header::new("effect").unwrap())))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("CompHelpData"), [
         ("type", Type::I16),
         ("text", Type::CUtf8),
