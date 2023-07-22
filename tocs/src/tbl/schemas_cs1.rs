@@ -126,6 +126,10 @@
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("LinkLevelExp"), [
+        ("level", Type::I8),
+        ("exp", Type::I32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MG02Text"), [
         ("character", Type::I16),
         ("id", Type::U16),

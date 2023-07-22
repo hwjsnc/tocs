@@ -183,10 +183,19 @@
         ("text", Type::CUtf8),
         ("unknown_data", Type::X(9)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("LinkAbList"), [
+        ("character", Type::U16),
+        ("level", Type::U16),
+        ("ability", Type::U8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("LinkAbText"), [
         ("id", Type::U8),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("LinkLevelExp"), [
+        ("level", Type::I8),
+        ("exp", Type::I32),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("magic"), [
         ("id", Type::I16),

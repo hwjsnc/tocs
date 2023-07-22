@@ -212,10 +212,29 @@
         ("unknown_string_1", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("LinkAbList"), [
+        ("character", Type::U16),
+        ("level", Type::U16),
+        ("ability", Type::U32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("LinkAbRateA"), [
+        ("id", Type::I8),
+        ("unknown_float", Type::F32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("LinkAbRateB"), [
+        ("id", Type::I8),
+        ("unknown_float", Type::F32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("LinkAbText"), [
-        ("unknown_data", Type::X(10)),
+        ("unknown_data_1", Type::X(2)),
+        ("id", Type::U32),
+        ("group_id", Type::U32),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("LinkLevelExp"), [
+        ("level", Type::I8),
+        ("exp", Type::U32),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("magic"), [
         ("id", Type::U16),
