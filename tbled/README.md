@@ -106,7 +106,7 @@ Releases (downloads & changelogs)
 
 ### v1.0-rc3 (in development)
 
-- improved schemas for Trails into Reverie
+- improved schemas for every game
 
 ### [v1.0-rc2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc2/tbled-v1.0-rc2.exe)
 

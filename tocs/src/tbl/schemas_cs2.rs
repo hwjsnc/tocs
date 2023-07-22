@@ -361,6 +361,13 @@
         ("enemy", Type::CUtf8),
         ("unknown_data", Type::X(6)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("QSRank"), [
+        ("id", Type::U16),
+        ("text", Type::CUtf8),
+        ("unknown_int1", Type::U16),
+        ("unknown_int2", Type::U16),
+        ("unknown_int3", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("QSText"), [
         ("id", Type::U16),
         ("unknown_byte_1", Type::U8),
