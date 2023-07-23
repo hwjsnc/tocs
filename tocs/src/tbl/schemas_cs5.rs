@@ -367,6 +367,22 @@
         ("id", Type::U16),
         ("text", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MGRank"), [
+        ("mg_id", Type::U32),
+        ("stage_id", Type::U32),
+        ("unknown_int_1", Type::U32),
+        ("unknown_int_2", Type::U32),
+        ("unknown_short", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MGStage"), [
+        ("mg_id", Type::U32),
+        ("stage_id", Type::U32),
+        ("text", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MGText"), [
+        ("id", Type::U16),
+        ("text", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("NameChangeTableData"), [
         ("unknown_data_1", Type::X(2)),
         ("unknown_text", Type::CUtf8),
