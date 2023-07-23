@@ -294,7 +294,7 @@
         ("sub_spd", Type::I16),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("mcburn_resist"), [
-        ("monster", Type::CUtf8),
+        ("enemy", Type::CUtf8),
         ("unknown_data", Type::X(4)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MG08Card"), [
@@ -500,6 +500,13 @@
         ("unknown_short_1", Type::U16),
         ("unknown_short_2", Type::U16),
         ("text", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("QSMons"), [
+        ("enemy", Type::CUtf8),
+        ("unknown_string", Type::CUtf8),
+        ("section_id", Type::U16),
+        ("unknown_short", Type::U16),
+        ("unknown_data", Type::X(4)), // I think the last two bytes are for when a section is expanded in a later section of the game
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("QuartzCost"), [
         ("id", Type::I16),
