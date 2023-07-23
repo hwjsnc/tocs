@@ -293,6 +293,10 @@
         ("sub_adf", Type::I16),
         ("sub_spd", Type::I16),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("mcburn_resist"), [
+        ("monster", Type::CUtf8),
+        ("unknown_data", Type::X(4)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MG08Card"), [
         ("id", Type::U16),
         ("type", Type::U16),
