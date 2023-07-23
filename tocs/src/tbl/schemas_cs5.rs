@@ -48,6 +48,18 @@
         ("name", Type::CUtf8),
         ("unknown_data", Type::X(51)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("BtlWinLinkPair"), [
+        ("unknown_data_1", Type::X(26)),
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
+        ("unknown_data_2", Type::X(4)),
+        ("unknown_float_4", Type::F32),
+        ("unknown_short_3", Type::U16),
+        ("unknown_byte_1", Type::I8),
+        ("unknown_byte_2", Type::I8),
+        ("unknown_string_1", Type::CUtf8),
+        ("unknown_string_2", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("CompHelpData"), [
         ("type", Type::I16),
         ("text", Type::CUtf8),
