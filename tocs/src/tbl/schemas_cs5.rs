@@ -75,6 +75,108 @@
         ("text", Type::CUtf8),
         ("description", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityAsset"), [
+        ("unknown_int", Type::U32),
+        ("unknown_text", Type::Repeat(16, Box::new(Type::CUtf8))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityChara"), [
+        ("character", Type::U16),
+        ("shard_id", Type::U16),
+        ("orb_id", Type::U16),
+        ("aura_or_halo_id", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityCharaItem"), [
+        ("character", Type::U16),
+        ("dummy_item", Type::U16),
+        ("item", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityDefine"), [
+        ("unknown_int", Type::U32),
+        ("unknown_float", Type::F32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityEpisode"), [
+        ("unknown_byte_1", Type::U8),
+        ("unknown_byte_2", Type::U8),
+        ("unknown_short", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityGachaChara"), [
+        ("character", Type::U16),
+        ("stratum", Type::U8), // probably
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityHills"), [
+        ("map", Type::CUtf8), // probably
+        ("unknown_data", Type::X(20)),
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
+        ("unknown_float_3", Type::F32),
+        ("unknown_float_4", Type::F32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityItem"), [
+        ("unknown_data", Type::X(5)),
+        ("unknown_short_2", Type::U16),
+        ("unknown_short_3", Type::U16),
+        ("unknown_short_4", Type::U16),
+        ("unknown_short_5", Type::U16),
+        ("unknown_short_6", Type::U16),
+        ("unknown_short_7", Type::U16),
+        ("unknown_text", Type::CUtf8),
+        ("unknown_short_8", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityItemRank"), [
+        ("unknown_int", Type::U32),
+        ("unknown_string", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityItemRate"), [
+        ("unknown_int_1", Type::U32),
+        ("unknown_int_2", Type::U32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityLayout"), [
+        ("unknown_int_1", Type::U32),
+        ("unknown_int_2", Type::U32),
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
+        ("unknown_float_3", Type::F32),
+        ("unknown_float_4", Type::F32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityMons"), [
+        ("unknown_data", Type::X(13)),
+        ("unknown_text_1", Type::CUtf8),
+        ("unknown_byte_1", Type::U8),
+        ("unknown_text_2", Type::CUtf8),
+        ("unknown_byte_2", Type::U8),
+        ("unknown_text_3", Type::CUtf8),
+        ("unknown_byte_3", Type::U8),
+        ("unknown_text_4", Type::CUtf8),
+        ("unknown_byte_4", Type::U8),
+        ("unknown_text_5", Type::CUtf8),
+        ("unknown_byte_5", Type::U8),
+        ("unknown_text_6", Type::CUtf8),
+        ("unknown_byte_6", Type::U8),
+        ("unknown_text_7", Type::CUtf8),
+        ("unknown_byte_7", Type::U8),
+        ("unknown_text_8", Type::CUtf8),
+        ("unknown_byte_8", Type::U8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityPosBreak"), [
+        ("unknown_int_1", Type::U32),
+        ("unknown_int_2", Type::U32),
+        ("unknown_floats", Type::Repeat(36, Box::new(Type::F32))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityPosCrystal"), [
+        ("unknown_int_1", Type::U32),
+        ("unknown_int_2", Type::U32),
+        ("unknown_floats", Type::Repeat(36, Box::new(Type::F32))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityPosMons"), [
+        ("unknown_int_1", Type::U32),
+        ("unknown_int_2", Type::U32),
+        ("unknown_floats", Type::Repeat(36, Box::new(Type::F32))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityPosTbox"), [
+        ("unknown_int_1", Type::U32),
+        ("unknown_int_2", Type::U32),
+        ("unknown_floats", Type::Repeat(36, Box::new(Type::F32))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("item"), [
         ("id", Type::U16),
         ("character_restriction", Type::U16),
@@ -503,7 +605,7 @@
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("QSMons"), [
         ("enemy", Type::CUtf8),
-        ("unknown_string", Type::CUtf8),
+        ("unknown_byte", Type::U8),
         ("section_id", Type::U16),
         ("unknown_short", Type::U16),
         ("unknown_data", Type::X(4)), // I think the last two bytes are for when a section is expanded in a later section of the game
@@ -517,6 +619,10 @@
         ("time_sepith_cost", Type::U16),
         ("space_sepith_cost", Type::U16),
         ("mirage_sepith_cost", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("ScrambleRaidStrong"), [
+        ("enemy", Type::CUtf8),
+        ("unknown_data", Type::X(10)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("se"), [
         ("id", Type::U16),
