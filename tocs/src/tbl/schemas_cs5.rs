@@ -48,6 +48,11 @@
         ("name", Type::CUtf8),
         ("unknown_data", Type::X(51)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("CompHelpData"), [
+        ("type", Type::I16),
+        ("text", Type::CUtf8),
+        ("value", Type::I32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("EventTableData"), [
         ("id", Type::U16),
         ("unknown_string_1", Type::CUtf8),
@@ -179,6 +184,13 @@
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
         ("unknown_data_4", Type::X(22)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("ItemHelpData"), [
+        ("effect", Type::U16),
+        ("unknown_int", Type::U16),
+        ("text", Type::CUtf8),
+        ("unknown_short", Type::I16),
+        ("unknown_data", Type::X(7)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("KisinPilotData"), [
         ("unknown_data", Type::X(8)),
