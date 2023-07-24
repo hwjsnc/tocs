@@ -415,6 +415,14 @@
         ("enemy", Type::CUtf8),
         ("unknown_data", Type::X(4)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MG07ChrData"), [
+        ("character", Type::U16),
+        ("unknown_short_1", Type::U16),
+        ("unknown_short_2", Type::U16),
+        ("avatar", Type::CUtf8),
+        ("unknown_text", Type::CUtf8),
+        ("unknown_shorts", Type::Repeat(6, Box::new(Type::U16))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MG08Card"), [
         ("id", Type::U16),
         ("type", Type::U16),
