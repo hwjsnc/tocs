@@ -37,6 +37,11 @@
         ("lines", Type::U16),
         ("elements", Type::Repeat(7, Box::new(Type::U16))),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("BaseParam"), [
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
+        ("unknown_float_3", Type::F32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("bgm"), [
         ("id", Type::U16),
         ("track", Type::CUtf8),
@@ -65,6 +70,27 @@
         ("text", Type::CUtf8),
         ("value", Type::I32),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("CoursePoint"), [
+        ("course", Type::U32),
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
+        ("unknown_float_3", Type::F32),
+        ("unknown_float_4", Type::F32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("DifficultyParam"), [
+        ("unknown_data", Type::X(4)),
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
+        ("unknown_float_3", Type::F32),
+        ("unknown_float_4", Type::F32),
+        ("unknown_float_5", Type::F32),
+        ("unknown_float_6", Type::F32),
+        ("unknown_float_7", Type::F32),
+        ("unknown_float_8", Type::F32),
+        ("unknown_float_9", Type::F32),
+        ("unknown_float_10", Type::F32),
+        ("unknown_float_11", Type::F32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("EventGroupData"), [
         ("id", Type::U16),
         ("title", Type::CUtf8),
@@ -80,6 +106,13 @@
         ("unknown_data_4", Type::X(6)),
         ("unknown_string_5", Type::CUtf8),
         ("unknown_data_5", Type::X(16)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("FlagData"), [
+        ("unknown_byte_1", Type::U8), // course?
+        ("unknown_byte_2", Type::U8), // difficulty?
+        ("unknown_byte_3", Type::U8),
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("FootStepData"), [
         ("unknown_string", Type::CUtf8),
