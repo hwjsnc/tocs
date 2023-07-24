@@ -65,6 +65,12 @@
         ("unknown_string_1", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    /*
+    (SmolStr::new("CharaParam"), [ // This header is used with different schemas in mg13 and charaviewer
+        ("character", Type::U16),
+        ("unknown_data", Type::X(4)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    */
     (SmolStr::new("CompHelpData"), [
         ("type", Type::I16),
         ("text", Type::CUtf8),
@@ -117,6 +123,19 @@
     (SmolStr::new("FootStepData"), [
         ("unknown_string", Type::CUtf8),
         ("unknown_data", Type::X(3)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("GameParam"), [
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
+        ("unknown_float_3", Type::F32),
+        ("unknown_float_4", Type::F32),
+        ("unknown_float_5", Type::F32),
+        ("unknown_float_6", Type::F32),
+        ("unknown_float_7", Type::F32),
+        ("unknown_float_8", Type::F32),
+        ("unknown_float_9", Type::F32),
+        ("unknown_float_10", Type::F32),
+        ("unknown_float_11", Type::F32),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("hkitugi_lst"), [
         ("unknown_short", Type::U16),
@@ -734,6 +753,10 @@
         ("answer_3", Type::CUtf8),
         ("answer_4", Type::CUtf8),
         ("comment", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("ScoreParam"), [
+        ("unknown_short_1", Type::U16),
+        ("unknown_short_2", Type::U16),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("ScrambleRaidStrong"), [
         ("enemy", Type::CUtf8),
