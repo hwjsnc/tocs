@@ -86,6 +86,12 @@
         ("unknown_data", Type::X(4)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     */
+    (SmolStr::new("CharGroup"), [
+        ("unknown_short_1", Type::I16),
+        ("characters", Type::Repeat(6, Box::new(Type::I16))),
+        ("unknown_data", Type::X(14)),
+        ("name", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("CompHelpData"), [
         ("type", Type::I16),
         ("text", Type::CUtf8),
@@ -457,14 +463,35 @@
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MapJumpData"), [
+        ("unknown_data_1", Type::X(10)),
+        ("name", Type::CUtf8),
+        ("unknown_string_1", Type::CUtf8),
+        ("unknown_string_2", Type::CUtf8),
+        ("unknown_data_2", Type::X(2)),
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
+        ("unknown_float_3", Type::F32),
+        ("unknown_float_4", Type::F32),
+        ("unknown_data_3", Type::X(8)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MapParam"), [
         ("map", Type::CUtf8),
-        ("namp", Type::CUtf8),
+        ("unknown_string", Type::CUtf8),
         ("unknown_float_1", Type::F32),
         ("unknown_float_2", Type::F32),
         ("unknown_data_1", Type::X(4)),
         ("unknown_float_3", Type::F32),
         ("unknown_data_2", Type::X(2)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MarkerTableData"), [
+        ("unknown_short_1", Type::U16),
+        ("unknown_short_2", Type::U16),
+        ("unknown_short_3", Type::U16),
+        ("unknown_string_1", Type::CUtf8),
+        ("unknown_data_1", Type::X(9)),
+        ("unknown_string_2", Type::CUtf8),
+        ("unknown_data_2", Type::X(12)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MasterQuartzAbilityMemo"), [
         ("id", Type::U32),
@@ -1021,6 +1048,12 @@
         ("unknown_short_4", Type::U16),
         ("unknown_data", Type::X(2)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("QSTitle"), [
+        ("unknown_data_1", Type::X(3)),
+        ("description_1", Type::CUtf8),
+        ("description_2", Type::CUtf8),
+        ("unknown_data_2", Type::X(17)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("QuartzCost"), [
         ("id", Type::I16),
         ("earth_sepith_cost", Type::U16),
@@ -1044,6 +1077,13 @@
     (SmolStr::new("ScoreParam"), [
         ("unknown_short_1", Type::U16),
         ("unknown_short_2", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("SCraftLvBox"), [
+        ("name", Type::CUtf8),
+        ("unknown_data_1", Type::X(3)),
+        ("required_level", Type::U8),
+        ("unknown_data_2", Type::X(2)),
+        ("party", Type::Repeat(4, Box::new(Type::Ref(Header::new("SCraftLvBox_upgrade").unwrap())))),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("ScrambleRaidStrong"), [
         ("enemy", Type::CUtf8),
