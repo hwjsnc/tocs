@@ -104,7 +104,7 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
-### v1.0-rc3 (in development)
+### [v1.0-rc3](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc3/tbled-v1.0-rc3.exe)
 
 - improved schemas for every game
 
