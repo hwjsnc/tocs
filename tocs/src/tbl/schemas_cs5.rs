@@ -967,6 +967,14 @@
         ("unknown_short", Type::U16),
         ("unknown_data", Type::X(4)), // I think the last two bytes are for when a section is expanded in a later section of the game
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("QSRank"), [
+        ("unknown_short_1", Type::U16),
+        ("name", Type::CUtf8),
+        ("required_RP", Type::U16),
+        ("unknown_short_3", Type::U16),
+        ("unknown_short_4", Type::U16),
+        ("unknown_data", Type::X(2)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("QuartzCost"), [
         ("id", Type::I16),
         ("earth_sepith_cost", Type::U16),
