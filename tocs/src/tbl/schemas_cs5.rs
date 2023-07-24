@@ -279,6 +279,16 @@
         ("unknown_int_2", Type::U32),
         ("unknown_floats", Type::Repeat(36, Box::new(Type::F32))),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfRFItem"), [
+        ("description_short", Type::CUtf8),
+        ("item_name", Type::CUtf8),
+        ("unknown_data_1", Type::X(6)),
+        ("item", Type::U16),
+        ("description_long", Type::CUtf8),
+        ("unknown_data_2", Type::X(6)),
+        ("cost", Type::Repeat(10, Box::new(Type::I16))),
+        ("unknown_data_3", Type::X(12)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("item"), [
         ("id", Type::U16),
         ("character_restriction", Type::U16),
@@ -473,7 +483,9 @@
         ("unknown_float_2", Type::F32),
         ("unknown_float_3", Type::F32),
         ("unknown_float_4", Type::F32),
-        ("unknown_data_3", Type::X(8)),
+        ("unknown_short_1", Type::U16),
+        ("unknown_short_2", Type::U16),
+        ("unknown_data_3", Type::X(4)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MapParam"), [
         ("map", Type::CUtf8),
@@ -1053,6 +1065,11 @@
         ("description_1", Type::CUtf8),
         ("description_2", Type::CUtf8),
         ("unknown_data_2", Type::X(17)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("QSText"), [
+        ("unknown_data_1", Type::X(3)),
+        ("text", Type::CUtf8),
+        ("unknown_data_2", Type::X(1)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("QuartzCost"), [
         ("id", Type::I16),
