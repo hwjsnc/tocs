@@ -65,6 +65,10 @@
         ("text", Type::CUtf8),
         ("value", Type::I32),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("EventGroupData"), [
+        ("id", Type::U16),
+        ("title", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("EventTableData"), [
         ("id", Type::U16),
         ("unknown_string_1", Type::CUtf8),
