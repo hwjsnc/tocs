@@ -636,6 +636,16 @@
         ("space_sepith_cost", Type::U16),
         ("mirage_sepith_cost", Type::U16),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("QuizData"), [
+        ("id", Type::U32),
+        ("question", Type::CUtf8),
+        ("unknown_data", Type::X(4)), // probably the correct answer?
+        ("answer_1", Type::CUtf8),
+        ("answer_2", Type::CUtf8),
+        ("answer_3", Type::CUtf8),
+        ("answer_4", Type::CUtf8),
+        ("comment", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("ScrambleRaidStrong"), [
         ("enemy", Type::CUtf8),
         ("unknown_data", Type::X(10)),
@@ -840,6 +850,10 @@
         ("name", Type::CUtf8),
         ("bonus", Type::F32),
         ("unknown_data", Type::X(2)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("TalkData"), [
+        ("id", Type::U32),
+        ("text", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("text_lst"), [
         ("id", Type::U16),
