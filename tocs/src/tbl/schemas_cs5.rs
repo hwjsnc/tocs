@@ -1,4 +1,11 @@
 [
+    (SmolStr::new("ActionParam"), [
+        ("unknown_short", Type::U16),
+        ("unknown_byte", Type::U8),
+        ("unknown_string_1", Type::CUtf8),
+        ("unknown_string_2", Type::CUtf8),
+        ("unknown_data", Type::X(2)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("ActiveVoiceTableData"), [
         ("unknown_short_1", Type::U16),
         ("unknown_short_2", Type::U16),
@@ -68,6 +75,10 @@
         ("unknown_byte_2", Type::I8),
         ("unknown_string_1", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("char_revise"), [
+        ("char", Type::CUtf8),
+        ("unknown_shorts", Type::Repeat(9, Box::new(Type::U16))),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     /*
     (SmolStr::new("CharaParam"), [ // This header is used with different schemas in mg13 and charaviewer
@@ -153,6 +164,16 @@
     (SmolStr::new("InfinityAsset"), [
         ("unknown_int", Type::U32),
         ("unknown_text", Type::Repeat(16, Box::new(Type::CUtf8))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfinityAttachPointLight"), [
+        ("unknown_string", Type::CUtf8),
+        ("unknown_data_1", Type::X(4)),
+        ("unknown_float_1", Type::F32),
+        ("unknown_data_2", Type::X(4)),
+        ("unknown_float_2", Type::F32),
+        ("unknown_float_3", Type::F32),
+        ("unknown_float_4", Type::F32),
+        ("unknown_float_5", Type::F32),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("InfinityChara"), [
         ("character", Type::U16),
@@ -435,6 +456,15 @@
         ("animation", Type::CUtf8),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MapParam"), [
+        ("map", Type::CUtf8),
+        ("namp", Type::CUtf8),
+        ("unknown_float_1", Type::F32),
+        ("unknown_float_2", Type::F32),
+        ("unknown_data_1", Type::X(4)),
+        ("unknown_float_3", Type::F32),
+        ("unknown_data_2", Type::X(2)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MasterQuartzAbilityMemo"), [
         ("id", Type::U32),
