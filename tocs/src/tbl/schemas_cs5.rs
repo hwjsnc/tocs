@@ -436,6 +436,12 @@
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MasterQuartzAbilityMemo"), [
+        ("id", Type::U32),
+        ("description_1", Type::CUtf8),
+        ("description_2", Type::CUtf8),
+        ("description_3", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MasterQuartzBase"), [
         ("item_id", Type::U16),
         ("mq_id", Type::U16),
@@ -447,6 +453,16 @@
         ("ats_pattern", Type::U16),
         ("adf_pattern", Type::U16),
         ("spd_pattern", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MasterQuartzBase2"), [
+        ("item_id", Type::U32),
+        ("ability_1", Type::U16),
+        ("ability_2", Type::U16),
+        ("ability_3", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("MasterQuartzChrLv"), [
+        ("mq_level", Type::U32),
+        ("char_level", Type::U32), // probably
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("MasterQuartzData"), [
         ("item_id", Type::U16),
