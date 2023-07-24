@@ -12,6 +12,10 @@
         ("unknown_data", Type::X(14)),
         ("event_id", Type::U16),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("AssetCache"), [
+        ("unknown_int", Type::U16),
+        ("asset", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("AtBonus"), [
         ("unknown_int", Type::U32),
         ("inverse_chance", Type::U8),
@@ -96,6 +100,9 @@
         ("unknown_float_9", Type::F32),
         ("unknown_float_10", Type::F32),
         ("unknown_float_11", Type::F32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("EnterButtonImage"), [
+        ("unknown_string", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("EventGroupData"), [
         ("id", Type::U16),
@@ -354,6 +361,13 @@
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
         ("unknown_data_4", Type::X(22)),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("item_set"), [
+        ("unknown_data_1", Type::X(4)),
+        ("unknown_int", Type::U32),
+        ("unknown_data_2", Type::X(2)),
+        ("unknown_string_1", Type::CUtf8),
+        ("unknown_string_2", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("ItemHelpData"), [
         ("effect", Type::U16),
