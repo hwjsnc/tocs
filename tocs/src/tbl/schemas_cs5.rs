@@ -1378,16 +1378,14 @@
         ("id", Type::U16),
         ("text", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    /*
-    TODO: the schema seems to change partway through. fun.
     (SmolStr::new("voice"), [
         ("id", Type::U16),
-        ("unknown_byte", Type::U8),
-        ("clip", Type::CUtf8),
+        ("unknown_text_1", Type::CUtf8),
+        ("track", Type::CUtf8),
         ("unknown_short", Type::U16),
-        ("unknown_float", Type::F32),
-        ("unknown_data", Type::X(12)),
-        ("unknown_string", Type::CUtf8),
+        ("unknown_float_1", Type::F32),
+        ("unknown_data", Type::X(8)),
+        ("unknown_float_2", Type::F32),
+        ("text", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    */
 ].into_iter().map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema)).collect()
