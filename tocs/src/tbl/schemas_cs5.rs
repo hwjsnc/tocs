@@ -1388,4 +1388,8 @@
         ("unknown_float_2", Type::F32),
         ("text", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("VoiceTimingInfo"), [
+        ("voice_chunk_length", Type::U32),
+        ("voice_timing_length", Type::U32),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
 ].into_iter().map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema)).collect()
