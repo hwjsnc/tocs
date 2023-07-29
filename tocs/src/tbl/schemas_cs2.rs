@@ -102,6 +102,16 @@
         ("text", Type::CUtf8),
         ("description", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("HoriItem"), [
+        ("shop_id", Type::U16),
+        ("item_id", Type::U16),
+        ("shop_availability_start", Type::U16),
+        ("original_availability_end", Type::U16),
+        ("unknown_data_1", Type::U16),
+        ("unknown_data_2", Type::U8),
+        ("weight", Type::U16),
+        ("recipe_id", Type::I16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("InfMonsSet"), [
         ("unknown_data", Type::X(8)),
         ("unknown_string_1", Type::CUtf8),
