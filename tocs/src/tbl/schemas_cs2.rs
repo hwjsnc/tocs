@@ -464,6 +464,13 @@
         ("space_sepith_cost", Type::U16),
         ("mirage_sepith_cost", Type::U16),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("ShopItem"), [
+        ("shop_id", Type::I16),
+        ("item_id", Type::U16),
+        ("unknown_short", Type::U16),
+        ("availability_start", Type::U16),
+        ("availability_end", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("SlotCost"), [
         ("slot_position", Type::I16),
         ("level", Type::I16),
