@@ -104,7 +104,7 @@
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("HoriItem"), [
         ("shop_id", Type::U16),
-        ("item_id", Type::U16),
+        ("item_or_trade_id", Type::U16),
         ("shop_availability_start", Type::U16),
         ("original_availability_end", Type::U16),
         ("unknown_data_1", Type::U16),
@@ -688,6 +688,12 @@
     (SmolStr::new("TextTableData"), [
         ("id", Type::U16),
         ("text", Type::CUtf8),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("trade"), [
+        ("id", Type::U16),
+        ("item_id", Type::U16),
+        ("unknown_data", Type::X(4)),
+        ("ingredients", Type::Repeat(4, Box::new(Type::Ref(Header::new("TradeIngredient").unwrap())))),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("voice"), [
         ("id", Type::U16),
