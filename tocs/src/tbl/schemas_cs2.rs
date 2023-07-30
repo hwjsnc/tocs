@@ -694,4 +694,21 @@
         ("clip", Type::CUtf8),
         ("unknown_data", Type::X(14)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("weapon_attribute"), [
+        ("character", Type::U16),
+        ("unbalance_slash", Type::U8),
+        ("unbalance_thrust", Type::U8),
+        ("unbalance_pierce", Type::U8),
+        ("unbalance_strike", Type::U8),
+        ("is_magic", Type::U8),
+        ("field_attack_range", Type::F32),
+        ("field_attack_1_a", Type::F32),
+        ("field_attack_1_b", Type::F32),
+        ("breaks_obstacles_1", Type::U8),
+        ("obstacle_damage_1", Type::U8),
+        ("field_attack_2_a", Type::F32),
+        ("field_attack_2_b", Type::F32),
+        ("breaks_obstacles_2", Type::U8),
+        ("obstacle_damage_2", Type::U8)
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
 ].into_iter().map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema)).collect()
