@@ -166,7 +166,7 @@
         ("type", Type::U8),
         ("element", Type::U8),
         ("target_type", Type::U8),
-        ("range", Type::U8),
+        ("rarity", Type::U8),
         ("area", Type::U8),
         ("effects", Type::Repeat(2, Box::new(Type::Ref(Header::new("effect").unwrap())))),
         ("str", Type::I16),
@@ -185,7 +185,10 @@
         ("unknown_short", Type::I16),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
-        ("unknown_data_2", Type::X(8)),
+        ("prio_balanced", Type::U16),
+        ("prio_physical", Type::U16),
+        ("prio_magical", Type::U16),
+        ("prio_speed", Type::U16),
         ("arts", Type::Repeat(6, Box::new(Type::I16)))
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("ItemHelpData"), [
