@@ -45,10 +45,13 @@
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("AttachTableData"), [
         ("character", Type::U16),
-        ("unknown_data", Type::X(24)),
-        ("unknown_string_1", Type::CUtf8),
+        ("item_type", Type::U16),
+        ("unknown_short", Type::U16),
+        ("item_id", Type::U16),
+        ("unknown_data", Type::X(18)),
+        ("pkg_name", Type::CUtf8),
         ("model", Type::CUtf8),
-        ("unknown_string_2", Type::CUtf8),
+        ("attach_point", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("AttachTransformData"), [
         ("unknown_short", Type::U16),
@@ -93,6 +96,14 @@
     (SmolStr::new("char_revise"), [
         ("char", Type::CUtf8),
         ("unknown_shorts", Type::Repeat(9, Box::new(Type::U16))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("dlc"), [
+        ("dlc_id", Type::I16),
+        ("sort_id", Type::I16),
+        ("unknown_data", Type::X(16)),
+        ("name", Type::CUtf8),
+        ("description", Type::CUtf8),
+        ("items", Type::Repeat(20, Box::new(Type::Ref(Header::new("dlc_item").unwrap())))),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("CompHelpData"), [
         ("type", Type::I16),

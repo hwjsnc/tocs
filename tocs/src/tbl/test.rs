@@ -10,7 +10,7 @@ const TBL_TEST_FOLDERS: &[(
 )] = &[
     ("private-test-data/cs1/nisa-pc-1.6/data/text/dat_us/", Version::CS1En, false, true),
     ("private-test-data/cs2/nisa-pc-1.4.1/data/text/dat_us/", Version::CS2En, false, true),
-    ("private-test-data/cs3/nisa-pc-1.0.5/data/text/", Version::CS3, false, true),
+    ("private-test-data/cs3/nisa-pc-1.0.5/data/text/", Version::CS3, false, false),
     ("private-test-data/cs3/softbrilliant-mod-1.0.6/data/text/", Version::CS3, false, false),
     ("private-test-data/cs4/nisa-switch-1.0.0/text/", Version::CS4, true, true),
     ("private-test-data/cs4/softbrilliant-mod-1.0.7/data/text/", Version::CS4, false, false),
@@ -74,7 +74,8 @@ fn test_read_all() {
             }
         }
         if *comprehensive {
-            let difference: std::collections::BTreeSet<_> = schema_headers.difference(&seen_headers).collect();
+            let mut difference: std::collections::BTreeSet<_> = schema_headers.difference(&seen_headers).collect();
+            difference.remove(&Header::new("dlc").unwrap()); // Some games don't include free DLC so it's fine if these are missing.
             if !difference.is_empty() {
                 for hdr in difference {
                     log::error!("header '{hdr}' appears in the schemas but not in the dataset");

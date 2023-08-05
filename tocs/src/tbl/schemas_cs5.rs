@@ -30,7 +30,10 @@
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("AttachTableData"), [
         ("character", Type::U16),
-        ("unknown_data", Type::X(24)),
+        ("item_type", Type::U16),
+        ("unknown_short", Type::U16),
+        ("item_id", Type::U16),
+        ("unknown_data", Type::X(18)),
         ("unknown_string_1", Type::CUtf8),
         ("model", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
@@ -105,7 +108,9 @@
         ("unknown_float_4", Type::F32),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("dlc"), [
-        ("unknown_data", Type::X(20)),
+        ("dlc_id", Type::I16),
+        ("sort_id", Type::I16),
+        ("unknown_data", Type::X(16)),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
         ("items", Type::Repeat(20, Box::new(Type::Ref(Header::new("dlc_item").unwrap())))),
