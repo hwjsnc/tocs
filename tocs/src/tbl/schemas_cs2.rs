@@ -101,6 +101,14 @@
         ("unknown_string", Type::CUtf8),
         ("unknown_byte", Type::U8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("FPointItem"), [
+        ("shop_id", Type::U16),
+        ("item_id", Type::U16),
+        ("points", Type::U16),
+        ("rank_needed", Type::U16),
+        ("unknown_short_1", Type::U16),
+        ("unknown_short_2", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("game_difficulty"), [
         ("difficulty", Type::U16),
         ("modifier", Type::I16),
