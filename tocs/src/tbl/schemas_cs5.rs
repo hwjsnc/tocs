@@ -504,7 +504,7 @@
         ("character_restriction", Type::U16),
         ("flags", Type::CUtf8),
         ("category", Type::U8),
-        ("unknown_byte_1", Type::U8),
+        ("subcategory", Type::U8),
         ("element", Type::U8),
         ("mode_switch", Type::U8),
         ("target_type", Type::U8),
@@ -516,7 +516,7 @@
         ("effects", Type::Repeat(5, Box::new(Type::Ref(Header::new("effect").unwrap())))),
         ("cast_delay", Type::U8),
         ("recovery_delay", Type::U8),
-        ("unknown_byte", Type::U8), // probably cost type: 2 for crafts that cost EP
+        ("cost_type", Type::U8),
         ("cost", Type::U16),
         ("unbalance_bonus", Type::I8),
         ("break_bonus", Type::I16),
