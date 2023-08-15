@@ -34,7 +34,7 @@
         ("unknown_short", Type::U16),
         ("item_id", Type::U16),
         ("unknown_data", Type::X(18)),
-        ("unknown_string_1", Type::CUtf8),
+        ("sprite", Type::CUtf8),
         ("model", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
