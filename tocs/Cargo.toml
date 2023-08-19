@@ -32,7 +32,8 @@ hexhex = { git = "https://git.sr.ht/~quf/hexhex", version = "1.0.0" }
 indexmap = "1.9.2"
 itertools = "0.10.5"
 num-integer = "0.1.45"
-serde = { version = "1.0.163", optional = true, features = ["derive"] }
+serde = { version = "1.0.163,  <=1.0.171", optional = true, features = ["derive"] } # https://github.com/serde-rs/serde/issues/2538
+serde_derive = { version = "<=1.0.171", optional = true } # https://github.com/serde-rs/serde/issues/2538
 sha2 = { version = "0.10.6", optional = true }
 smallvec = { version = "1.10.0", features = ["write"] }
 smol_str = { version = "0.2", default-features = false }
