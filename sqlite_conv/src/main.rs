@@ -17,24 +17,9 @@ enum Args {
         /// path of the new database file
         #[arg(long)]
         db_path: std::path::PathBuf,
-        /// game (CS1/CS2/CS3)
-        #[arg(long)]
-        game: tocs::tbl::Version,
-    },
-    /// Read data from a sqlite database and generate corresponding tbl files
-    To_Tbl {
-        /// path of the database file from which data should be read
-        #[arg(long)]
-        db_path: std::path::PathBuf,
-        /// path to the directory that the tbls should be written to
-        #[arg(long)]
-        tbl_path: std::path::PathBuf,
         /// game (CS1/CS2/CS3/CS4/CS5)
         #[arg(long)]
         game: tocs::tbl::Version,
-        /// overwrite any existing tbl files
-        #[arg(short, long)]
-        force: bool,
     },
     /// Read .pka file list and convert to sqlite for analysis
     ///
@@ -55,9 +40,6 @@ pub fn main() {
     match Args::parse() {
         Args::Tbl_to_Sql { tbl_path, db_path, game } => {
             tbl_to_new_db(&tbl_path, &db_path, &game);
-        }
-        Args::To_Tbl { .. } => {
-            todo!()
         }
         Args::Pka_to_Sql { pka_path, db_path } => {
             pka_metadata_to_new_db(&pka_path, &db_path);
