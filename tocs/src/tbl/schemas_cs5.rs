@@ -1384,6 +1384,12 @@
         ("id", Type::U16),
         ("text", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("trade"), [
+        ("id", Type::U16),
+        ("item_id", Type::U16),
+        ("unknown_data", Type::X(4)),
+        ("ingredients", Type::Repeat(8, Box::new(Type::Ref(Header::new("TradeIngredient").unwrap())))),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("TextTableData"), [
         ("id", Type::U16),
         ("text", Type::CUtf8),
