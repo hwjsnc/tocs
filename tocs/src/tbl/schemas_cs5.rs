@@ -315,6 +315,13 @@
         ("unknown_short_6", Type::I16),
         ("unknown_data_3", Type::X(8)),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("InfRFHeal"), [
+        ("level", Type::U16),
+        ("cp", Type::U16),
+        ("ap", Type::U16),
+        ("bp", Type::U16),
+        ("cooldown", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("InfRFItem"), [
         ("description_short", Type::CUtf8),
         ("item_name", Type::CUtf8),
