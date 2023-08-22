@@ -1162,6 +1162,15 @@
         ("answer_4", Type::CUtf8),
         ("comment", Type::CUtf8),
     ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
+    (SmolStr::new("RouteChrData"), [
+        ("unknown_short_1", Type::U16),
+        ("unknown_string_1", Type::CUtf8),
+        ("unknown_string_2", Type::CUtf8),
+        ("unknown_short_2", Type::U16),
+        ("unknown_short_3", Type::U16),
+        ("unknown_short_4", Type::U16),
+        ("unknown_short_5", Type::U16),
+    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
     (SmolStr::new("ScoreParam"), [
         ("unknown_short_1", Type::U16),
         ("unknown_short_2", Type::U16),
