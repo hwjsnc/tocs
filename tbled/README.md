@@ -107,6 +107,7 @@ Releases (downloads & changelogs)
 ### v1.0 (in development)
 
 - improved schemas for CS2
+- fixed a crash condition that may occur when editing a non-existent cell
 
 ### [v1.0-rc3](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc3/tbled-v1.0-rc3.exe)
 

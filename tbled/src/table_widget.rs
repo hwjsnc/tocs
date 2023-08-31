@@ -218,24 +218,24 @@ impl FilteredTable {
         self.widget.emit(sender, msg)
     }
 
-    fn original_row(&self, filtered_row_index: i32) -> usize {
+    fn original_row(&self, filtered_row_index: i32) -> Option<usize> {
         let row: usize = filtered_row_index.try_into().unwrap();
         let guard = self.data.lock().unwrap();
         let TableData { ref original_row_indexes, .. } = &*guard;
-        original_row_indexes[row]
+        original_row_indexes.get(row).copied()
     }
 
-    fn original_col(&self, filtered_col_index: i32) -> usize {
+    fn original_col(&self, filtered_col_index: i32) -> Option<usize> {
         let col: usize = filtered_col_index.try_into().unwrap();
         let guard = self.data.lock().unwrap();
         let TableData { ref original_col_indexes, .. } = &*guard;
-        original_col_indexes[col]
+        original_col_indexes.get(col).copied()
     }
 
     pub fn selected_cell(&self) -> Option<(usize, usize)> {
         let (row, col, row2, col2) = self.widget.try_get_selection()?;
         if row == row2 && col == col2 {
-            Some((self.original_row(row), self.original_col(col)))
+            Some((self.original_row(row)?, self.original_col(col)?))
         } else {
             None
         }
@@ -244,7 +244,7 @@ impl FilteredTable {
     pub fn selected_row(&self) -> Option<usize> {
         let (row, col, row2, col2) = self.widget.try_get_selection()?;
         if row == row2 && col == 0 && col2 == self.widget.cols() - 1 {
-            Some(self.original_row(row))
+            self.original_row(row)
         } else {
             None
         }
