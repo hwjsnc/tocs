@@ -1303,7 +1303,7 @@
         ("space_sepith_growth", Type::F32),
         ("mirage_sepith_growth", Type::F32),
         ("sepith_mass_growth", Type::F32),
-        ("unknown_data_1", Type::X(14)),
+        ("drops", Type::Repeat(2, Box::new(Type::Ref(Header::new("item_drop").unwrap())))),
         ("stat_variation_min", Type::F32),
         ("stat_variation_max", Type::F32),
         ("flags", Type::CUtf8),
