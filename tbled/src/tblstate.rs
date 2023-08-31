@@ -85,20 +85,20 @@ pub struct TblStateHistory {
 
 impl TblStateWithoutHistory {
     fn duplicate_row(&self, rowid: usize) -> Self {
-        let mut all_rows = self.all_rows.clone(); // O(1) for immutable vector
-        let row = all_rows[rowid].clone();
+        let mut all_rows = self.all_rows.clone();
+        let row = std::rc::Rc::clone(&all_rows[rowid]);
         all_rows.insert(rowid + 1, row);
         TblStateWithoutHistory { all_rows }
     }
 
     fn remove_row(&self, rowid: usize) -> Self {
-        let mut all_rows = self.all_rows.clone(); // O(1) for immutable vector
+        let mut all_rows = self.all_rows.clone();
         let _ = all_rows.remove(rowid);
         TblStateWithoutHistory { all_rows }
     }
 
     fn update_cell(&self, rowid: usize, colid: usize, value: Value) -> Self {
-        let mut all_rows = self.all_rows.clone(); // O(1) for immutable vector
+        let mut all_rows = self.all_rows.clone();
         let row = std::rc::Rc::make_mut(&mut all_rows[rowid]); // Clones inner data and gives us a reference to the cloned data
         let (_, oldval) = row.values.get_index_mut(colid).expect("column index should be valid");
         match (oldval.r#type(), value.r#type()) {
