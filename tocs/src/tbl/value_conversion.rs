@@ -64,11 +64,16 @@ impl AtomicValue {
             AtomicValue::I8(_) | AtomicValue::I16(_) | AtomicValue::I32(_) | AtomicValue::U8(_) | AtomicValue::U16(_) | AtomicValue::U32(_) | AtomicValue::F32(_) => {
                 let mut buf = smallvec::SmallVec::<[u8; 22]>::new();
                 write!(buf, "{self}").expect("write to SmallVec should not fail"); // this should not allocate because buf is long enough
-                SmolStr::from_str(std::str::from_utf8(&buf).expect("Display should write valid UTF-8")).expect("SmolStr::from_str should not fail")
+                SmolStr::new(std::str::from_utf8(&buf).expect("Display should write valid UTF-8"))
                 // should not allocate since buf.len() <= 22
             }
             AtomicValue::CUtf8(s) => s.clone(),
-            AtomicValue::X(x) => SmolStr::from(hexhex::Hex::new(x).to_string()), // TODO: don't double-allocate!
+            AtomicValue::X(x) => {
+                // this does not allocate as long as x.len() * 2 < 22; otherwise is allocates twice
+                let mut buf = smallvec::SmallVec::<[u8; 22]>::new();
+                write!(buf, "{}", hexhex::Hex::new(x)).expect("write to SmallVec should not fail");
+                SmolStr::new(std::str::from_utf8(&buf).expect("Display should write valid UTF-8"))
+            }
         }
     }
 }
