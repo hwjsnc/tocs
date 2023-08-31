@@ -56,8 +56,10 @@ You can also use the CSV import/export function for editing:
 - Import the updated CSV
 - Save the updated .tbl file
 
-When importing a CSV, under certain circumstances the order of .tbl entries may change relative to the entries that have a different header.
-It's unlikely that this would cause any problems, but I cannot fully exclude the possibility so just be aware of that.
+When importing a CSV, the order of .tbl entries may change relative to the entries that have a different header.
+In a few `.tbl` files (e.g. `t_mstqrt.tbl` and `t_orb.tbl`) this can cause errors!
+At the moment, these files should only be edited in `tbled`, and you should not attempt to add or remove entries.
+(I plan to address this problem in a future version.)
 
 Search / row filters
 --------------------
