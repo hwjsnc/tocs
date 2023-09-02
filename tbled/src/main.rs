@@ -448,7 +448,9 @@ impl App {
                 self.save_tbl_to_file(None);
             }
             Some(Msg::SelectAndSaveFile) => {
-                let Some(path) = misc::save_file_dialog("tbl", &format!("{}", self.state.path.display())) else { return };
+                let Some(path) = misc::save_file_dialog("tbl", &format!("{}", self.state.path.display())) else {
+                    return;
+                };
                 self.save_tbl_to_file(Some(path));
             }
             Some(Msg::ExportCSV) => {

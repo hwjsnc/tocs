@@ -60,12 +60,12 @@ impl RowFilter {
             // no operator => search full substring
             if s.is_empty() {
                 // search string is empty => all rows pass
-                return RowFilter::PassAll
+                return RowFilter::PassAll;
             } else {
                 return RowFilter::CaseInsensitiveContains {
                     attribute: None,
                     substring: to_case_insensitive_search_regex(s),
-                }
+                };
             }
         };
         let attribute = Attribute::from(&s[..i]);
