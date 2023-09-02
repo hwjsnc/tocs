@@ -291,10 +291,10 @@ impl App {
         header_selector.emit(sender.clone(), Msg::DifferentHeaderSelected);
         header_selector.input().set_readonly(true);
         header_selector.set_tooltip("Select header (entry type).");
-        flex_row.set_size(&header_selector, 200);
+        flex_row.fixed(&header_selector, 200);
 
         flex_row.end();
-        flex.set_size(&flex_row, 26);
+        flex.fixed(&flex_row, 26);
         let mut flex_row = fltk::group::Flex::default().size_of_parent();
         flex_row.set_type(fltk::group::FlexType::Row);
 
@@ -316,8 +316,8 @@ impl App {
         search.set_tooltip("Search filter: Rows which do not contain the search string in any (hidden or visible) cell will be hidden. Search is case-insensitive. Special characters :=>< cause different behaviour, see documentation for a full explanation.");
 
         flex_row.end();
-        flex_row.set_size(&search, 200);
-        flex.set_size(&flex_row, 26);
+        flex_row.fixed(&search, 200);
+        flex.fixed(&flex_row, 26);
 
         let mut table = table_widget::FilteredTable::new();
         table.emit(sender, Msg::TableEvent);

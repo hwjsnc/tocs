@@ -20,7 +20,7 @@ impl WarningDialog {
         let mut label = fltk::frame::Frame::default();
         label.set_label(s);
         let h = fltk::draw::measure(s, true).1;
-        flex.set_size(&label, h + h / 10);
+        flex.fixed(&label, h + h / 10);
 
         let mut s = String::new();
         for (i, w) in warnings.enumerate() {
@@ -47,9 +47,9 @@ impl WarningDialog {
         let _ = fltk::widget::Widget::default(); // for spacing
         let mut button = fltk::button::Button::default();
         button.set_label("close");
-        //flex_row.set_size(&button, 20);
+        //flex_row.fixed(&button, 20);
         let _ = fltk::widget::Widget::default(); // for spacing
-        flex.set_size(&flex_row, 24);
+        flex.fixed(&flex_row, 24);
 
         flex.end();
 
