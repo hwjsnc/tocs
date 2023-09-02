@@ -101,7 +101,7 @@ Files with known schemas can be read under certain circumstances even when these
 For those cases, a list of warnings will be shown when loading the file.
 If there are warnings, it is your responsibility to check every warning and decide whether or not to fix the detected problem, as well as how to fix it.
 
-If there are warnings when loading files that have previously been written with this tool, that's a bug.
+If there are warnings when loading files that have previously been written with this tool, that's a bug (unless you edited a field with hex content and changed its length).
 
 Releases (downloads & changelogs)
 ---------------------------------
