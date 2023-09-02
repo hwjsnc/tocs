@@ -110,6 +110,7 @@ Releases (downloads & changelogs)
 
 - improved schemas for CS2
 - fixed a crash condition that may occur when editing a non-existent cell
+- fixed a performance degradation by updating fltk version
 
 ### [v1.0-rc3](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc3/tbled-v1.0-rc3.exe)
 

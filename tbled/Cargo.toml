@@ -13,7 +13,8 @@ lto = true
 clap = { version = "4.0.26", features = ["derive"] }
 csv = { version = "1.1.6" }
 indexmap = "1.9.2"
-fltk = { version = "1.4.2", features = ["no-images", "no-pango"] }
+#fltk = { version = "1.4.2", features = ["no-images", "no-pango"] }
+fltk = { git = "https://github.com/fltk-rs/fltk-rs/", rev = "222d4d51ca3e5b25dbdbef823a3a36d2ccc99e37", features = ["no-images", "no-pango"] } # fixes https://github.com/fltk-rs/fltk-rs/issues/1452
 grid = "0.10.0"
 lazy_static = "1.4"
 log = { version = "0.4.17" }
