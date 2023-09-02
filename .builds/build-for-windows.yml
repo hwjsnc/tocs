@@ -3,6 +3,7 @@ packages:
   - mingw-w64-headers
   - mingw-w64-gcc
   - rustup
+  - cmake
 sources:
   - https://git.sr.ht/~quf/tocs
 artifacts:

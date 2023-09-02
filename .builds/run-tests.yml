@@ -6,6 +6,7 @@ packages:
  - fltk
  - pango
  - cairo
+ - cmake
 sources:
  - https://git.sr.ht/~quf/tocs
 secrets:
