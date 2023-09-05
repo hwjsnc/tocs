@@ -16,11 +16,16 @@ tasks:
     mkdir -p "$HOME/.cargo/"
     echo '[build]' >> "$HOME/.cargo/config.toml"
     echo 'rustc-wrapper = "/usr/bin/sccache"' >> "$HOME/.cargo/config.toml"
+ - install-cargo-audit: |
+    cargo install cargo-audit
  - unpack-data: |
     cd tocs
     mkdir private-test-data
     cd private-test-data
     gpg --decrypt --passphrase-file "$HOME/tocs-data-password" --batch --pinentry-mode loopback < ../.builds/data.tar.xz.gpg | xzcat | tar xf -
+ - cargo-audit: |
+    cd tocs
+    sh audit.sh
  - test: |
     cd tocs
     sh test.sh
