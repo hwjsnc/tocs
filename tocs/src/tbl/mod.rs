@@ -329,7 +329,7 @@ fn deserialize_header_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, c
         log::trace!("number of entries according to header: {}", number_of_entries);
     }
     let header_counts = deserialize_header_counts::<_, STRICT, LOG>(f, log)?;
-    let sum_of_counts: Option<u32> = header_counts.values().fold(Some(0), |a, b| a?.checked_add(*b));
+    let sum_of_counts: Option<u32> = header_counts.values().try_fold(0u32, |a, b| a.checked_add(*b));
     if sum_of_counts != Some(number_of_entries.into()) {
         let err = DeserializeError {
             detail: DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber {

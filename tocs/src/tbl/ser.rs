@@ -5,11 +5,7 @@ use super::Entry;
 
 pub fn atomic_attributes_serialization_length(schema: &AtomicAttributeValues) -> Option<u16> {
     // note: we're not using the serialization length of the schema because it can vary (if strings or opaque blobs are present)
-    schema.iter().map(|(_, v)| atomic_value_serialization_length(v)).fold(Some(0), |a, b| {
-        let x = a?;
-        let y = b?;
-        x.checked_add(y)
-    })
+    schema.iter().map(|(_, v)| atomic_value_serialization_length(v)).try_fold(0u16, |a, b| a.checked_add(b?))
 }
 
 pub fn atomic_value_serialization_length(v: &AtomicValue) -> Option<u16> {

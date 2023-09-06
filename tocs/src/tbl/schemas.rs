@@ -1,5 +1,3 @@
-use smol_str::SmolStr; // TODO: remove
-
 use super::{get_nf1_for_all, AtomicSchemas, Schemas, Type};
 
 use super::Header;
@@ -25,7 +23,7 @@ fn schemas_from_list(schemas_list: &[(&str, &[(&str, Type)])], common_list: &[(&
     for (header_name, attr_list) in schemas_list.iter() {
         let mut attrs = indexmap::IndexMap::with_capacity(attr_list.len());
         for (attr_name, attr_type) in attr_list.iter() {
-            let prev = attrs.insert(SmolStr::new(attr_name), attr_type.clone());
+            let prev = attrs.insert(smol_str::SmolStr::new(attr_name), attr_type.clone());
             if prev.is_some() {
                 panic!("duplicate attribute '{attr_name}' for '{header_name}'");
             }
@@ -43,7 +41,7 @@ fn schemas_from_list(schemas_list: &[(&str, &[(&str, Type)])], common_list: &[(&
         }
         let mut attrs = indexmap::IndexMap::with_capacity(attr_list.len());
         for (attr_name, attr_type) in attr_list.iter() {
-            let prev = attrs.insert(SmolStr::new(attr_name), attr_type.clone());
+            let prev = attrs.insert(smol_str::SmolStr::new(attr_name), attr_type.clone());
             if prev.is_some() {
                 panic!("duplicate attribute '{attr_name}' for '{header_name}'");
             }

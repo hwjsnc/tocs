@@ -74,6 +74,7 @@ macro_rules! fix_fun {
             $hash,
             &(|data: &mut std::vec::Vec<u8>| {
                 log::debug!("detected {}, '{}'. Applying fixes", $version_string, $filename);
+                #[allow(clippy::redundant_closure_call)]
                 $fixfun(data)
             }) as &'static FixFun,
         )
