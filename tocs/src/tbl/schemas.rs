@@ -20,37 +20,58 @@ lazy_static::lazy_static! {
     pub static ref EMPTY : AtomicSchemas = [].into_iter().collect();
 }
 
-fn gen_schemas_cs1() -> Schemas {
-    Schemas {
-        entries: include!("schemas_cs1.rs"),
-        common: include!("schemas_cs1_common.rs"),
+fn schemas_from_list(schemas_list: &[(&str, &[(&str, Type)])], common_list: &[(&str, &[(&str, Type)])]) -> Schemas {
+    let mut entries = indexmap::IndexMap::with_capacity(schemas_list.len());
+    for (header_name, attr_list) in schemas_list.iter() {
+        let mut attrs = indexmap::IndexMap::with_capacity(attr_list.len());
+        for (attr_name, attr_type) in attr_list.iter() {
+            let prev = attrs.insert(SmolStr::new(attr_name), attr_type.clone());
+            if prev.is_some() {
+                panic!("duplicate attribute '{attr_name}' for '{header_name}'");
+            }
+        }
+        let prev = entries.insert(Header::new(header_name).unwrap(), attrs);
+        if prev.is_some() {
+            panic!("duplicate schema for '{header_name}'");
+        }
     }
+    let mut common = indexmap::IndexMap::with_capacity(common_list.len());
+    for (header_name, attr_list) in common_list.iter() {
+        let name = Header::new(header_name).unwrap();
+        if entries.contains_key(&name) {
+            panic!("common schema '{header_name}' is also a schema name");
+        }
+        let mut attrs = indexmap::IndexMap::with_capacity(attr_list.len());
+        for (attr_name, attr_type) in attr_list.iter() {
+            let prev = attrs.insert(SmolStr::new(attr_name), attr_type.clone());
+            if prev.is_some() {
+                panic!("duplicate attribute '{attr_name}' for '{header_name}'");
+            }
+        }
+        let prev = common.insert(name, attrs);
+        if prev.is_some() {
+            panic!("duplicate schema for common structure '{header_name}'");
+        }
+    }
+    Schemas { entries, common }
+}
+
+fn gen_schemas_cs1() -> Schemas {
+    schemas_from_list(include!("schemas_cs1.rs"), include!("schemas_cs1_common.rs"))
 }
 
 fn gen_schemas_cs2() -> Schemas {
-    Schemas {
-        entries: include!("schemas_cs2.rs"),
-        common: include!("schemas_cs2_common.rs"),
-    }
+    schemas_from_list(include!("schemas_cs2.rs"), include!("schemas_cs2_common.rs"))
 }
 
 fn gen_schemas_cs3() -> Schemas {
-    Schemas {
-        entries: include!("schemas_cs3.rs"),
-        common: include!("schemas_cs3_common.rs"),
-    }
+    schemas_from_list(include!("schemas_cs3.rs"), include!("schemas_cs3_common.rs"))
 }
 
 fn gen_schemas_cs4() -> Schemas {
-    Schemas {
-        entries: include!("schemas_cs4.rs"),
-        common: include!("schemas_cs4_common.rs"),
-    }
+    schemas_from_list(include!("schemas_cs4.rs"), include!("schemas_cs4_common.rs"))
 }
 
 fn gen_schemas_cs5() -> Schemas {
-    Schemas {
-        entries: include!("schemas_cs5.rs"),
-        common: include!("schemas_cs5_common.rs"),
-    }
+    schemas_from_list(include!("schemas_cs5.rs"), include!("schemas_cs5_common.rs"))
 }

@@ -1,5 +1,5 @@
-[
-    (SmolStr::new("ActiveVoiceTableData"), [
+&[
+    ("ActiveVoiceTableData", &[
         ("unknown_short_1", Type::U16),
         ("unknown_short_2", Type::U16),
         ("unknown_short_3", Type::U16),
@@ -10,24 +10,24 @@
         ("unknown_float_1", Type::F32),
         ("unknown_float_2", Type::F32),
         ("unknown_data", Type::X(10)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("AttachTableData"), [
+    ]),
+    ("AttachTableData", &[
         ("character", Type::U16),
         ("unknown_data", Type::X(20)),
         ("model", Type::CUtf8),
         ("unknown_string", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("BaseList"), [
+    ]),
+    ("BaseList", &[
         ("character", Type::I16),
         ("lines", Type::U16),
         ("elements", Type::Repeat(8, Box::new(Type::U16))),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("bgm"), [
+    ]),
+    ("bgm", &[
         ("id", Type::U16),
         ("track", Type::CUtf8),
         ("unknown_data", Type::X(2)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("char_revise"), [
+    ]),
+    ("char_revise", &[
         ("char", Type::CUtf8),
         ("hp", Type::U16),
         ("str", Type::U16),
@@ -35,8 +35,8 @@
         ("ats", Type::U16),
         ("adf", Type::U16),
         ("spd", Type::U16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("CharData"), [
+    ]),
+    ("CharData", &[
         ("unknown_short_1", Type::U16),
         ("unknown_short_2", Type::U16),
         ("unknown_float_1", Type::F32),
@@ -45,50 +45,50 @@
         ("unknown_short_4", Type::U16),
         ("unknown_float_3", Type::F32),
         ("unknown_string", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("CompHelpData"), [
+    ]),
+    ("CompHelpData", &[
         ("type", Type::I16),
         ("text", Type::CUtf8),
         ("value", Type::I16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("condition"), [
+    ]),
+    ("condition", &[
         ("id", Type::U16),
         ("effects", Type::Repeat(5, Box::new(Type::Ref(Header::new("effect").unwrap())))),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("CourageousJumpData"), [
+    ]),
+    ("CourageousJumpData", &[
         ("unknown_data_1", Type::X(2)),
         ("name", Type::CUtf8),
         ("unknown_data_2", Type::X(8)),
         ("unknown_string_1", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
         ("unknown_data_3", Type::X(25)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("dlc"), [
+    ]),
+    ("dlc", &[
         ("id", Type::I16),
         ("unknown_data_1", Type::X(10)),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
         ("unknown_data_2", Type::X(80)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("EventTableData"), [
+    ]),
+    ("EventTableData", &[
         ("id", Type::U16),
         ("unknown_string_1", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
         ("unknown_data_1", Type::X(6)),
         ("unknown_string_3", Type::CUtf8),
         ("unknown_data_2", Type::X(18)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("FaceSupplementTableData"), [
+    ]),
+    ("FaceSupplementTableData", &[
         ("character", Type::I16),
         ("unknown_data_1", Type::X(16)),
         ("uknown_string", Type::CUtf8),
         ("unknown_data_2", Type::X(8)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("FaceShiftTableData"), [
+    ]),
+    ("FaceShiftTableData", &[
         ("character", Type::I16),
         ("unknown_strings", Type::Repeat(25, Box::new(Type::CUtf8))),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("fish_pnt"), [
+    ]),
+    ("fish_pnt", &[
         ("fish_pnt_id", Type::U16),
         ("place_id", Type::U32),
         ("max_attempts", Type::U16),
@@ -96,31 +96,31 @@
         ("unknown_int_2", Type::U16),
         ("fish", Type::Repeat(32, Box::new(Type::U8))),
         ("unknown_data_1", Type::X(16)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("FootStepData"), [
+    ]),
+    ("FootStepData", &[
         ("unknown_string", Type::CUtf8),
         ("unknown_byte", Type::U8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("FPointItem"), [
+    ]),
+    ("FPointItem", &[
         ("shop_id", Type::U16),
         ("item_id", Type::U16),
         ("points", Type::U16),
         ("rank_needed", Type::U16),
         ("unknown_short_1", Type::U16),
         ("unknown_short_2", Type::U16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("game_difficulty"), [
+    ]),
+    ("game_difficulty", &[
         ("difficulty", Type::U16),
         ("modifier", Type::I16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("hkitugi_lst"), [
+    ]),
+    ("hkitugi_lst", &[
         ("unknown_short", Type::U16),
         ("unknown_data", Type::X(2)),
         ("cost", Type::U16),
         ("text", Type::CUtf8),
         ("description", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("HoriItem"), [
+    ]),
+    ("HoriItem", &[
         ("shop_id", Type::U16),
         ("item_or_trade_id", Type::U16),
         ("shop_availability_start", Type::U16),
@@ -129,8 +129,8 @@
         ("unknown_data_2", Type::U8),
         ("weight", Type::U16),
         ("recipe_id", Type::I16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("InfMonsSet"), [
+    ]),
+    ("InfMonsSet", &[
         ("floor_min", Type::U16),
         ("floor_max", Type::U16),
         ("unknown_byte", Type::U8),
@@ -138,8 +138,8 @@
         ("field_type", Type::U8),
         ("warning", Type::U8),
         ("monsters", Type::Repeat(8, Box::new(Type::Ref(Header::new("InfMonster").unwrap())))),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("item"), [
+    ]),
+    ("item", &[
         ("id", Type::I16),
         ("character_restriction", Type::U16),
         ("flags", Type::CUtf8),
@@ -166,8 +166,8 @@
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
         ("unknown_data_2", Type::X(8)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("item_q"), [
+    ]),
+    ("item_q", &[
         ("id", Type::I16),
         ("character_restriction", Type::U16),
         ("flags", Type::CUtf8),
@@ -198,27 +198,27 @@
         ("prio_magical", Type::U16),
         ("prio_speed", Type::U16),
         ("arts", Type::Repeat(6, Box::new(Type::I16)))
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("ItemHelpData"), [
+    ]),
+    ("ItemHelpData", &[
         ("effect", Type::U16),
         ("text", Type::CUtf8),
         ("unknown_data", Type::X(9)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("LinkAbList"), [
+    ]),
+    ("LinkAbList", &[
         ("character", Type::U16),
         ("level", Type::U16),
         ("ability", Type::U8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("LinkAbText"), [
+    ]),
+    ("LinkAbText", &[
         ("id", Type::U8),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("LinkLevelExp"), [
+    ]),
+    ("LinkLevelExp", &[
         ("level", Type::I8),
         ("exp", Type::I32),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("magic"), [
+    ]),
+    ("magic", &[
         ("id", Type::I16),
         ("character_restriction", Type::U16),
         ("flags", Type::CUtf8),
@@ -238,23 +238,23 @@
         ("animation", Type::CUtf8),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MapJumpData"), [
+    ]),
+    ("MapJumpData", &[
         ("unknown_data_1", Type::X(4)),
         ("name", Type::CUtf8),
         ("unknown_data_2", Type::X(4)),
         ("unknown_string_1", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
         ("unknown_data_3", Type::X(30)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MarkerTableData"), [
+    ]),
+    ("MarkerTableData", &[
         ("unknown_data_1", Type::X(6)),
         ("unknown_string_1", Type::CUtf8),
         ("unknown_data_2", Type::X(9)),
         ("unknown_string_2", Type::CUtf8),
         ("unknown_data_3", Type::X(12)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MasterQuartzBase"), [
+    ]),
+    ("MasterQuartzBase", &[
         ("item_id", Type::U16),
         ("mq_id", Type::U16),
         ("unknown_short", Type::U16),
@@ -265,28 +265,28 @@
         ("ats_pattern", Type::U16),
         ("adf_pattern", Type::U16),
         ("spd_pattern", Type::U16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MasterQuartzData"), [
+    ]),
+    ("MasterQuartzData", &[
         ("item_id", Type::U16),
         ("level", Type::U16),
         ("effect_data", Type::Repeat(6, Box::new(Type::F32))),
         ("arts", Type::Repeat(2, Box::new(Type::I16))),
         ("memos", Type::Repeat(9, Box::new(Type::I16))),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MasterQuartzDummy"), [
+    ]),
+    ("MasterQuartzDummy", &[
         ("dummy_id", Type::I16),
         ("original_id", Type::I16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MasterQuartzDummy2"), [
+    ]),
+    ("MasterQuartzDummy2", &[
         ("dummy_id", Type::I16),
         ("original_id", Type::I16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MasterQuartzMemo"), [
+    ]),
+    ("MasterQuartzMemo", &[
         ("item_id", Type::I16),
         ("memo_id", Type::I16),
         ("text", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MasterQuartzStatus"), [
+    ]),
+    ("MasterQuartzStatus", &[
         ("pattern_id", Type::U8),
         ("level", Type::U16),
         ("hp", Type::I16),
@@ -296,22 +296,22 @@
         ("ats", Type::I16),
         ("adf", Type::I16),
         ("spd", Type::I16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MG02Help"), [
+    ]),
+    ("MG02Help", &[
         ("id", Type::I16),
         ("text", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MG02Text"), [
+    ]),
+    ("MG02Text", &[
         ("character", Type::I16),
         ("unknown_data_1", Type::X(4)),
         ("text", Type::CUtf8),
         ("unknown_data_2", Type::X(6)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("MissionText"), [
+    ]),
+    ("MissionText", &[
         ("id", Type::I8),
         ("text", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("NameTableData"), [
+    ]),
+    ("NameTableData", &[
         ("character", Type::I16),
         ("name", Type::CUtf8),
         ("model", Type::CUtf8),
@@ -321,37 +321,37 @@
         ("unknown_string_4", Type::CUtf8),
         ("unknown_string_5", Type::CUtf8),
         ("unknown_data_1", Type::X(17)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("NaviTextData"), [
+    ]),
+    ("NaviTextData", &[
         ("id", Type::I16),
         ("text", Type::CUtf8),
         ("unknown_data_2", Type::X(4)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("OrbLineList"), [
+    ]),
+    ("OrbLineList", &[
         ("character", Type::I16),
         ("line", Type::U16),
         ("slot_ids", Type::Repeat(8, Box::new(Type::I16))),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("PlaceTableData"), [
+    ]),
+    ("PlaceTableData", &[
         ("unknown_data_1", Type::X(4)),
         ("unknown_string_1", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
         ("unknown_data_2", Type::X(4)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSBook"), [
+    ]),
+    ("QSBook", &[
         ("unknown_short_1", Type::U16),
         ("unknown_short_2", Type::U16),
         ("title", Type::CUtf8),
         ("unknown_text_1", Type::CUtf8),
         ("unknown_text_2", Type::CUtf8),
         ("unknown_data", Type::X(5)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSChapter"), [
+    ]),
+    ("QSChapter", &[
         ("section_id", Type::I16),
         ("section_name", Type::CUtf8),
         ("unknown_short", Type::I16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSChar"), [
+    ]),
+    ("QSChar", &[
         ("character", Type::U16),
         ("section_id", Type::U16),
         ("entries", Type::U16),
@@ -365,8 +365,8 @@
         ("note_2", Type::CUtf8),
         ("note_3_title", Type::CUtf8),
         ("note_3", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSCook"), [
+    ]),
+    ("QSCook", &[
         ("regular_name", Type::CUtf8),
         ("recipe_id", Type::U16),
         ("ingredients", Type::Repeat(8, Box::new(Type::Ref(Header::new("QSCookIngredient").unwrap())))),
@@ -394,8 +394,8 @@
         ("skill_towa", Type::U8),
         ("skill_alfin", Type::U8),
         ("unknown_data_2", Type::X(29)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSFish"), [
+    ]),
+    ("QSFish", &[
         ("id", Type::I16),
         ("is_valid", Type::U8),
         ("name", Type::CUtf8),
@@ -446,32 +446,32 @@
         ("unknown_data_8", Type::X(2)),
         ("unknown_float_10", Type::F32),
         ("unknown_data_9", Type::X(20))
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSHelp"), [
+    ]),
+    ("QSHelp", &[
         ("unknown_short_1", Type::U16),
         ("unknown_short_2", Type::U16),
         ("text", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSMons"), [
+    ]),
+    ("QSMons", &[
         ("enemy", Type::CUtf8),
         ("section_id", Type::U16),
         ("enemy_id", Type::U16),
         ("is_extra", Type::U16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSRank"), [
+    ]),
+    ("QSRank", &[
         ("id", Type::U16),
         ("text", Type::CUtf8),
         ("unknown_int1", Type::U16),
         ("unknown_int2", Type::U16),
         ("unknown_int3", Type::U16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSText"), [
+    ]),
+    ("QSText", &[
         ("id", Type::U16),
         ("unknown_byte_1", Type::U8),
         ("text", Type::CUtf8),
         ("unknown_byte_2", Type::U8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QSTitle"), [
+    ]),
+    ("QSTitle", &[
         ("unknown_short", Type::U16),
         ("unknown_byte", Type::U8),
         ("title", Type::CUtf8),
@@ -479,8 +479,8 @@
         ("story_section", Type::U16),
         ("base_ap", Type::U8),
         ("unknown_data", Type::X(8)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("QuartzCost"), [
+    ]),
+    ("QuartzCost", &[
         ("id", Type::I16),
         ("earth_sepith_cost", Type::U16),
         ("water_sepith_cost", Type::U16),
@@ -489,15 +489,15 @@
         ("time_sepith_cost", Type::U16),
         ("space_sepith_cost", Type::U16),
         ("mirage_sepith_cost", Type::U16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("ShopItem"), [
+    ]),
+    ("ShopItem", &[
         ("shop_id", Type::I16),
         ("item_id", Type::U16),
         ("unknown_short", Type::U16),
         ("availability_start", Type::U16),
         ("availability_end", Type::U16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("SlotCost"), [
+    ]),
+    ("SlotCost", &[
         ("slot_position", Type::I16),
         ("level", Type::I16),
         ("earth_sepith_cost", Type::U16),
@@ -507,14 +507,14 @@
         ("time_sepith_cost", Type::U16),
         ("space_sepith_cost", Type::U16),
         ("mirage_sepith_cost", Type::U16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("SlotEp"), [
+    ]),
+    ("SlotEp", &[
         ("character", Type::I16),
         ("slot_level", Type::I16),
         ("ep_base", Type::U16),
         ("ep_increase", Type::Repeat(8, Box::new(Type::I16))),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("status"), [
+    ]),
+    ("status", &[
         ("script", Type::CUtf8),
         ("texture", Type::CUtf8),
         ("model", Type::CUtf8),
@@ -596,8 +596,8 @@
         ("flags", Type::CUtf8),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("status_p"), [
+    ]),
+    ("status_p", &[
         ("id", Type::I16),
         ("script", Type::CUtf8),
         ("texture", Type::CUtf8),
@@ -680,8 +680,8 @@
         ("flags", Type::CUtf8),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("status_revise"), [
+    ]),
+    ("status_revise", &[
         ("difficulty", Type::U16),
         ("hp", Type::U16),
         ("str", Type::U16),
@@ -689,34 +689,34 @@
         ("ats", Type::U16),
         ("adf", Type::U16),
         ("spd", Type::U16),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("TacticalBonus"), [
+    ]),
+    ("TacticalBonus", &[
         ("id", Type::I16),
         ("text", Type::CUtf8),
         ("bonus", Type::F32),
         ("unknown_byte_1", Type::U8),
         ("unknown_byte_2", Type::U8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("text_lst"), [
+    ]),
+    ("text_lst", &[
         ("id", Type::U16),
         ("text", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("TextTableData"), [
+    ]),
+    ("TextTableData", &[
         ("id", Type::U16),
         ("text", Type::CUtf8),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("trade"), [
+    ]),
+    ("trade", &[
         ("id", Type::U16),
         ("item_id", Type::U16),
         ("unknown_data", Type::X(4)),
         ("ingredients", Type::Repeat(4, Box::new(Type::Ref(Header::new("TradeIngredient").unwrap())))),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("voice"), [
+    ]),
+    ("voice", &[
         ("id", Type::U16),
         ("clip", Type::CUtf8),
         ("unknown_data", Type::X(14)),
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-    (SmolStr::new("weapon_attribute"), [
+    ]),
+    ("weapon_attribute", &[
         ("character", Type::U16),
         ("unbalance_slash", Type::U8),
         ("unbalance_thrust", Type::U8),
@@ -732,5 +732,5 @@
         ("field_attack_2_b", Type::F32),
         ("breaks_obstacles_2", Type::U8),
         ("obstacle_damage_2", Type::U8)
-    ].into_iter().map(|(s, t)| (SmolStr::new(s), t)).collect()),
-].into_iter().map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema)).collect()
+    ]),
+]
