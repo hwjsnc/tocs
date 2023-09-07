@@ -1,6 +1,7 @@
 mod ascii;
 mod bytestring;
 
+// TODO: ascii name (for pka/pkg)
 pub use ascii::{PaddedAsciiStr, PaddedAsciiString};
 pub use bytestring::{PaddedByteStr, PaddedByteString};
 
