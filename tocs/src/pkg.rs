@@ -13,14 +13,14 @@ pub type FileNameUnchecked = PaddedByteString<64>;
 pub type FileName = PaddedAsciiName<64>;
 
 pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<std::vec::Vec<FileListEntry>, PkgError> {
-    let _data = read_bytes::<4, _>(f).map_err(PkgError::IO)?; // TODO: magic header or a hash or something???
-    let number_of_files = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
+    let _data = read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?; // TODO: magic header or a hash or something???
+    let number_of_files = u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?);
     log::debug!("Expecting {number_of_files} files");
 
     let mut filelist = std::vec::Vec::<FileListEntry>::new();
     for i in 0..number_of_files {
         log::debug!("parsing filelist entry {} of {}", i + 1, number_of_files);
-        let entry = parse_filelist_entry(f)?;
+        let entry = parse_filelist_entry(f.by_ref())?;
         filelist.push(entry);
     }
     Ok(filelist)
@@ -73,15 +73,15 @@ pub struct FileListEntry {
 }
 
 fn parse_filelist_entry<F: std::io::Read>(f: &mut F) -> Result<FileListEntry, PkgError> {
-    let filename = FileNameUnchecked::read(f).map_err(PkgError::from)?;
+    let filename = FileNameUnchecked::read(f.by_ref()).map_err(PkgError::from)?;
     log::trace!("filename: {}", String::from_utf8_lossy(filename.as_bytes_excluding_terminator_and_padding()));
-    let decompressed_size = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
+    let decompressed_size = u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?);
     log::trace!("raw size: {decompressed_size} (0x{decompressed_size:x})");
-    let compressed_size = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
+    let compressed_size = u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?);
     log::trace!("compressed size: {compressed_size} (0x{compressed_size:x})");
-    let data_offset = u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?);
+    let data_offset = u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?);
     log::trace!("data offset: {data_offset} (0x{data_offset:x})");
-    let compression = Compression::from(u32::from_le_bytes(read_bytes::<4, _>(f).map_err(PkgError::IO)?));
+    let compression = Compression::from(u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?));
     log::trace!("compression: {compression:?}");
     Ok(FileListEntry {
         filename,

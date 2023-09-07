@@ -1,6 +1,10 @@
 use smallvec::SmallVec;
 
-pub fn read_byte<F: std::io::Read>(f: &mut F) -> Result<u8, std::io::Error> {
+mod bytestring;
+
+pub use bytestring::{PaddedByteString, PaddedByteStr};
+
+pub fn read_byte<F: std::io::Read>(f: &mut F) -> Result<u8, std::io::Error> { // TODO: `mut f: impl std::io::Read`
     let a: [u8; 1] = read_bytes(f)?;
     Ok(a[0])
 }
@@ -51,86 +55,6 @@ impl std::fmt::Display for PaddedStringReadError {
 
 impl std::error::Error for PaddedStringReadError {}
 
-/// A string of non-null bytes, followed by a terminating null-byte and padded (with null bytes) to a multiple of a certain length
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PaddedByteString<const PADDING: usize> {
-    bytes: smallvec::SmallVec<[u8; 64]>, // bytestring excluding null terminator and padding
-}
-
-impl<const PADDING: usize> PaddedByteString<PADDING> {
-    pub fn new(bytes: &[u8]) -> Result<Self, PaddedStringError> {
-        if bytes.iter().copied().any(|c| c == 0) {
-            Err(PaddedStringError::ContainsNull)
-        } else {
-            Ok(Self { bytes: bytes.as_ref().into() })
-        }
-    }
-
-    pub fn len_with_padding(&self) -> usize {
-        let (n, r) = num_integer::div_rem(self.bytes.len() + 1, PADDING);
-        if r == 0 {
-            n * PADDING
-        } else {
-            (n + 1) * PADDING
-        }
-    }
-
-    pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
-        let mut n = f.write(&self.bytes)?;
-        loop {
-            n += f.write(&[0])?;
-            if n % PADDING == 0 {
-                assert_eq!(n, self.len_with_padding());
-                return Ok(n);
-            }
-        }
-    }
-
-    pub fn as_bytes_excluding_terminator_and_padding(&self) -> &[u8] {
-        &self.bytes
-    }
-
-    pub fn to_utf8_lossy(&self) -> std::borrow::Cow<'_, str> {
-        String::from_utf8_lossy(&self.bytes)
-    }
-
-    pub fn to_utf8(&self) -> Result<&str, std::str::Utf8Error> {
-        std::str::from_utf8(&self.bytes)
-    }
-
-    pub fn read<F: std::io::Read>(f: &mut F) -> Result<Self, PaddedStringReadError> {
-        assert!(PADDING >= 1);
-
-        let mut bytes: SmallVec<[u8; 64]> = SmallVec::new();
-        let mut i = 0;
-        loop {
-            let x = read_byte(f).map_err(PaddedStringReadError::Io)?;
-            i += 1;
-            if x == 0 {
-                break;
-            } else {
-                bytes.push(x);
-            }
-        }
-
-        // read padding
-        while (i % PADDING) != 0 {
-            match read_byte(f) {
-                Ok(0) => {}
-                Ok(x) => {
-                    return Err(PaddedStringReadError::Padding(x));
-                }
-                Err(e) => {
-                    return Err(PaddedStringReadError::Io(e));
-                }
-            }
-            i += 1;
-        }
-
-        Ok(Self { bytes })
-    }
-}
-
 /// A null-terminated ASCII string, padded to a multiple of a certain length with null bytes
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PaddedAsciiString<const PADDING: usize> {
@@ -148,7 +72,7 @@ impl<const PADDING: usize> PaddedAsciiString<PADDING> {
     }
 
     pub fn len_with_padding(&self) -> usize {
-        self.bytes.len_with_padding()
+        self.bytes.len_with_padding().get()
     }
 
     pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
@@ -195,7 +119,7 @@ impl<const PADDING: usize> PaddedUtf8String<PADDING> {
 
     #[allow(dead_code)]
     pub fn len_with_padding(&self) -> usize {
-        self.bytes.len_with_padding()
+        self.bytes.len_with_padding().get()
     }
 
     #[allow(dead_code)]
