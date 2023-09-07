@@ -1,9 +1,13 @@
 mod ascii;
 mod bytestring;
+mod utf8;
 
 // TODO: ascii name (for pka/pkg)
 pub use ascii::{PaddedAsciiStr, PaddedAsciiString};
 pub use bytestring::{PaddedByteStr, PaddedByteString};
+pub use utf8::{PaddedUtf8Str, PaddedUtf8String};
+
+// TODO: slice reader and std::io::Read reader
 
 pub fn read_byte(f: impl std::io::Read) -> Result<u8, std::io::Error> {
     let a: [u8; 1] = read_bytes(f)?;
@@ -56,48 +60,20 @@ impl std::fmt::Display for PaddedStringReadError {
 
 impl std::error::Error for PaddedStringReadError {}
 
-/// A null-terminated UTF-8 string, padded to a multiple of a certain length with null bytes
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PaddedUtf8String<const PADDING: usize> {
-    bytes: PaddedByteString<PADDING>,
-}
+impl TryFrom<PaddedStringError> for PaddedStringReadError {
+    type Error = ();
 
-impl<const PADDING: usize> PaddedUtf8String<PADDING> {
-    #[allow(dead_code)]
-    pub fn new(str: &str) -> Result<Self, PaddedStringError> {
-        PaddedByteString::new(str.as_bytes()).map(|bytes| Self { bytes })
-    }
-
-    #[allow(dead_code)]
-    pub fn len_with_padding(&self) -> usize {
-        self.bytes.len_with_padding().get()
-    }
-
-    #[allow(dead_code)]
-    pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
-        self.bytes.write_to(f)
-    }
-
-    pub fn as_bytes_excluding_terminator_and_padding(&self) -> &[u8] {
-        self.bytes.as_bytes_excluding_terminator_and_padding()
-    }
-
-    pub fn as_str(&self) -> &str {
-        std::str::from_utf8(self.as_bytes_excluding_terminator_and_padding()).expect("creation is only possible with valid UTF-8 strings")
+    fn try_from(err: PaddedStringError) -> Result<PaddedStringReadError, ()> {
+        match err {
+            PaddedStringError::ContainsNull => Err(()),
+            PaddedStringError::Ascii => Ok(PaddedStringReadError::Ascii),
+            PaddedStringError::Utf8(e) => Ok(PaddedStringReadError::Utf8(e)),
+        }
     }
 }
 
-impl<const PADDING: usize> std::fmt::Display for PaddedUtf8String<PADDING> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.as_str().fmt(f)
-    }
-}
-
-impl<const PADDING: usize> TryFrom<PaddedByteString<PADDING>> for PaddedUtf8String<PADDING> {
-    type Error = PaddedStringError;
-
-    fn try_from(bytes: PaddedByteString<PADDING>) -> Result<Self, Self::Error> {
-        let _ = std::str::from_utf8(bytes.as_bytes_excluding_terminator_and_padding()).map_err(PaddedStringError::Utf8)?;
-        Ok(Self { bytes })
+impl From<std::io::Error> for PaddedStringReadError {
+    fn from(err: std::io::Error) -> PaddedStringReadError {
+        PaddedStringReadError::Io(err)
     }
 }
