@@ -59,13 +59,13 @@ pub struct FileDataEntry {
     pub compression: Compression,
 }
 
-pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgListEntryUnchecked>, std::vec::Vec<FileDataEntry>), PkgError> {
+pub fn load_filelist(mut f: impl std::io::Read) -> Result<(std::vec::Vec<PkgListEntryUnchecked>, std::vec::Vec<FileDataEntry>), PkgError> {
     // header
-    let magic = read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?;
+    let magic = read_bytes::<4>(f.by_ref()).map_err(PkgError::IO)?;
     if magic != [0x0d, 0xcf, 0xf7, 0x7f] {
         return Err(PkgError::Filelist(format!("unexpected magic bytes: {magic:?}")));
     }
-    let number_of_pkgs = u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?);
+    let number_of_pkgs = u32::from_le_bytes(read_bytes::<4>(f.by_ref()).map_err(PkgError::IO)?);
     log::debug!("number of pkgs in pka: {number_of_pkgs}");
 
     // list of pkg filenames and hashes
@@ -74,32 +74,32 @@ pub fn load_filelist<F: std::io::Read>(f: &mut F) -> Result<(std::vec::Vec<PkgLi
         log::trace!("reading pkg {} of {}", i + 1, number_of_pkgs);
         let mut files = vec![];
         let pkg_filename = PkgNameUnchecked::read(f.by_ref()).map_err(|e| PkgError::Filelist(e.to_string()))?;
-        log::trace!("pkg filename: {}", pkg_filename.to_string_lossy());
-        let number_of_files = u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?);
+        log::trace!("pkg filename: {}", pkg_filename.as_padded_byte_str().to_string_lossy());
+        let number_of_files = u32::from_le_bytes(read_bytes::<4>(f.by_ref()).map_err(PkgError::IO)?);
         log::trace!("number of files in pkg: {number_of_files}");
         for j in 0..number_of_files {
             log::trace!("reading file {} of {}", j + 1, number_of_files);
             let filename = FileNameUnchecked::read(f.by_ref())?;
-            log::trace!("file name: {}", filename.to_string_lossy());
-            let hash = read_bytes::<32, _>(f.by_ref()).map_err(PkgError::IO)?;
+            log::trace!("file name: {}", filename.as_padded_byte_str().to_string_lossy());
+            let hash = read_bytes::<32>(f.by_ref()).map_err(PkgError::IO)?;
             log::trace!("file hash: {}", hexhex::Hex::new(hash));
             files.push(PkgFileListEntryUnchecked { name: filename, hash });
         }
         pkgs.push(PkgListEntryUnchecked { name: pkg_filename, files });
     }
 
-    let number_of_hashes = u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?);
+    let number_of_hashes = u32::from_le_bytes(read_bytes::<4>(f.by_ref()).map_err(PkgError::IO)?);
     log::debug!("number of hashes: {}", number_of_hashes);
 
     // TODO: use a hashmap or indexmap instead?
     // content hashes, locations, sizes, compression
     let mut filedata = std::vec::Vec::with_capacity(number_of_hashes.try_into().expect("32 bits please"));
     for i in 0..number_of_hashes {
-        let hash = read_bytes::<32, _>(f.by_ref()).map_err(PkgError::IO)?;
-        let offset = u64::from_le_bytes(read_bytes::<8, _>(f.by_ref()).map_err(PkgError::IO)?);
-        let compressed_size = u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?);
-        let decompressed_size = u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?);
-        let compression = Compression::from(u32::from_le_bytes(read_bytes::<4, _>(f.by_ref()).map_err(PkgError::IO)?));
+        let hash = read_bytes::<32>(f.by_ref()).map_err(PkgError::IO)?;
+        let offset = u64::from_le_bytes(read_bytes::<8>(f.by_ref()).map_err(PkgError::IO)?);
+        let compressed_size = u32::from_le_bytes(read_bytes::<4>(f.by_ref()).map_err(PkgError::IO)?);
+        let decompressed_size = u32::from_le_bytes(read_bytes::<4>(f.by_ref()).map_err(PkgError::IO)?);
+        let compression = Compression::from(u32::from_le_bytes(read_bytes::<4>(f.by_ref()).map_err(PkgError::IO)?));
         log::trace!(
             "hash {} of {}: hash = {}, offset = {} (0x{:x}), compressed size = {} (0x{:x}), decompressed size = {}, compression = {}",
             i + 1,

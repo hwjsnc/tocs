@@ -215,7 +215,7 @@ impl std::fmt::Display for DeserializeError {
 
 impl std::error::Error for DeserializeError {}
 
-fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>) -> Result<ecow::EcoString, DeserializeError> {
+fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(mut f: F, warnings: &mut WarningLogger<DeserializeError>) -> Result<ecow::EcoString, DeserializeError> {
     // TODO: rewrite this to work only on &[u8], then return a &str.
     let bytes = PaddedByteString::<1>::read(f.by_ref()).map_err(|e| match e {
         crate::io::PaddedStringReadError::Io(e) => DeserializeError {
@@ -278,23 +278,23 @@ fn deserialize_header_name<F: std::io::Read + std::io::Seek, const LOG: bool>(f:
 }
 
 fn deserialize_atomic_value<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
-    f: &mut F,
+    mut f: F,
     log: &mut WarningLogger<DeserializeError>,
     t: &AtomicType,
 ) -> Result<AtomicValue, DeserializeError> {
-    let wrap_err = |e: std::io::Error, f: &mut F| DeserializeError {
+    let wrap_err = |e: std::io::Error, mut f: F| DeserializeError {
         detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::Value(*t)],
     };
     Ok(match t {
-        AtomicType::I8 => AtomicValue::I8(i8::from_le_bytes(read_bytes(f).map_err(|e| wrap_err(e, f))?)),
-        AtomicType::I16 => AtomicValue::I16(i16::from_le_bytes(read_bytes(f).map_err(|e| wrap_err(e, f))?)),
-        AtomicType::I32 => AtomicValue::I32(i32::from_le_bytes(read_bytes(f).map_err(|e| wrap_err(e, f))?)),
-        AtomicType::U8 => AtomicValue::U8(u8::from_le_bytes(read_bytes(f).map_err(|e| wrap_err(e, f))?)),
-        AtomicType::U16 => AtomicValue::U16(u16::from_le_bytes(read_bytes(f).map_err(|e| wrap_err(e, f))?)),
-        AtomicType::U32 => AtomicValue::U32(u32::from_le_bytes(read_bytes(f).map_err(|e| wrap_err(e, f))?)),
-        AtomicType::F32 => AtomicValue::F32(f32::from_le_bytes(read_bytes(f).map_err(|e| wrap_err(e, f))?)),
+        AtomicType::I8 => AtomicValue::I8(i8::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| wrap_err(e, f))?)),
+        AtomicType::I16 => AtomicValue::I16(i16::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| wrap_err(e, f))?)),
+        AtomicType::I32 => AtomicValue::I32(i32::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| wrap_err(e, f))?)),
+        AtomicType::U8 => AtomicValue::U8(u8::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| wrap_err(e, f))?)),
+        AtomicType::U16 => AtomicValue::U16(u16::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| wrap_err(e, f))?)),
+        AtomicType::U32 => AtomicValue::U32(u32::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| wrap_err(e, f))?)),
+        AtomicType::F32 => AtomicValue::F32(f32::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| wrap_err(e, f))?)),
         AtomicType::CUtf8 => AtomicValue::CUtf8(deserialize_c_utf8::<_, STRICT, LOG>(f, log)?),
         AtomicType::X(n) => {
             let mut buf = SmallBuf::with_capacity(*n);
@@ -308,8 +308,8 @@ fn deserialize_atomic_value<F: std::io::Read + std::io::Seek, const STRICT: bool
 }
 
 /// deserialize tbl header for trails of cold steel (no list of headers at the start)
-fn deserialize_header_v1<F: std::io::Read + std::io::Seek>(f: &mut F) -> Result<u16, DeserializeError> {
-    read_bytes(f).map(u16::from_le_bytes).map_err(|e| DeserializeError {
+fn deserialize_header_v1<F: std::io::Read + std::io::Seek>(mut f: F) -> Result<u16, DeserializeError> {
+    read_bytes(f.by_ref()).map(u16::from_le_bytes).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::TblHeader],
@@ -318,11 +318,11 @@ fn deserialize_header_v1<F: std::io::Read + std::io::Seek>(f: &mut F) -> Result<
 
 /// deserialize tbl header for trails of cold steel 2 - 5 (includes list of headers at the start)
 fn deserialize_header_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
-    f: &mut F,
+    mut f: F,
     log: &mut WarningLogger<DeserializeError>,
 ) -> Result<(u16, IndexMap<Header, u32>), DeserializeError> {
     let warnings_before = log.len();
-    let number_of_entries = read_bytes(f).map(u16::from_le_bytes).map_err(|e| DeserializeError {
+    let number_of_entries = read_bytes(f.by_ref()).map(u16::from_le_bytes).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::TblHeader],
@@ -330,7 +330,7 @@ fn deserialize_header_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, c
     if LOG {
         log::trace!("number of entries according to header: {}", number_of_entries);
     }
-    let header_counts = deserialize_header_counts::<_, STRICT, LOG>(f, log)?;
+    let header_counts = deserialize_header_counts::<_, STRICT, LOG>(f.by_ref(), log)?;
     let sum_of_counts: Option<u32> = header_counts.values().try_fold(0u32, |a, b| a.checked_add(*b));
     if sum_of_counts != Some(number_of_entries.into()) {
         let err = DeserializeError {
@@ -362,7 +362,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
     log: &mut WarningLogger<DeserializeError>,
 ) -> Result<IndexMap<Header, u32>, DeserializeError> {
     let warnings_before = log.len();
-    let number_of_headers = u32::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
+    let number_of_headers = u32::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::TblHeader],
@@ -374,7 +374,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
     let mut header_counts = IndexMap::new();
     for i in 0..number_of_headers {
         let hdr = deserialize_header_name::<_, STRICT>(f)?;
-        let count = u32::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
+        let count = u32::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| DeserializeError {
             detail: DeserializeErrorDetail::Io(e),
             position: f.stream_position().ok(),
             context: vec![DeserializeErrorPosition::TblHeaderEntry { entry_number: i }],
@@ -422,7 +422,7 @@ pub fn deserialize_entry_data<F: std::io::Read + std::io::Seek, const STRICT: bo
     let mut values = IndexMap::new();
     for (attr, ty) in schema.iter() {
         let warnings_before = log.len();
-        let val = deserialize_atomic_value::<_, STRICT, LOG>(f, log, ty).map_err(|e| e.with_context(DeserializeErrorPosition::Attribute(attr.clone())))?;
+        let val = deserialize_atomic_value::<_, STRICT, LOG>(f.by_ref(), log, ty).map_err(|e| e.with_context(DeserializeErrorPosition::Attribute(attr.clone())))?;
         if LOG {
             log::trace!("attribute '{}' = {:?}", attr, val);
             log.add_context_for_all_since(warnings_before, DeserializeErrorPosition::Attribute(attr.clone()));
@@ -466,7 +466,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
 
     let warnings_before_data = log.len();
     // read data length
-    let len = u16::from_le_bytes(read_bytes(f).map_err(|e| DeserializeError {
+    let len = u16::from_le_bytes(read_bytes(f.by_ref()).map_err(|e| DeserializeError {
         detail: DeserializeErrorDetail::Io(e),
         position: f.stream_position().ok(),
         context: vec![DeserializeErrorPosition::EntryHeader],
@@ -478,13 +478,13 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
         if LOG {
             log::debug!("parsing data according to schema");
         }
-        let data = deserialize_entry_data::<_, STRICT, LOG>(f, log, schema).map_err(|e| e.with_context(DeserializeErrorPosition::EntryData))?;
+        let data = deserialize_entry_data::<_, STRICT, LOG>(f.by_ref(), log, schema).map_err(|e| e.with_context(DeserializeErrorPosition::EntryData))?;
         (hdr.clone(), data)
     } else {
         if LOG {
             log::debug!("parsing data with general parser");
         }
-        let x = deserialize_atomic_value::<_, STRICT, LOG>(f, log, &AtomicType::X(len.into()))
+        let x = deserialize_atomic_value::<_, STRICT, LOG>(f.by_ref(), log, &AtomicType::X(len.into()))
             .map_err(|e| e.with_context(DeserializeErrorPosition::Attribute("data".into())).with_context(DeserializeErrorPosition::EntryData))?;
         (hdr, [("data".into(), x)].into_iter().collect())
     };
@@ -588,7 +588,7 @@ pub fn deserialize_tbl_v1<F: std::io::Read + std::io::Seek, const STRICT: bool, 
     if LOG {
         log::debug!("parsing tbl");
     }
-    let number_of_entries = deserialize_header_v1(f)?;
+    let number_of_entries = deserialize_header_v1(f.by_ref())?;
     deserialize_all_entries::<_, STRICT, LOG>(f, log, number_of_entries, None, schemas)
 }
 
@@ -600,7 +600,7 @@ pub fn deserialize_tbl_v2<F: std::io::Read + std::io::Seek, const STRICT: bool, 
     if LOG {
         log::debug!("parsing tbl");
     }
-    let (number_of_entries, header_counts) = deserialize_header_v2::<_, STRICT, LOG>(f, log)?;
+    let (number_of_entries, header_counts) = deserialize_header_v2::<_, STRICT, LOG>(f.by_ref(), log)?;
     let entries = deserialize_all_entries::<_, STRICT, LOG>(f, log, number_of_entries, Some(&header_counts), schemas)?;
     Ok((header_counts, entries))
 }

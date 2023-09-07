@@ -281,7 +281,7 @@ fn pkg_ls<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
     for e in filelist.iter() {
         println!(
             "{:64} (compressed size {} bytes, decompressed size {} bytes (compression factor {:.3}), compression={}",
-            e.filename.to_utf8().map_err(anyhow::Error::msg)?,
+            e.filename.as_padded_byte_str().to_str().map_err(anyhow::Error::msg)?,
             e.compressed_size,
             e.decompressed_size,
             e.compressed_size as f64 / std::cmp::max(1, e.decompressed_size) as f64,
@@ -761,7 +761,7 @@ fn pka_unpack_single_pkg<F: std::io::Read + std::io::Seek>(
     blobs_by_hash: &std::collections::HashMap<[u8; 32], tocs::pka::FileDataEntry>,
     pkg: &tocs::pka::PkgListEntryUnchecked,
 ) -> anyhow::Result<()> {
-    log::debug!("unpack single pkg '{}'", &pkg.name.to_utf8_lossy());
+    log::debug!("unpack single pkg '{}'", &pkg.name.as_padded_byte_str().to_string_lossy());
     let pkgname = tocs::pkg::PaddedAsciiName::try_from(&pkg.name).map_err(anyhow::Error::msg)?;
 
     let out = std::path::Path::join(out_dir, pkgname.as_path());

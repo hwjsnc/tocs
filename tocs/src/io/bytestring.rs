@@ -1,6 +1,6 @@
 use super::{read_byte, PaddedStringError, PaddedStringReadError};
-use smallvec::SmallVec;
 use core::num::NonZeroUsize;
+use smallvec::SmallVec;
 
 /// A string of non-null bytes, followed by a terminating null-byte and padded (with null bytes) to a multiple of a given length.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -142,7 +142,11 @@ impl<'a, const PADDING: usize> PaddedByteStr<'a, PADDING> {
         Ok(self.len_with_padding().get())
     }
 
-    pub fn to_string_lossy(&self) -> std::borrow::Cow<'a, str> {
+    pub fn to_str(self) -> Result<&'a str, std::str::Utf8Error> {
+        std::str::from_utf8(self.bytes)
+    }
+
+    pub fn to_string_lossy(self) -> std::borrow::Cow<'a, str> {
         String::from_utf8_lossy(self.bytes)
     }
 }
@@ -166,9 +170,5 @@ impl<const PADDING: usize> PaddedByteString<PADDING> {
 
     pub fn write_to(&self, f: impl std::io::Write) -> std::io::Result<usize> {
         self.as_padded_byte_str().write_to(f)
-    }
-
-    pub fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
-        self.as_padded_byte_str().to_string_lossy()
     }
 }

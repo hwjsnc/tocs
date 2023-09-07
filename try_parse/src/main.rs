@@ -226,10 +226,10 @@ pub fn parse_pka(path: &std::path::Path) {
     let mut f = std::io::BufReader::new(std::fs::File::open(path).unwrap());
     let (pkgs, hashes) = tocs::pka::load_filelist(&mut f).unwrap();
     for pkg in pkgs {
-        log::debug!("pkg: {}", pkg.name.to_utf8_lossy());
+        log::debug!("pkg: {}", pkg.name.as_padded_byte_str().to_string_lossy());
         log::info!("pkg: {}", tocs::pka::PkgName::try_from(pkg.name).unwrap());
         for file in pkg.files {
-            log::debug!("file: name = {}, hash = '{}'", file.name.to_utf8_lossy(), hexhex::Hex::new(file.hash));
+            log::debug!("file: name = {}, hash = '{}'", file.name.as_padded_byte_str().to_string_lossy(), hexhex::Hex::new(file.hash));
             log::info!("file: name = {}, hash = '{}'", tocs::pka::FileName::try_from(file.name).unwrap(), hexhex::Hex::new(file.hash));
         }
     }
