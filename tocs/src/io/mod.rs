@@ -7,7 +7,11 @@ pub use ascii::{PaddedAsciiStr, PaddedAsciiString};
 pub use bytestring::{PaddedByteStr, PaddedByteString};
 pub use utf8::{PaddedUtf8Str, PaddedUtf8String};
 
-// TODO: slice reader and std::io::Read reader
+mod mem_reader;
+
+pub use mem_reader::MemReader;
+
+// TODO: std::io::Read reader; MemWriter; maybe std::io::Write writer?
 
 pub fn read_byte(f: impl std::io::Read) -> Result<u8, std::io::Error> {
     let a: [u8; 1] = read_bytes(f)?;
