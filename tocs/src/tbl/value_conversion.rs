@@ -1,8 +1,5 @@
 // Conversion of schema values to/from other types
 
-use smol_str::SmolStr;
-
-use std::io::Write as _;
 use std::str::FromStr as _;
 
 #[cfg(feature = "rusqlite")]
@@ -38,7 +35,7 @@ pub fn try_atomic_value_from_str(t: &AtomicType, s: &str, strict: bool) -> Resul
         AtomicType::U16 => Ok(AtomicValue::U16(u16::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
         AtomicType::U32 => Ok(AtomicValue::U32(u32::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
         AtomicType::F32 => Ok(AtomicValue::F32(f32::from_str(s).map_err(|_| AtomicValueFromStringError::Generic)?)),
-        AtomicType::CUtf8 => Ok(AtomicValue::CUtf8(SmolStr::from(s))),
+        AtomicType::CUtf8 => Ok(AtomicValue::CUtf8(s.into())),
         AtomicType::X(n) => {
             let data = hexhex::decode(s).map_err(|_| AtomicValueFromStringError::Generic)?; // TODO: SmallVec<_> from hex
             if strict && data.len() != *n {
@@ -57,24 +54,6 @@ impl AtomicValue {
 
     pub fn from_str_nonstrict(ty: &AtomicType, text: &str) -> Result<AtomicValue, AtomicValueFromStringError> {
         try_atomic_value_from_str(ty, text, false)
-    }
-
-    pub fn to_smol_str(&self) -> SmolStr {
-        match self {
-            AtomicValue::I8(_) | AtomicValue::I16(_) | AtomicValue::I32(_) | AtomicValue::U8(_) | AtomicValue::U16(_) | AtomicValue::U32(_) | AtomicValue::F32(_) => {
-                let mut buf = smallvec::SmallVec::<[u8; 22]>::new();
-                write!(buf, "{self}").expect("write to SmallVec should not fail"); // this should not allocate because buf is long enough
-                SmolStr::new(std::str::from_utf8(&buf).expect("Display should write valid UTF-8"))
-                // should not allocate since buf.len() <= 22
-            }
-            AtomicValue::CUtf8(s) => s.clone(),
-            AtomicValue::X(x) => {
-                // this does not allocate as long as x.len() * 2 < 22; otherwise is allocates twice
-                let mut buf = smallvec::SmallVec::<[u8; 22]>::new();
-                write!(buf, "{}", hexhex::Hex::new(x)).expect("write to SmallVec should not fail");
-                SmolStr::new(std::str::from_utf8(&buf).expect("Display should write valid UTF-8"))
-            }
-        }
     }
 }
 
@@ -135,7 +114,7 @@ impl AtomicValue {
             AtomicType::U16 => u16::column_result(val).map(AtomicValue::U16),
             AtomicType::U32 => u32::column_result(val).map(AtomicValue::U32),
             AtomicType::F32 => f32::column_result(val).map(AtomicValue::F32),
-            AtomicType::CUtf8 => val.as_str().map(SmolStr::from).map(AtomicValue::CUtf8),
+            AtomicType::CUtf8 => val.as_str().map(ecow::EcoString::from).map(AtomicValue::CUtf8),
             AtomicType::X(_) => val.as_blob().map(|blob| AtomicValue::X(blob.into())),
         }
     }

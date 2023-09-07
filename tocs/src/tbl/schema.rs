@@ -1,6 +1,6 @@
+use ecow::{eco_format, EcoString};
 use indexmap::IndexMap;
 use smallvec::SmallVec;
-use smol_str::SmolStr;
 
 pub type SmallBuf = SmallVec<[u8; 16]>;
 
@@ -70,7 +70,7 @@ pub enum AtomicValue {
     U16(u16),
     U32(u32),
     F32(f32),
-    CUtf8(SmolStr),
+    CUtf8(EcoString),
     X(SmallBuf),
 }
 
@@ -86,7 +86,7 @@ pub struct Schemas {
 pub struct Header {
     name: crate::io::PaddedAsciiString<1>,
 }
-pub type Attribute = SmolStr; // attributes do not need to be serialized or deserialized
+pub type Attribute = EcoString;
 
 pub type Schema = IndexMap<Attribute, Type>;
 
@@ -327,13 +327,13 @@ pub fn get_nf1(schema_name: &Header, schemas: &indexmap::IndexMap<Header, Schema
             Type::Repeat(n, ty) => {
                 if let Some(t) = ty.try_to_atomic_type() {
                     for i in 1..=*n {
-                        nf1.insert(SmolStr::new(format!("{}[{}]", name, i)), t);
+                        nf1.insert(eco_format!("{}[{}]", name, i), t);
                     }
                 } else if let Type::Ref(s) = ty.as_ref() {
                     let sub_nf1 = get_nf1(s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
                     for i in 1..=*n {
                         for (n, t) in sub_nf1.iter() {
-                            nf1.insert(SmolStr::new(format!("{}[{}] {}", name, i, n)), *t);
+                            nf1.insert(eco_format!("{}[{}] {}", name, i, n), *t);
                         }
                     }
                 } else {
@@ -343,7 +343,7 @@ pub fn get_nf1(schema_name: &Header, schemas: &indexmap::IndexMap<Header, Schema
             Type::Ref(s) => {
                 let sub_nf1 = get_nf1(s, schemas).map_err(|e| e.add_context(NF1ErrorPosition::Deref(schema_name.clone())))?;
                 for (n, t) in sub_nf1.into_iter() {
-                    nf1.insert(SmolStr::new(format!("{} {}", name, n)), t);
+                    nf1.insert(eco_format!("{} {}", name, n), t);
                 }
             }
             _ => unreachable!("all other types should be primitive and caught by the 'if let' above"),

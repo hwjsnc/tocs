@@ -5,7 +5,6 @@ use crate::filter::row_passes_filter;
 use tocs::tbl::AtomicSchema as Schema;
 use tocs::tbl::{AtomicType, Attribute, Entry, Header};
 
-use smol_str::SmolStr;
 use std::borrow::Borrow;
 use std::sync::{Arc, Mutex};
 
@@ -17,7 +16,7 @@ struct TableData {
     attribute_types: std::vec::Vec<AtomicType>,
     original_col_indexes: std::vec::Vec<usize>,
     original_row_indexes: std::vec::Vec<usize>,
-    cells: grid::Grid<SmolStr>,
+    cells: grid::Grid<ecow::EcoString>,
 }
 
 pub struct FilteredTable {
@@ -167,7 +166,7 @@ impl FilteredTable {
                 for (attr, attr_idx) in attributes.iter().zip(original_col_indexes.iter()) {
                     let (k, v) = row.borrow().values.get_index(*attr_idx).expect("entry attributes should correspond to schema");
                     assert_eq!(k, attr, "entry should have attributes in the same order as the schema");
-                    row_major_vector_of_cells.push(v.to_smol_str());
+                    row_major_vector_of_cells.push(ecow::eco_format!("{v}"));
                 }
             }
         }

@@ -2,7 +2,8 @@
 
 use clap::Parser;
 use indexmap::IndexMap;
-use smol_str::SmolStr;
+
+use tocs::tbl::Attribute;
 
 use anyhow::Context as _;
 
@@ -58,8 +59,8 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
     let tx = db.transaction().unwrap();
 
     let create_tables = || -> rusqlite::Result<()> {
-        let generic_schema: IndexMap<SmolStr, tocs::tbl::AtomicType> = [("header", tocs::tbl::AtomicType::CUtf8), ("data", tocs::tbl::AtomicType::X(0))]
-            .map(|(s, t)| (SmolStr::from(s), t))
+        let generic_schema: IndexMap<Attribute, tocs::tbl::AtomicType> = [("header", tocs::tbl::AtomicType::CUtf8), ("data", tocs::tbl::AtomicType::X(0))]
+            .map(|(s, t)| (s.into(), t))
             .into_iter()
             .collect();
         sqlite_recreate_table_destroy_if_exists_unsafe(&tx, "generic", &generic_schema)?;
@@ -85,7 +86,7 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
                     sqlite_insert_unsafe(&tx, entry.header.as_str(), &path_for_db, &entry.values)
                 } else {
                     let mut values_with_header = IndexMap::new();
-                    values_with_header.insert(SmolStr::from("header"), tocs::tbl::AtomicValue::CUtf8(entry.header.as_str().into()));
+                    values_with_header.insert(Attribute::from("header"), tocs::tbl::AtomicValue::CUtf8(entry.header.as_str().into()));
                     for (attr, val) in entry.values.iter() {
                         values_with_header.insert(attr.clone(), val.clone());
                     }
@@ -106,7 +107,7 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
 // This bears the risk of SQL injection.
 // Since the table names all come from an attribute which we supply ourselves in the source code, this should not become a problem.
 
-fn sqlite_recreate_table_destroy_if_exists_unsafe(tx: &rusqlite::Transaction, table_name: &str, schema: &IndexMap<SmolStr, tocs::tbl::AtomicType>) -> rusqlite::Result<()> {
+fn sqlite_recreate_table_destroy_if_exists_unsafe(tx: &rusqlite::Transaction, table_name: &str, schema: &IndexMap<Attribute, tocs::tbl::AtomicType>) -> rusqlite::Result<()> {
     tx.execute(&format!("drop table if exists '{}'", table_name), [])?;
     tx.execute(
         &format!(
@@ -119,7 +120,7 @@ fn sqlite_recreate_table_destroy_if_exists_unsafe(tx: &rusqlite::Transaction, ta
     Ok(())
 }
 
-fn sqlite_insert_unsafe(tx: &rusqlite::Transaction, table: &str, filename: &str, values: &indexmap::IndexMap<SmolStr, tocs::tbl::AtomicValue>) -> rusqlite::Result<usize> {
+fn sqlite_insert_unsafe(tx: &rusqlite::Transaction, table: &str, filename: &str, values: &indexmap::IndexMap<Attribute, tocs::tbl::AtomicValue>) -> rusqlite::Result<usize> {
     let mut vals: std::vec::Vec<&dyn rusqlite::ToSql> = vec![&filename];
     for x in values.values() {
         vals.push(x);

@@ -301,7 +301,7 @@ mod test {
             ("MasterQuartzBase", vec![("item_id", AtomicType::U16), ("mq_id", AtomicType::U16), ("hp_pattern", AtomicType::U16)]),
         ]
         .into_iter()
-        .map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema.into_iter().map(|(attr, ty)| (Attribute::new(attr), ty)).collect()))
+        .map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema.into_iter().map(|(attr, ty)| (Attribute::from(attr), ty)).collect()))
         .collect();
     }
 
@@ -311,7 +311,7 @@ mod test {
         let values = data
             .into_iter()
             .map(|(attr, s)| {
-                let attr = Attribute::new(attr);
+                let attr = Attribute::from(attr);
                 let val = AtomicValue::from_str(schema.get(&attr).unwrap(), &s).unwrap();
                 (attr, val)
             })
@@ -500,9 +500,9 @@ mod test {
         let initial_row = tocs::tbl::Entry {
             header: Header::new("foo").unwrap(),
             values: [
-                (Attribute::new("id"), AtomicValue::I16(0)),
-                (Attribute::new("x"), AtomicValue::U32(3892)),
-                (Attribute::new("y"), AtomicValue::CUtf8("lorem ipsum".into())),
+                (Attribute::from("id"), AtomicValue::I16(0)),
+                (Attribute::from("x"), AtomicValue::U32(3892)),
+                (Attribute::from("y"), AtomicValue::CUtf8("lorem ipsum".into())),
             ]
             .into_iter()
             .collect(),

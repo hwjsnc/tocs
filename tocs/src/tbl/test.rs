@@ -167,13 +167,13 @@ fn test_roundtrip_cs5_strict() {
 }
 
 fn to_entry(schemas: &AtomicSchemas, (header, data): (&str, std::vec::Vec<(&str, &str)>)) -> Entry {
-    let fallback_schema = [(Attribute::new("data"), AtomicType::X(0))].into_iter().collect();
+    let fallback_schema = [(Attribute::from("data"), AtomicType::X(0))].into_iter().collect();
     let header = Header::new(header).unwrap();
     let schema = schemas.get(&header).unwrap_or(&fallback_schema);
     let values = data
         .into_iter()
         .map(|(attr, s)| {
-            let attr = Attribute::new(attr);
+            let attr = Attribute::from(attr);
             let val = AtomicValue::from_str_nonstrict(schema.get(&attr).unwrap(), &s).unwrap();
             (attr, val)
         })
@@ -206,7 +206,7 @@ fn test_file_rw() {
         ("bar", vec![("i16", AtomicType::I16), ("f32", AtomicType::F32), ("text", AtomicType::CUtf8), ("i8", AtomicType::I8)]),
     ]
     .into_iter()
-    .map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema.into_iter().map(|(attr, t)| (Attribute::new(attr), t)).collect()))
+    .map(|(hdr, schema)| (Header::new(&hdr).unwrap(), schema.into_iter().map(|(attr, t)| (Attribute::from(attr), t)).collect()))
     .collect();
 
     let original_rows: std::vec::Vec<Entry> = [

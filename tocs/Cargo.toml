@@ -18,7 +18,7 @@ rusqlite = ["dep:rusqlite"]
 pkg = ["compression", "dep:fallible-iterator", "dep:sha2"]
 compression = ["dep:lz4", "dep:zstd", "dep:hashbrown"]
 proptest = ["dep:proptest"]
-serde = ["dep:serde", "indexmap/serde", "smol_str/serde"]
+serde = ["dep:serde", "indexmap/serde", "ecow/serde"]
 
 [dependencies]
 bitvec = "1.0.1"
@@ -26,17 +26,17 @@ lazy_static = "1.4"
 log = "0.4.17"
 lz4 = { version = "1.24.0", optional = true }
 blake2 = "0.10.5"
+ecow = { version = "0.1.2", default-features = false }
 fallible-iterator = { version = "0.2", optional = true }
 hashbrown = { version = "0.13.1", optional = true }
 hexhex = { git = "https://git.sr.ht/~quf/hexhex", version = "1.0.0" }
 indexmap = "1.9.2"
 itertools = "0.10.5"
 num-integer = "0.1.45"
-serde = { version = "1.0.163,  <=1.0.171", optional = true, features = ["derive"] } # https://github.com/serde-rs/serde/issues/2538
+serde = { version = "1.0.163, <=1.0.171", optional = true, features = ["derive"] } # https://github.com/serde-rs/serde/issues/2538
 serde_derive = { version = "<=1.0.171", optional = true } # https://github.com/serde-rs/serde/issues/2538
 sha2 = { version = "0.10.6", optional = true }
 smallvec = { version = "1.10.0", features = ["write"] }
-smol_str = { version = "0.2", default-features = false }
 rusqlite = { version = "0.29", optional = true }
 zstd = { version = "0.12.3", optional = true }
 

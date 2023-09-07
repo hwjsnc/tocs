@@ -344,6 +344,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ecow"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d1990d053cf6edf3f030682dba3b0eb65ef01fabb2686072765d8a17d6728e8"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -796,15 +805,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
-name = "smol_str"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74212e6bbe9a4352329b2f68ba3130c15a3f26fe88ff22dbdc6cdd58fa85e99c"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -839,6 +839,7 @@ version = "1.0.0-rc3"
 dependencies = [
  "clap",
  "csv",
+ "ecow",
  "fltk",
  "grid",
  "hexhex",
@@ -847,9 +848,9 @@ dependencies = [
  "log",
  "native-dialog",
  "regex",
+ "serde",
  "serde_json",
  "simple_logger",
- "smol_str",
  "tocs",
 ]
 
@@ -879,6 +880,7 @@ version = "0.1.0"
 dependencies = [
  "bitvec",
  "blake2",
+ "ecow",
  "hexhex",
  "indexmap",
  "itertools",
@@ -887,7 +889,6 @@ dependencies = [
  "num-integer",
  "serde",
  "smallvec",
- "smol_str",
 ]
 
 [[package]]

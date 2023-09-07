@@ -214,7 +214,8 @@ impl std::fmt::Display for DeserializeError {
 
 impl std::error::Error for DeserializeError {}
 
-fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>) -> Result<smol_str::SmolStr, DeserializeError> {
+fn deserialize_c_utf8<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(f: &mut F, warnings: &mut WarningLogger<DeserializeError>) -> Result<ecow::EcoString, DeserializeError> {
+    // TODO: rewrite this to work only on &[u8], then return a &str.
     let bytes = PaddedByteString::<1>::read(f).map_err(|e| match e {
         crate::io::PaddedStringReadError::Io(e) => DeserializeError {
             detail: DeserializeErrorDetail::Io(e),

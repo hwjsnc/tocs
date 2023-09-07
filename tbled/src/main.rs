@@ -529,7 +529,8 @@ impl App {
                         if let Some((row, col)) = self.widgets.table.selected_cell() {
                             // copy table value to input
                             log::debug!("double click on cell");
-                            self.widgets.input.set_value(&self.state.tbl_history.get_cell_contents(row, col).unwrap().1.to_smol_str());
+                            let value = ecow::eco_format!("{}", &self.state.tbl_history.get_cell_contents(row, col).unwrap().1);
+                            self.widgets.input.set_value(value.as_str());
                             self.widgets.input.take_focus().unwrap();
                             self.widgets.input.redraw();
                         }

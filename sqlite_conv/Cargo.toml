@@ -24,4 +24,3 @@ rusqlite = { version = "0.29", features = ["bundled"] }
 walkdir = "2.3.2"
 tocs = { path = "../tocs", features = ["rusqlite", "pkg"] }
 simple_logger = { version = "4", default-features = false, features = ["stderr"] }
-smol_str = { version = "0.2", default-features = false }

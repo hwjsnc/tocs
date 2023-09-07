@@ -102,9 +102,9 @@ pub fn row_passes_filter(entry: &tocs::tbl::Entry, filter: &RowFilter) -> bool {
         RowFilter::DenyAll => false,
         RowFilter::CaseInsensitiveContains { attribute, substring } => {
             if let Some(attr) = attribute {
-                entry.values.get(attr).map(|v| substring.is_match(v.to_smol_str().as_str())).unwrap_or(false)
+                entry.values.get(attr).map(|v| substring.is_match(ecow::eco_format!("{v}").as_str())).unwrap_or(false)
             } else {
-                entry.values.values().any(|v| substring.is_match(v.to_smol_str().as_str()))
+                entry.values.values().any(|v| substring.is_match(ecow::eco_format!("{v}").as_str()))
             }
         }
         RowFilter::Compare { attribute, operator, reference } => {
