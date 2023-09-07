@@ -13,6 +13,11 @@ impl<'a> MemReader<'a> {
         self.off
     }
 
+    pub fn set_offset(&mut self, off: usize) {
+        assert!(off <= self.data.len());
+        self.off = off;
+    }
+
     pub fn at_end(&self) -> bool {
         self.off == self.data.len()
     }
