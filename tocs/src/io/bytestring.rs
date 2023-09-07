@@ -2,6 +2,20 @@ use super::{read_byte, PaddedStringError, PaddedStringReadError};
 use core::num::NonZeroUsize;
 use smallvec::SmallVec;
 
+pub(crate) fn len_of_padding(len: usize, padding: NonZeroUsize) -> usize {
+    let len_with_terminator = len + 1;
+    let r = len_with_terminator % padding;
+    if r == 0 {
+        0
+    } else {
+        padding.get() - r
+    }
+}
+
+pub(crate) fn len_with_padding(len: usize, padding: NonZeroUsize) -> NonZeroUsize {
+    NonZeroUsize::new(1 + len + len_of_padding(len, padding)).unwrap()
+}
+
 /// A string of non-null bytes, followed by a terminating null-byte and padded (with null bytes) to a multiple of a given length.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PaddedByteString<const PADDING: usize> {
@@ -72,6 +86,14 @@ impl<'a, const PADDING: usize> PaddedByteStr<'a, PADDING> {
         None => panic!("PADDING = 0 does not make sense"),
     };
 
+    /// `bytes_without_terminator_or_padding` must not contain a null byte (`0u8`).
+    pub(crate) fn new_unchecked(bytes_without_terminator_or_padding: &'a [u8]) -> Self {
+        _ = Self::P;
+        Self {
+            bytes: bytes_without_terminator_or_padding,
+        }
+    }
+
     pub fn new(bytes_without_terminator_or_padding: &'a [u8]) -> Result<Self, PaddedStringError> {
         _ = Self::P;
         if bytes_without_terminator_or_padding.iter().copied().all(|c| c != 0) {
@@ -115,17 +137,11 @@ impl<'a, const PADDING: usize> PaddedByteStr<'a, PADDING> {
 
 impl<'a, const PADDING: usize> PaddedByteStr<'a, PADDING> {
     pub fn len_of_padding(&self) -> usize {
-        let len_with_terminator = self.bytes.len() + 1;
-        let r = len_with_terminator % Self::P;
-        if r == 0 {
-            0
-        } else {
-            PADDING - r
-        }
+        len_of_padding(self.bytes.len(), Self::P)
     }
 
     pub fn len_with_padding(&self) -> NonZeroUsize {
-        NonZeroUsize::new(1 + self.bytes.len() + self.len_of_padding()).unwrap()
+        len_with_padding(self.bytes.len(), Self::P)
     }
 
     pub fn len_excluding_terminator_and_padding(&self) -> usize {

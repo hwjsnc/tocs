@@ -1,8 +1,10 @@
+mod ascii;
 mod bytestring;
 
+pub use ascii::{PaddedAsciiStr, PaddedAsciiString};
 pub use bytestring::{PaddedByteStr, PaddedByteString};
 
-pub fn read_byte(mut f: impl std::io::Read) -> Result<u8, std::io::Error> {
+pub fn read_byte(f: impl std::io::Read) -> Result<u8, std::io::Error> {
     let a: [u8; 1] = read_bytes(f)?;
     Ok(a[0])
 }
@@ -52,56 +54,6 @@ impl std::fmt::Display for PaddedStringReadError {
 }
 
 impl std::error::Error for PaddedStringReadError {}
-
-/// A null-terminated ASCII string, padded to a multiple of a certain length with null bytes
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PaddedAsciiString<const PADDING: usize> {
-    bytes: PaddedByteString<PADDING>,
-}
-
-impl<const PADDING: usize> PaddedAsciiString<PADDING> {
-    pub fn new(str: &str) -> Result<Self, PaddedStringError> {
-        assert!(PADDING >= 1);
-        if str.is_ascii() {
-            PaddedByteString::new(str.as_bytes()).map(|bytes| Self { bytes })
-        } else {
-            Err(PaddedStringError::Ascii)
-        }
-    }
-
-    pub fn len_with_padding(&self) -> usize {
-        self.bytes.len_with_padding().get()
-    }
-
-    pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
-        self.bytes.write_to(f)
-    }
-
-    pub fn as_bytes_excluding_terminator_and_padding(&self) -> &[u8] {
-        self.bytes.as_bytes_excluding_terminator_and_padding()
-    }
-
-    pub fn as_str(&self) -> &str {
-        std::str::from_utf8(self.as_bytes_excluding_terminator_and_padding()).expect("creation is only possible with valid ASCII strings")
-    }
-}
-
-impl<const PADDING: usize> std::fmt::Display for PaddedAsciiString<PADDING> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.as_str().fmt(f)
-    }
-}
-
-impl<const PADDING: usize> TryFrom<PaddedByteString<PADDING>> for PaddedAsciiString<PADDING> {
-    type Error = PaddedStringError;
-
-    fn try_from(bytes: PaddedByteString<PADDING>) -> Result<Self, Self::Error> {
-        if !bytes.as_bytes_excluding_terminator_and_padding().iter().copied().all(|b| b < 128) {
-            return Err(PaddedStringError::Ascii);
-        }
-        Ok(Self { bytes })
-    }
-}
 
 /// A null-terminated UTF-8 string, padded to a multiple of a certain length with null bytes
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

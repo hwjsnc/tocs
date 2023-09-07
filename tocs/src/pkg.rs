@@ -310,7 +310,7 @@ impl<const PADDING: usize> PaddedAsciiName<PADDING> {
         } else if name.is_empty() {
             Err(AsciiNameError::IsEmpty)
         } else {
-            if s.len_with_padding() > PADDING {
+            if s.len_with_padding().get() > PADDING {
                 log::warn!(
                     "file name length ({}) exceeds padding block size ({}), idk if that'll work but you can try shrug emoji",
                     s.len_with_padding(),
@@ -337,7 +337,7 @@ impl<const PADDING: usize> PaddedAsciiName<PADDING> {
     }
 
     pub fn len_with_padding(&self) -> usize {
-        self.name.len_with_padding()
+        self.name.len_with_padding().get()
     }
 
     pub fn write_to<F: std::io::Write>(&self, f: &mut F) -> std::io::Result<usize> {
