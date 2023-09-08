@@ -1,7 +1,9 @@
 use crate::io::{MemReader, PaddedAsciiStr, PaddedByteStr, PaddedUtf8Str, PaddedUtf8String};
 
-use super::{AtomicType, Attribute, Header};
+use super::{AtomicType, AtomicValue, Attribute, Header};
 use crate::tbl::schema::HeaderRef;
+
+use indexmap::IndexMap;
 
 // Warning Logger
 
@@ -82,7 +84,7 @@ impl<P: Clone, W: ErrorWithContext<Position = P>> WarningLogger<W> {
 pub enum DeserializeErrorDetail {
     Io(std::io::Error),
     Ascii,
-    Utf8(std::str::Utf8Error, String),
+    Utf8(std::str::Utf8Error, ecow::EcoString),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
     DuplicateHeader(Header),
     EntryHeaderNotInTblHeader { missing: Header },
@@ -131,11 +133,10 @@ impl detail::ErrorWithContext for DeserializeError {
     }
 }
 
-#[derive(Clone)]
 struct TblReader<'a> {
     inner: MemReader<'a>,
     strict: bool,
-    warnings: Option<WarningLogger<DeserializeError>>,
+    warning_logger: Option<&'a mut WarningLogger<DeserializeError>>,
 }
 
 impl<'a> TblReader<'a> {
@@ -143,13 +144,15 @@ impl<'a> TblReader<'a> {
         Self {
             inner: MemReader::new(data),
             strict: true,
+            warning_logger: None,
         }
     }
 
-    pub fn new_lax(data: &'a [u8]) -> Self {
+    pub fn new_lax(data: &'a [u8], logger: &'a mut WarningLogger<DeserializeError>) -> Self {
         Self {
             inner: MemReader::new(data),
             strict: false,
+            warning_logger: Some(logger),
         }
     }
 }
@@ -165,6 +168,25 @@ macro_rules! impl_via_inner {
 }
 
 impl<'a> TblReader<'a> {
+    #[inline(always)]
+    fn log_warning(&mut self, warning: DeserializeError) {
+        if let Some(logger) = self.warning_logger.as_mut() {
+            logger.log(warning)
+        }
+    }
+
+    #[inline(always)]
+    fn warning_index(&self) -> usize {
+        self.warning_logger.as_ref().map(|logger| logger.len()).unwrap_or(0)
+    }
+
+    #[inline(always)]
+    fn add_warning_context(&mut self, warnings_since: usize, context: DeserializeErrorPosition) {
+        if let Some(logger) = self.warning_logger.as_mut() {
+            logger.add_context_for_all_since(warnings_since, context);
+        }
+    }
+
     pub fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], DeserializeError> {
         self.inner
             .read_bytes(n)
@@ -203,19 +225,13 @@ impl<'a> TblReader<'a> {
             self.inner.set_offset(off);
             match err {
                 PaddedStringError::Utf8(err) => {
-                    let s = String::from_utf8_lossy(bytes.as_bytes_excluding_terminator_and_padding()).into_owned();
+                    let s = String::from_utf8_lossy(bytes.as_bytes_excluding_terminator_and_padding()).into();
                     self.error(DeserializeErrorDetail::Utf8(err, s)).with_context(DeserializeErrorPosition::Value(AtomicType::CUtf8))
                 }
                 PaddedStringError::ContainsNull => unreachable!(),
                 PaddedStringError::Ascii => unreachable!(),
             }
         })
-    }
-
-    pub fn read_c_utf8_string_lossy(&mut self) -> Result<PaddedUtf8String<1>, DeserializeError> {
-        self._read_c_byte_str()
-            .map(PaddedUtf8String::<1>::from_utf8_lossy)
-            .map_err(|err| err.with_context(DeserializeErrorPosition::Value(AtomicType::CUtf8)))
     }
 
     pub fn read_header_name(&mut self) -> Result<HeaderRef, DeserializeError> {
@@ -230,7 +246,7 @@ impl<'a> TblReader<'a> {
                 self.inner.set_offset(off);
                 Err(match err {
                     PaddedStringError::Utf8(err) => {
-                        let s = String::from_utf8_lossy(bytes.as_bytes_excluding_terminator_and_padding()).into_owned();
+                        let s = String::from_utf8_lossy(bytes.as_bytes_excluding_terminator_and_padding()).into();
                         self.error(DeserializeErrorDetail::Utf8(err, s)).with_context(DeserializeErrorPosition::HeaderName)
                     }
                     PaddedStringError::ContainsNull => unreachable!(),
@@ -252,10 +268,55 @@ impl<'a> TblReader<'a> {
 }
 
 impl<'a> TblReader<'a> {
-    /*
-    pub fn read_header_v1(&mut self) -> Result<u16, DeserializeError>{
-        self.read_u16_le().map_err(|e| self.error(DeserializeError::)
-        })
+    /// Read tbl header for Trails of Cold Steel (no list of entry headers at the start)
+    pub fn read_tbl_header_v1(&mut self) -> Result<u16, DeserializeError> {
+        self.read_u16_le().map_err(|err| err.with_context(DeserializeErrorPosition::TblHeader))
     }
-    */
+
+    /// Read tbl header for Trails of Cold Steel 2 - 5 (includes list of entry headers at the start)
+    pub fn read_tbl_header_v2(&mut self) -> Result<(u16, IndexMap<Header, u32>), DeserializeError> {
+        let number_of_entries = self.read_u16_le().map_err(|err| err.with_context(DeserializeErrorPosition::TblHeader))?;
+        let number_of_headers = self.read_u32_le().map_err(|err| err.with_context(DeserializeErrorPosition::TblHeader))?;
+        let mut entry_counts = IndexMap::with_capacity(number_of_entries.try_into().unwrap());
+        for i in 0..number_of_headers {
+            let ctx = DeserializeErrorPosition::TblHeaderEntry { entry_number: i };
+            let hdr = self.read_header_name().map_err(|err| err.with_context(ctx.clone()))?;
+            let count = self.read_u32_le().map_err(|err| err.with_context(ctx))?;
+        }
+        Ok((number_of_entries, entry_counts))
+    }
+
+    pub fn read_value(&mut self, t: AtomicType) -> Result<AtomicValue, DeserializeError> {
+        match t {
+            AtomicType::I8 => self.read_i8().map(AtomicValue::I8),
+            AtomicType::I16 => self.read_i16_le().map(AtomicValue::I16),
+            AtomicType::I32 => self.read_i32_le().map(AtomicValue::I32),
+            AtomicType::U8 => self.read_u8().map(AtomicValue::U8),
+            AtomicType::U16 => self.read_u16_le().map(AtomicValue::U16),
+            AtomicType::U32 => self.read_u32_le().map(AtomicValue::U32),
+            AtomicType::F32 => self.read_f32_le().map(AtomicValue::F32),
+            AtomicType::CUtf8 => match self.read_c_utf8_str() {
+                Ok(utf8) => Ok(AtomicValue::CUtf8(utf8.as_str().into())),
+                Err(err) => match (self.strict, &err.detail) {
+                    (false, DeserializeErrorDetail::Utf8(e, s)) => {
+                        let ret = s.clone();
+                        self.log_warning(err);
+                        Ok(AtomicValue::CUtf8(ret))
+                    }
+                    _ => Err(err),
+                },
+            },
+            AtomicType::X(n) => self.read_bytes(n).map(|slice| AtomicValue::X(slice.into())),
+        }
+    }
+
+    pub fn read_tbl_entry_data(&mut self, schema: &IndexMap<Attribute, AtomicType>) -> Result<IndexMap<Attribute, AtomicValue>, DeserializeError> {
+        let mut values = IndexMap::with_capacity(schema.len());
+        for (i, (attr_name, attr_type)) in schema.iter().enumerate() {
+            let wi = self.warning_index();
+            let val = self.read_value(*attr_type).map_err(|err| err.with_context(DeserializeErrorPosition::EntryData))?;
+            self.add_warning_context(wi, DeserializeErrorPosition::EntryData);
+        }
+        Ok(values)
+    }
 }

@@ -64,6 +64,10 @@ impl<const PADDING: usize> PaddedUtf8String<PADDING> {
         _ = Self::P;
         PaddedUtf8Str { s: self.s.as_str() }
     }
+
+    pub fn into_inner(self) -> ecow::EcoString {
+        self.s
+    }
 }
 
 impl<'a, const PADDING: usize> PaddedUtf8Str<'a, PADDING> {
