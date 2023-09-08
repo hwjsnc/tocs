@@ -1,4 +1,4 @@
-use crate::io::{MemReader, PaddedUtf8Str, PaddedUtf8String};
+use crate::io::{MemReader, PaddedAsciiStr, PaddedByteStr, PaddedUtf8Str, PaddedUtf8String};
 
 use super::{AtomicType, Attribute, Header};
 use crate::tbl::schema::HeaderRef;
@@ -109,8 +109,18 @@ pub enum DeserializeErrorPosition {
 #[derive(Debug)]
 pub struct DeserializeError {
     pub detail: DeserializeErrorDetail,
-    pub position: Option<usize>,                          // seek position in the file
-    pub context: std::vec::Vec<DeserializeErrorPosition>, // first element is the position of the original cause, the rest is how we got there; may be empty
+    /// Seek position in the file
+    pub position: usize,
+    /// First element is the position of the original cause, the rest is how we got there.
+    ///
+    /// May be empty.
+    pub context: std::vec::Vec<DeserializeErrorPosition>,
+}
+
+impl DeserializeErrorDetail {
+    pub fn eof() -> Self {
+        DeserializeErrorDetail::Io(std::io::ErrorKind::UnexpectedEof.into())
+    }
 }
 
 impl detail::ErrorWithContext for DeserializeError {
@@ -125,6 +135,7 @@ impl detail::ErrorWithContext for DeserializeError {
 struct TblReader<'a> {
     inner: MemReader<'a>,
     strict: bool,
+    warnings: Option<WarningLogger<DeserializeError>>,
 }
 
 impl<'a> TblReader<'a> {
@@ -144,32 +155,107 @@ impl<'a> TblReader<'a> {
 }
 
 macro_rules! impl_via_inner {
-    ($f:ident, $result:ty) => {
-        pub fn $f(&mut self) -> $result {
-            self.inner.$f()
+    ($f:ident, $t:ty, $at:expr) => {
+        pub fn $f(&mut self) -> Result<$t, DeserializeError> {
+            self.inner
+                .$f()
+                .ok_or_else(|| self.error(DeserializeErrorDetail::eof()).with_context(DeserializeErrorPosition::Value($at)))
         }
     };
 }
 
 impl<'a> TblReader<'a> {
-    pub fn read_bytes(&mut self, n: usize) -> Option<&'a [u8]> {
-        self.inner.read_bytes(n)
+    pub fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], DeserializeError> {
+        self.inner
+            .read_bytes(n)
+            .ok_or_else(|| self.error(DeserializeErrorDetail::eof()).with_context(DeserializeErrorPosition::Value(AtomicType::X(n))))
     }
 
-    impl_via_inner! {read_byte, Option::<u8>}
-    impl_via_inner! {read_u8, Option::<u8>}
-    impl_via_inner! {read_i8, Option::<i8>}
+    impl_via_inner! {read_byte, u8, AtomicType::U8}
+    impl_via_inner! {read_u8, u8, AtomicType::U8}
+    impl_via_inner! {read_i8, i8, AtomicType::I8}
 
-    impl_via_inner! {read_u16_le, Option::<u16>}
-    impl_via_inner! {read_u32_le, Option::<u32>}
-    impl_via_inner! {read_i16_le, Option::<i16>}
-    impl_via_inner! {read_i32_le, Option::<i32>}
-    impl_via_inner! {read_f32_le, Option::<f32>}
+    impl_via_inner! {read_u16_le, u16, AtomicType::U16}
+    impl_via_inner! {read_u32_le, u32, AtomicType::U32}
+    impl_via_inner! {read_i16_le, i16, AtomicType::I16}
+    impl_via_inner! {read_i32_le, i32, AtomicType::I32}
+    impl_via_inner! {read_f32_le, f32, AtomicType::F32}
 
-    pub fn read_header_name(&mut self) -> Result<HeaderRef, crate::io::PaddedStringReadError> {
-        self.inner.read_c_ascii_str().map(HeaderRef::from)
+    fn _read_c_byte_str(&mut self) -> Result<PaddedByteStr<'a, 1>, DeserializeError> {
+        use crate::io::PaddedStringReadError;
+
+        self.inner.read_c_byte_str().map_err(|err| {
+            self.error(match err {
+                PaddedStringReadError::Io(err) => DeserializeErrorDetail::Io(err),
+                PaddedStringReadError::Padding(_) => unreachable!(), // tbls don't have padded strings, only null-terminated
+                PaddedStringReadError::Ascii | PaddedStringReadError::Utf8(_) => unreachable!(), // we're not reading ASCII or UTF-8
+            })
+        })
     }
 
-    impl_via_inner! {read_c_utf8_str, Result<PaddedUtf8Str<1>, crate::io::PaddedStringReadError>}
-    impl_via_inner! {read_c_utf8_string_lossy, Result<PaddedUtf8String<1>, crate::io::PaddedStringReadError>}
+    pub fn read_c_utf8_str(&mut self) -> Result<PaddedUtf8Str<'a, 1>, DeserializeError> {
+        use crate::io::PaddedStringError;
+
+        let off = self.inner.offset();
+        let bytes = self._read_c_byte_str().map_err(|e| e.with_context(DeserializeErrorPosition::Value(AtomicType::CUtf8)))?;
+
+        bytes.try_into().map_err(|err| {
+            self.inner.set_offset(off);
+            match err {
+                PaddedStringError::Utf8(err) => {
+                    let s = String::from_utf8_lossy(bytes.as_bytes_excluding_terminator_and_padding()).into_owned();
+                    self.error(DeserializeErrorDetail::Utf8(err, s)).with_context(DeserializeErrorPosition::Value(AtomicType::CUtf8))
+                }
+                PaddedStringError::ContainsNull => unreachable!(),
+                PaddedStringError::Ascii => unreachable!(),
+            }
+        })
+    }
+
+    pub fn read_c_utf8_string_lossy(&mut self) -> Result<PaddedUtf8String<1>, DeserializeError> {
+        self._read_c_byte_str()
+            .map(PaddedUtf8String::<1>::from_utf8_lossy)
+            .map_err(|err| err.with_context(DeserializeErrorPosition::Value(AtomicType::CUtf8)))
+    }
+
+    pub fn read_header_name(&mut self) -> Result<HeaderRef, DeserializeError> {
+        use crate::io::PaddedStringError;
+
+        let off = self.inner.offset();
+        let bytes = self._read_c_byte_str().map_err(|e| e.with_context(DeserializeErrorPosition::HeaderName))?;
+
+        match PaddedAsciiStr::<'_, 1>::try_from(bytes) {
+            Ok(ascii) => Ok(HeaderRef::from(ascii)),
+            Err(err) => {
+                self.inner.set_offset(off);
+                Err(match err {
+                    PaddedStringError::Utf8(err) => {
+                        let s = String::from_utf8_lossy(bytes.as_bytes_excluding_terminator_and_padding()).into_owned();
+                        self.error(DeserializeErrorDetail::Utf8(err, s)).with_context(DeserializeErrorPosition::HeaderName)
+                    }
+                    PaddedStringError::ContainsNull => unreachable!(),
+                    PaddedStringError::Ascii => self.error(DeserializeErrorDetail::Ascii).with_context(DeserializeErrorPosition::HeaderName),
+                })
+            }
+        }
+    }
+}
+
+impl<'a> TblReader<'a> {
+    pub fn error(&self, detail: DeserializeErrorDetail) -> DeserializeError {
+        DeserializeError {
+            detail,
+            position: self.inner.offset(),
+            context: vec![],
+        }
+    }
+}
+
+impl<'a> TblReader<'a> {
+    /*
+    pub fn read_header_v1(&mut self) -> Result<u16, DeserializeError>{
+        self.read_u16_le().map_err(|e| self.error(DeserializeError::)
+        })
+    }
+    */
 }

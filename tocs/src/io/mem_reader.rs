@@ -98,7 +98,7 @@ impl<'a> MemReader<'a> {
         let (bytes, _rest) = super::PaddedByteStr::<'a, PADDING>::read_from_slice(self.rest())?;
         self.off += bytes.len_with_padding().get();
         debug_assert!(self.off <= self.data.len());
-        Ok(super::PaddedUtf8String::from_utf8_lossy(bytes.as_bytes_excluding_terminator_and_padding()).unwrap())
+        Ok(super::PaddedUtf8String::from_utf8_lossy(bytes))
     }
 
     pub fn read_c_byte_str(&mut self) -> Result<super::PaddedByteStr<'a, 1>, super::PaddedStringReadError> {
