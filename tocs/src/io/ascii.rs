@@ -198,3 +198,15 @@ impl<const PADDING: usize> TryFrom<PaddedByteString<PADDING>> for PaddedAsciiStr
         Self::from_ascii(bytes.as_bytes_excluding_terminator_and_padding())
     }
 }
+
+impl<'a, const PADDING: usize> PartialEq<PaddedAsciiString<PADDING>> for PaddedAsciiStr<'a, PADDING> {
+    fn eq(&self, other: &PaddedAsciiString<PADDING>) -> bool {
+        self.s == other.s
+    }
+}
+
+impl<'a, const PADDING: usize> PartialEq<PaddedAsciiStr<'a, PADDING>> for PaddedAsciiString<PADDING> {
+    fn eq(&self, other: &PaddedAsciiStr<'a, PADDING>) -> bool {
+        self.s == other.s
+    }
+}

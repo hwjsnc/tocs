@@ -1,6 +1,7 @@
-use crate::io::{read_bytes, PaddedByteString};
+use crate::io::{MemReader, PaddedUtf8Str, PaddedUtf8String};
 
 use super::{AtomicType, Attribute, Header};
+use crate::tbl::schema::HeaderRef;
 
 // Warning Logger
 
@@ -118,4 +119,57 @@ impl detail::ErrorWithContext for DeserializeError {
     fn add_context(&mut self, position: Self::Position) {
         self.context.push(position);
     }
+}
+
+#[derive(Clone)]
+struct TblReader<'a> {
+    inner: MemReader<'a>,
+    strict: bool,
+}
+
+impl<'a> TblReader<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
+        Self {
+            inner: MemReader::new(data),
+            strict: true,
+        }
+    }
+
+    pub fn new_lax(data: &'a [u8]) -> Self {
+        Self {
+            inner: MemReader::new(data),
+            strict: false,
+        }
+    }
+}
+
+macro_rules! impl_via_inner {
+    ($f:ident, $result:ty) => {
+        pub fn $f(&mut self) -> $result {
+            self.inner.$f()
+        }
+    };
+}
+
+impl<'a> TblReader<'a> {
+    pub fn read_bytes(&mut self, n: usize) -> Option<&'a [u8]> {
+        self.inner.read_bytes(n)
+    }
+
+    impl_via_inner! {read_byte, Option::<u8>}
+    impl_via_inner! {read_u8, Option::<u8>}
+    impl_via_inner! {read_i8, Option::<i8>}
+
+    impl_via_inner! {read_u16_le, Option::<u16>}
+    impl_via_inner! {read_u32_le, Option::<u32>}
+    impl_via_inner! {read_i16_le, Option::<i16>}
+    impl_via_inner! {read_i32_le, Option::<i32>}
+    impl_via_inner! {read_f32_le, Option::<f32>}
+
+    pub fn read_header_name(&mut self) -> Result<HeaderRef, crate::io::PaddedStringReadError> {
+        self.inner.read_c_ascii_str().map(HeaderRef::from)
+    }
+
+    impl_via_inner! {read_c_utf8_str, Result<PaddedUtf8Str<1>, crate::io::PaddedStringReadError>}
+    impl_via_inner! {read_c_utf8_string_lossy, Result<PaddedUtf8String<1>, crate::io::PaddedStringReadError>}
 }

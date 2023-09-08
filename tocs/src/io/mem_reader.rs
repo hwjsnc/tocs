@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct MemReader<'a> {
     data: &'a [u8],
     /// Invariant: off <= data.len()
@@ -98,5 +99,21 @@ impl<'a> MemReader<'a> {
         self.off += bytes.len_with_padding().get();
         debug_assert!(self.off <= self.data.len());
         Ok(super::PaddedUtf8String::from_utf8_lossy(bytes.as_bytes_excluding_terminator_and_padding()).unwrap())
+    }
+
+    pub fn read_c_byte_str(&mut self) -> Result<super::PaddedByteStr<'a, 1>, super::PaddedStringReadError> {
+        self.read_padded_byte_str::<1>()
+    }
+
+    pub fn read_c_ascii_str(&mut self) -> Result<super::PaddedAsciiStr<'a, 1>, super::PaddedStringReadError> {
+        self.read_padded_ascii_str::<1>()
+    }
+
+    pub fn read_c_utf8_str(&mut self) -> Result<super::PaddedUtf8Str<'a, 1>, super::PaddedStringReadError> {
+        self.read_padded_utf8_str::<1>()
+    }
+
+    pub fn read_c_utf8_string_lossy(&mut self) -> Result<super::PaddedUtf8String<1>, super::PaddedStringReadError> {
+        self.read_padded_utf8_string_lossy::<1>()
     }
 }

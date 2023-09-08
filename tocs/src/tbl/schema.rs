@@ -86,6 +86,10 @@ pub struct Schemas {
 pub struct Header {
     name: crate::io::PaddedAsciiString<1>,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HeaderRef<'a> {
+    name: crate::io::PaddedAsciiStr<'a, 1>,
+}
 pub type Attribute = EcoString;
 
 pub type Schema = IndexMap<Attribute, Type>;
@@ -110,6 +114,18 @@ impl Header {
     }
 }
 
+impl<'a> HeaderRef<'a> {
+    pub fn to_owned(self) -> Header {
+        Header::from(self.name.to_owned())
+    }
+}
+
+impl<'a> From<crate::io::PaddedAsciiStr<'a, 1>> for HeaderRef<'a> {
+    fn from(name: crate::io::PaddedAsciiStr<'a, 1>) -> Self {
+        Self { name }
+    }
+}
+
 impl From<crate::io::PaddedAsciiString<1>> for Header {
     fn from(name: crate::io::PaddedAsciiString<1>) -> Self {
         Self { name }
@@ -120,6 +136,18 @@ impl TryFrom<crate::io::PaddedByteString<1>> for Header {
     type Error = crate::io::PaddedStringError;
     fn try_from(s: crate::io::PaddedByteString<1>) -> Result<Self, Self::Error> {
         crate::io::PaddedAsciiString::<1>::try_from(s).map(|name| Self { name })
+    }
+}
+
+impl<'a> PartialEq<Header> for HeaderRef<'a> {
+    fn eq(&self, other: &Header) -> bool {
+        self.name == other.name
+    }
+}
+
+impl<'a> PartialEq<HeaderRef<'a>> for Header {
+    fn eq(&self, other: &HeaderRef<'a>) -> bool {
+        self.name == other.name
     }
 }
 
