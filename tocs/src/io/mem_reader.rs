@@ -92,4 +92,11 @@ impl<'a> MemReader<'a> {
         debug_assert!(self.off <= self.data.len());
         Ok(utf8)
     }
+
+    pub fn read_padded_utf8_string_lossy<const PADDING: usize>(&mut self) -> Result<super::PaddedUtf8String<PADDING>, super::PaddedStringReadError> {
+        let (bytes, _rest) = super::PaddedByteStr::<'a, PADDING>::read_from_slice(self.rest())?;
+        self.off += bytes.len_with_padding().get();
+        debug_assert!(self.off <= self.data.len());
+        Ok(super::PaddedUtf8String::from_utf8_lossy(bytes.as_bytes_excluding_terminator_and_padding()).unwrap())
+    }
 }

@@ -54,6 +54,13 @@ impl<const PADDING: usize> PaddedUtf8String<PADDING> {
         Ok(PaddedUtf8String { s: s.into() })
     }
 
+    pub fn from_utf8_lossy(bytes_excluding_terminator_or_padding: &[u8]) -> Result<Self, PaddedStringError> {
+        _ = Self::P;
+        let s = String::from_utf8_lossy(bytes_excluding_terminator_or_padding);
+        check_str(&s)?;
+        Ok(PaddedUtf8String { s: s.into() })
+    }
+
     pub fn as_padded_utf8_str(&self) -> PaddedUtf8Str<'_, PADDING> {
         _ = Self::P;
         PaddedUtf8Str { s: self.s.as_str() }
