@@ -1,6 +1,6 @@
 use crate::io::{MemReader, PaddedAsciiStr, PaddedByteStr, PaddedUtf8Str, PaddedUtf8String};
 
-use super::{AtomicType, AtomicValue, AtomicSchemas, Attribute, Header};
+use super::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Header};
 use crate::tbl::schema::HeaderRef;
 
 use indexmap::IndexMap;
@@ -216,7 +216,6 @@ impl<'a> TblReader<'a> {
         })
     }
 
-    /*
     pub fn read_value(&mut self, t: AtomicType) -> Result<AtomicValue, DeserializeError> {
         match t {
             AtomicType::I8 => self.read_i8().map(AtomicValue::I8),
@@ -228,28 +227,25 @@ impl<'a> TblReader<'a> {
             AtomicType::F32 => self.read_f32_le().map(AtomicValue::F32),
             AtomicType::CUtf8 => match self.read_c_utf8_str() {
                 Ok(utf8) => Ok(AtomicValue::CUtf8(utf8.as_str().into())),
-                Err(err) => match (self.strict, &err.detail) {
-                    (false, DeserializeErrorDetail::Utf8(e, s)) => {
-                        let ret = s.clone();
-                        self.log_warning(err);
-                        Ok(AtomicValue::CUtf8(ret))
-                    }
-                    _ => Err(err),
-                },
+                Err(DeserializeError {
+                    detail: DeserializeErrorDetail::Utf8(_, s),
+                    ..
+                }) if self.non_strict() => Ok(AtomicValue::CUtf8(s)),
+                Err(err) => Err(err),
             },
             AtomicType::X(n) => self.read_bytes(n).map(|slice| AtomicValue::X(slice.into())),
         }
     }
 
     pub fn read_tbl_entry_data(&mut self, schema: &IndexMap<Attribute, AtomicType>) -> Result<IndexMap<Attribute, AtomicValue>, DeserializeError> {
-        let mut values = IndexMap::with_capacity(schema.len());
-        for (i, (attr_name, attr_type)) in schema.iter().enumerate() {
-            let wi = self.warning_index();
-            let val = self.read_value(*attr_type).map_err(|err| err.with_context(DeserializeErrorPosition::EntryData))?;
-            self.add_warning_context(wi, DeserializeErrorPosition::EntryData);
-        }
-        Ok(values)
+        self.in_context(DeserializeErrorPosition::EntryData, |this| {
+            let mut values = IndexMap::with_capacity(schema.len());
+            for (i, (attr_name, attr_type)) in schema.iter().enumerate() {
+                let val = this.in_context(DeserializeErrorPosition::Attribute(attr_name.clone()), |this| this.read_value(*attr_type))?;
+                let previous = values.insert(attr_name.clone(), val);
+                assert!(previous.is_none());
+            }
+            Ok(values)
+        })
     }
-
-    */
 }
