@@ -158,6 +158,18 @@ impl core::fmt::Display for Header {
     }
 }
 
+impl indexmap::Equivalent<HeaderRef<'_>> for Header {
+    fn equivalent(&self, key: &HeaderRef<'_>) -> bool {
+        self == key
+    }
+}
+
+impl<'a> indexmap::Equivalent<Header> for HeaderRef<'a> {
+    fn equivalent(&self, key: &Header) -> bool {
+        self == key
+    }
+}
+
 // serialize schemas with serde
 
 #[cfg(feature = "serde")]

@@ -4,7 +4,7 @@
 
 use crate::io::{MemReader, PaddedAsciiStr, PaddedByteStr, PaddedUtf8Str, PaddedUtf8String};
 
-use super::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Header};
+use super::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Entry, Header};
 use crate::tbl::schema::HeaderRef;
 
 use indexmap::IndexMap;
@@ -19,6 +19,7 @@ pub enum DeserializeErrorDetail {
     EntryHeaderNotInTblHeader { missing: Header },
     EntryCountDoesNotMatchHeaderEntry { header: Header, expected: u32, actual: usize },
     EntryDataLengthMismatch { expected: u16, actual: Option<u16> },
+    UnexpectedNumberOfEntries { expected: u16, actual: usize },
     TrailingData,
 }
 
@@ -190,7 +191,7 @@ impl<'a> TblReader<'a> {
         })
     }
 
-    pub fn read_header_name(&mut self) -> Result<HeaderRef, DeserializeError> {
+    pub fn read_header_name(&mut self) -> Result<HeaderRef<'a>, DeserializeError> {
         use crate::io::PaddedStringError;
 
         self.in_context(DeserializeErrorPosition::HeaderName, |this| {
@@ -286,6 +287,42 @@ impl<'a> TblReader<'a> {
         })
     }
 
+    /// Read entry data as a blob for an entry with unknown schema
+    pub fn read_generic_tbl_entry_data(&mut self, len: usize) -> Result<IndexMap<Attribute, AtomicValue>, DeserializeError> {
+        self.in_context(DeserializeErrorPosition::EntryData, |this| {
+            let attr_name = Attribute::from("data");
+            let data = this.in_context(DeserializeErrorPosition::Attribute(attr_name.clone()), |this| this.read_value(AtomicType::X(len)))?;
+            Ok([(attr_name, data)].into_iter().collect())
+        })
+    }
+
+    fn _read_entry(&mut self) -> Result<Entry, DeserializeError> {
+        // read header and data
+        let (header_ref, data_len) = self.in_context(DeserializeErrorPosition::EntryHeader, |this| {
+            let header_ref = this.read_header_name()?;
+            let data_len = this.read_u16_le()?;
+            Ok((header_ref, data_len))
+        })?;
+        let data = match self.schemas.get(&header_ref) {
+            // TODO: special case for Reverie NameTableData
+            Some(schema) => self.read_tbl_entry_data(&schema)?,
+            None => self.read_generic_tbl_entry_data(data_len.into())?,
+        };
+
+        // check actual data length against what we read
+        let actual_len = super::ser::atomic_attributes_serialization_length(&data);
+        if actual_len != Some(data_len) {
+            let err = self.error(DeserializeErrorDetail::EntryDataLengthMismatch {
+                expected: data_len,
+                actual: actual_len,
+            });
+            if self.strict() {
+                return Err(err);
+            }
+        }
+        todo!()
+    }
+
     pub fn read_entries(&mut self, expected_total_count: u16, expected_counts: Option<&IndexMap<Header, u32>>) -> Result<std::vec::Vec<(Header, IndexMap<Attribute, AtomicValue>)>, DeserializeError> {
         let mut entries = std::vec::Vec::with_capacity(expected_total_count.into());
 
@@ -293,10 +330,31 @@ impl<'a> TblReader<'a> {
             if self.at_end() || (self.strict() && entries.len() >= usize::from(expected_total_count)) {
                 break;
             }
-            todo!()
+
+            self.in_context(
+                DeserializeErrorPosition::Entry {
+                    number: entries.len().try_into().unwrap_or(u16::MAX),
+                },
+                |this| {
+                    // read entry
+                    let entry = this._read_entry()?;
+
+                    // check that entry header is present in tbl header
+                    if let Some(counts) = expected_counts.as_ref() {
+                        if !counts.contains_key(&entry.header) {
+                            let missing = entry.header.clone();
+                            let err = this.in_context(DeserializeErrorPosition::EntryHeader, |this| this.error(DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing }));
+                            if this.strict() {
+                                return Err(err);
+                            }
+                        }
+                    }
+                    Ok(())
+                },
+            )?;
         }
 
-        todo!("check counds");
+        todo!("check counts");
 
         Ok(entries)
     }

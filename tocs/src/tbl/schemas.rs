@@ -1,4 +1,4 @@
-use super::{get_nf1_for_all, AtomicSchemas, Schemas, Type};
+use super::{get_nf1_for_all, AtomicSchema, AtomicSchemas, AtomicType, Schemas, Type};
 
 use super::Header;
 

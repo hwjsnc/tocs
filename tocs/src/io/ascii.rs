@@ -210,3 +210,9 @@ impl<'a, const PADDING: usize> PartialEq<PaddedAsciiStr<'a, PADDING>> for Padded
         self.s == other.s
     }
 }
+
+impl<'a, const PADDING: usize> indexmap::Equivalent<PaddedAsciiStr<'a, PADDING>> for PaddedAsciiString<PADDING> {
+    fn equivalent(&self, other: &PaddedAsciiStr<'a, PADDING>) -> bool {
+        self == other
+    }
+}
