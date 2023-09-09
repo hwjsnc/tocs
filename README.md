@@ -3,19 +3,20 @@ trails of corroded steel
 
 a rusty toolbox for handling data from the trails of cold steel games.
 
-it's a work in progress.
+for an introduction to modding trails games, see https://github.com/Trails-Research-Group
 
 overview
 --------
 
-This project is split up into several crates (some libraries, some binaries) due to a past design mistake and to preserve links into the repository.
+This project is split up into several crates (some libraries, some binaries).
 Here's a short overview:
 
 - `tocs` is the core library.
   It currently supports:
 
-  - serialization and deserialization of tbl files for Cold Steel 1/2/3/4.
+  - serialization and deserialization of tbl files for all Cold Steel games including Reverie.
   - packing/unpacking .pkg and .pka asset files
+  - decoding BC7 textures (preliminary, barely tested)
 
   If you want to programmatically modify tbl or pkg/pka files in Rust, this is what you want.
 
@@ -28,12 +29,9 @@ Here's a short overview:
 - `misc` contains miscellaneous functionality that isn't specific to the games.
 
 - `sqlite_conv` is a CLI program to convert from tbls to a sqlite database.
-  This sqlite database can be edited, e.g. with [sqlitebrowser](https://sqlitebrowser.org/) and converted back to tbl files.
-  WARNING:
+  I use this for datamining and reverse engineering.
   The table schema is not going to be stable across versions, and backwards compatability is NOT a goal since it would be too much effort.
   As I learn more about the data, columns will be added/removed/renamed.
-  If you created a database using some version of the program, it will likely be impossible to turn back to tbl using any other version.
-  If you want to upgrade and need to persist the data from the database, first convert it to tbl files, then convert the tbls back to a new database after the upgrade.
 
 - `try_parse` is a CLI program that attempts to parse all game data and prints any errors.
   It's there for finding instances where the game data doesn't follow the rules we've reverse engineered.
@@ -43,15 +41,6 @@ Here's a short overview:
   It is not "intelligent" and all fixes are hardcoded.
   Only very basic formatting errors are fixed (so far it's only incorrect length bytes in tbls).
   This can be used to bring the files into a form where they can be more easily parsed with other software.
-
-related & alternative projects
-------------------------------
-
-- https://github.com/Trails-Research-Group
-- https://github.com/nnguyen259/ColdSteel3Tools
-- https://github.com/nnguyen259/SenSchema
-- https://github.com/Ouroboros/Falcom
-- https://github.com/TwnKey/SenScriptsDecompiler
 
 license
 -------
