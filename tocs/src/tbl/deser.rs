@@ -53,7 +53,7 @@ struct TblReader<'a> {
     /// Context stack (what we are working on right now)
     ///
     /// The most specific position is at the end
-    context: std::vec::Vec<DeserializeErrorPosition>,
+    context: std::vec::Vec<DeserializeErrorPosition>, // TODO: option to not build context stack?
     schemas: &'a AtomicSchemas,
 }
 
@@ -75,18 +75,21 @@ impl<'a> TblReader<'a> {
 }
 
 impl<'a> TblReader<'a> {
+    /// Create an error in the current context, and log it if possible.
     pub fn error(&mut self, detail: DeserializeErrorDetail) -> DeserializeError {
-        let mut context = self.context.clone();
-        context.reverse();
         let err = DeserializeError {
             detail,
             position: self.inner.offset(),
-            context,
+            context: self.context.clone(),
         };
         if let Some(log) = self.warning_log.as_mut() {
             log.push(err.clone());
         }
         err
+    }
+
+    pub fn warning(&mut self, detail: DeserializeErrorDetail) {
+        _ = self.error(detail);
     }
 
     pub fn enter_context(&mut self, pos: DeserializeErrorPosition) {
@@ -108,9 +111,18 @@ impl<'a> TblReader<'a> {
         ret
     }
 
+    pub fn at_end(&self) -> bool {
+        self.inner.at_end()
+    }
+
+    #[inline(always)]
+    fn strict(&self) -> bool {
+        self.warning_log.is_none()
+    }
+
     #[inline(always)]
     fn non_strict(&self) -> bool {
-        self.warning_log.is_some()
+        !self.strict()
     }
 }
 
@@ -208,10 +220,31 @@ impl<'a> TblReader<'a> {
                 this.in_context(DeserializeErrorPosition::TblHeaderEntry { entry_number: i }, |this| {
                     let hdr = this.read_header_name()?.to_owned(); // TODO: clone an existing known header (if there is one)
                     let count = this.read_u32_le()?;
-                    entry_counts.insert(hdr, count);
-                    Ok::<(), DeserializeError>(())
+                    match entry_counts.entry(hdr) {
+                        indexmap::map::Entry::Vacant(vacant) => {
+                            vacant.insert(count);
+                        }
+                        indexmap::map::Entry::Occupied(previous) => {
+                            let (hdr, _) = previous.remove_entry();
+                            return Err(this.error(DeserializeErrorDetail::DuplicateHeader(hdr)));
+                        }
+                    }
+                    Ok(())
                 })?;
             }
+
+            // check counts
+            let sum_of_counts: Option<u32> = entry_counts.values().try_fold(0u32, |a, b| a.checked_add(*b));
+            if sum_of_counts != Some(number_of_entries.into()) {
+                let err = this.error(DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber {
+                    expected_total: number_of_entries,
+                    sum: sum_of_counts,
+                });
+                if this.strict() {
+                    return Err(err);
+                }
+            }
+
             Ok((number_of_entries, entry_counts))
         })
     }
@@ -247,5 +280,20 @@ impl<'a> TblReader<'a> {
             }
             Ok(values)
         })
+    }
+
+    pub fn read_entries(&mut self, expected_total_count: u16, expected_counts: Option<&IndexMap<Header, u32>>) -> Result<std::vec::Vec<(Header, IndexMap<Attribute, AtomicValue>)>, DeserializeError> {
+        let mut entries = std::vec::Vec::with_capacity(expected_total_count.into());
+
+        loop {
+            if self.at_end() || (self.strict() && entries.len() >= usize::from(expected_total_count)) {
+                break;
+            }
+            todo!()
+        }
+
+        todo!("check counds");
+
+        Ok(entries)
     }
 }
