@@ -1306,7 +1306,7 @@
         ("stat_variation_min", Type::F32),
         ("stat_variation_max", Type::F32),
         ("flags", Type::CUtf8),
-        ("unknown_short", Type::I16),
+        ("char_id", Type::I16),
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
     ]),
