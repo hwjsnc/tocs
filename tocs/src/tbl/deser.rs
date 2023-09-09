@@ -1,3 +1,7 @@
+// TODO: I'm deserializing entries as vec<(header, indexmap<attr, val>)> here because that's how I did it before and I don't care to change the API _again_.
+// However, it would probably be a better idea to deserialize as (&Schema, Vec<val>).
+// The downside to this is the awful lifetime management in programs with long-lived `Tbl`s.
+
 use crate::io::{MemReader, PaddedAsciiStr, PaddedByteStr, PaddedUtf8Str, PaddedUtf8String};
 
 use super::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Header};
