@@ -676,7 +676,7 @@ impl Version {
 #[derive(Clone, Debug)]
 pub struct Tbl {
     version: VersionWithoutSchema,
-    headers: SmallVec<[Header; 6]>,
+    headers: SmallVec<[Header; 6]>, // TODO: just make it a vec ffs
     entries: std::vec::Vec<Entry>,
 }
 
@@ -687,6 +687,10 @@ impl Tbl {
             headers: headers.into_iter().collect(),
             entries: entries.into_iter().collect(),
         }
+    }
+
+    fn new_2(version: VersionWithoutSchema, headers: SmallVec<[Header; 6]>, entries: std::vec::Vec<Entry>) -> Self {
+        Self { version, headers, entries }
     }
 
     pub fn headers(&self) -> impl Iterator<Item = &Header> {

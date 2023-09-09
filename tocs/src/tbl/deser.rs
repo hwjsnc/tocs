@@ -4,7 +4,7 @@
 
 use crate::io::{MemReader, PaddedAsciiStr, PaddedByteStr, PaddedUtf8Str, PaddedUtf8String};
 
-use super::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Entry, Header};
+use super::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Entry, Header, Version, VersionWithoutSchema};
 use crate::tbl::schema::HeaderRef;
 
 use indexmap::IndexMap;
@@ -49,8 +49,9 @@ pub struct DeserializeError {
     pub context: std::vec::Vec<DeserializeErrorPosition>,
 }
 
-struct TblReader<'a> {
+struct TblReaderAtomic<'a> {
     inner: MemReader<'a>,
+    version: VersionWithoutSchema,
     /// Warning log
     ///
     /// If `None`, no warnings are emitted and parsing is strict.
@@ -62,24 +63,25 @@ struct TblReader<'a> {
     schemas: &'a AtomicSchemas,
 }
 
-impl<'a> TblReader<'a> {
-    pub fn new(data: &'a [u8], schemas: &'a AtomicSchemas) -> Self {
+impl<'a> TblReaderAtomic<'a> {
+    pub fn new(data: &'a [u8], version: &'a Version) -> Self {
         Self {
+            version: version.without_schema(),
             inner: MemReader::new(data),
             warning_log: None,
             context: std::vec::Vec::with_capacity(5),
-            schemas,
+            schemas: version.schemas(),
         }
     }
 
-    pub fn new_lax(data: &'a [u8], schemas: &'a AtomicSchemas, warning_log: &'a mut std::vec::Vec<DeserializeError>) -> Self {
-        let mut reader = Self::new(data, schemas);
+    pub fn new_lax(data: &'a [u8], version: &'a Version, warning_log: &'a mut std::vec::Vec<DeserializeError>) -> Self {
+        let mut reader = Self::new(data, version);
         reader.warning_log = Some(warning_log);
         reader
     }
 }
 
-impl<'a> TblReader<'a> {
+impl<'a> TblReaderAtomic<'a> {
     /// Create an error in the current context, and log it if possible.
     pub fn error(&mut self, detail: DeserializeErrorDetail) -> DeserializeError {
         let err = DeserializeError {
@@ -142,7 +144,7 @@ macro_rules! impl_primitive_read_via_inner {
     };
 }
 
-impl<'a> TblReader<'a> {
+impl<'a> TblReaderAtomic<'a> {
     pub fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], DeserializeError> {
         self.in_context(DeserializeErrorPosition::Value(AtomicType::X(n)), |this| {
             this.inner.read_bytes(n).ok_or_else(|| this.error(DeserializeErrorDetail::Eof))
@@ -209,7 +211,7 @@ impl<'a> TblReader<'a> {
     }
 }
 
-impl<'a> TblReader<'a> {
+impl<'a> TblReaderAtomic<'a> {
     /// Read tbl header for Trails of Cold Steel (no list of entry headers at the start)
     pub fn read_tbl_header_v1(&mut self) -> Result<u16, DeserializeError> {
         self.in_context(DeserializeErrorPosition::TblHeader, |this| this.read_u16_le())
@@ -323,7 +325,7 @@ impl<'a> TblReader<'a> {
         todo!()
     }
 
-    pub fn read_entries(&mut self, expected_total_count: u16, expected_counts: Option<&IndexMap<Header, u32>>) -> Result<std::vec::Vec<(Header, IndexMap<Attribute, AtomicValue>)>, DeserializeError> {
+    pub fn read_entries(&mut self, expected_total_count: u16, expected_counts: Option<&IndexMap<Header, u32>>) -> Result<std::vec::Vec<Entry>, DeserializeError> {
         let mut entries = std::vec::Vec::with_capacity(expected_total_count.into());
 
         loop {
@@ -349,13 +351,68 @@ impl<'a> TblReader<'a> {
                             }
                         }
                     }
+
+                    entries.push(entry);
+
                     Ok(())
                 },
             )?;
         }
 
-        todo!("check counts");
+        self.in_context(DeserializeErrorPosition::End, move |this| {
+            // We should have reached the end
+            if !this.at_end() {
+                return Err(this.error(DeserializeErrorDetail::TrailingData));
+            }
 
-        Ok(entries)
+            // Did we read too many or too few entries?
+            if entries.len() != usize::from(expected_total_count) {
+                let err = this.error(DeserializeErrorDetail::UnexpectedNumberOfEntries {
+                    expected: expected_total_count,
+                    actual: entries.len(),
+                });
+                if this.strict() {
+                    return Err(err);
+                }
+            }
+
+            // Check entry counts per header
+            if let Some(counts) = expected_counts {
+                // Note: we don't need to count headers that aren't expected since we already reported them as missing from the tbl header.
+                for (header, count) in counts.iter() {
+                    // O(n^2) but w/e
+                    let actual = entries.iter().filter(|ent| &ent.header == header).count();
+                    if actual != usize::try_from(*count).unwrap() {
+                        let err = this.error(DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry {
+                            header: header.clone(),
+                            expected: *count,
+                            actual,
+                        });
+                        if this.strict() {
+                            return Err(err);
+                        }
+                    }
+                }
+            }
+
+            Ok(entries)
+        })
+    }
+
+    pub fn read(&mut self) -> Result<super::Tbl, DeserializeError> {
+        match self.version {
+            VersionWithoutSchema::V1 => {
+                let entry_count = self.read_tbl_header_v1()?;
+                let entries = self.read_entries(entry_count, None)?;
+                let headers = smallvec::SmallVec::new();
+                Ok(super::Tbl::new_2(self.version, headers, entries))
+            }
+            VersionWithoutSchema::V2 => {
+                let (total_count, entry_counts) = self.read_tbl_header_v2()?;
+                let entries = self.read_entries(total_count, Some(&entry_counts))?;
+                let headers = entry_counts.into_iter().map(|(h, _)| h).collect();
+                Ok(super::Tbl::new_2(self.version, headers, entries))
+            }
+        }
     }
 }
