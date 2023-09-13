@@ -374,7 +374,7 @@ impl<'a> TblReaderAtomic<'a> {
         })?;
         let data = match self.schemas.get(&header_ref) {
             // TODO: special case for Reverie NameTableData
-            Some(schema) => self.read_tbl_entry_data(&schema)?,
+            Some(schema) => self.read_tbl_entry_data(schema)?,
             None => self.read_generic_tbl_entry_data(data_len.into())?,
         };
 

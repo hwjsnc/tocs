@@ -91,7 +91,7 @@ impl<'a, const PADDING: usize> PaddedUtf8Str<'a, PADDING> {
         Ok(Self { s })
     }
 
-    pub fn to_owned(&self) -> PaddedUtf8String<PADDING> {
+    pub fn to_owned(self) -> PaddedUtf8String<PADDING> {
         _ = Self::P;
         PaddedUtf8String { s: self.s.into() }
     }
@@ -101,7 +101,7 @@ impl<'a, const PADDING: usize> PaddedUtf8Str<'a, PADDING> {
     }
 
     pub fn as_str(&self) -> &'a str {
-        &self.s
+        self.s
     }
 }
 

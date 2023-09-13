@@ -224,10 +224,11 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
                 DeserializeErrorDetail::DuplicateHeader(_) => {}
                 DeserializeErrorDetail::EntryHeaderNotInTblHeader { .. } => {}
                 DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, .. } => {
+                    #[allow(clippy::if_same_then_else)]
                     if schemas.contains_key(header) {
                         // should be fine
                     } else {
-                        (); //return false; TODO: add missing schemas that make this fail tests
+                        //return false; TODO: add missing schemas that make this fail tests
                     }
                 }
                 DeserializeErrorDetail::EntryDataLengthMismatch { .. } => {
@@ -250,14 +251,6 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
     true
 }
 
-pub fn read<F: std::io::Read>(f: &mut F, version: &Version) -> ReadTblResult {
-    let mut data = std::vec::Vec::new();
-    match f.read_to_end(&mut data) {
-        Ok(_) => parse(&data, version).into(),
-        Err(err) => ReadTblResult::Err(ReadError::Io(err)),
-    }
-}
-
 pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, SerializeError> {
     let written = match tbl.version {
         VersionWithoutSchema::V1 => serialize_tbl_v1(f, &tbl.entries)?,
@@ -277,14 +270,11 @@ pub fn parse_once_lax(data: &[u8], version: &Version) -> (Result<Tbl, Deserializ
     (result, warnings)
 }
 
-// TODO: parse (&[u8]) + read (impl std::io::Read)
-// distinct error types: parse cannot have io errors
-
 pub fn parse(data: &[u8], version: &Version) -> ParseTblResult {
     match parse_once(data, version) {
-        Ok(tbl) => return ParseTblResult::Ok(tbl),
+        Ok(tbl) => ParseTblResult::Ok(tbl),
         Err(first_error) => match parse_once_lax(data, version) {
-            (Ok(tbl), warnings) if warnings_are_likely_fine(&tbl, version.schemas(), &warnings) => ParseTblResult::Warn { tbl, warnings: warnings },
+            (Ok(tbl), warnings) if warnings_are_likely_fine(&tbl, version.schemas(), &warnings) => ParseTblResult::Warn { tbl, warnings },
             _ => ParseTblResult::Err(first_error),
         },
     }

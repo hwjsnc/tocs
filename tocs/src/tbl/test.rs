@@ -1,4 +1,4 @@
-use super::{read, write, AtomicSchemas, AtomicType, AtomicValue, Attribute, Entry, Header, ReadTblResult, Tbl, Version};
+use super::{parse, write, AtomicSchemas, AtomicType, AtomicValue, Attribute, Entry, Header, ParseTblResult, ReadTblResult, Tbl, Version};
 
 static INIT_LOG: std::sync::Once = std::sync::Once::new();
 
@@ -44,9 +44,9 @@ fn test_read_all() {
             if direntry.file_type().is_file() && path.extension() == Some(&std::ffi::OsStr::new("tbl")) {
                 log::info!("READING FILE {}", path.display());
                 let original = std::fs::read(path).unwrap();
-                let tbl = match read(&mut std::io::Cursor::new(&original), version) {
-                    ReadTblResult::Ok(tbl) => tbl,
-                    ReadTblResult::Warn { tbl, .. } | ReadTblResult::KnownFixApplied(tbl) => {
+                let tbl = match parse(&original, version) {
+                    ParseTblResult::Ok(tbl) => tbl,
+                    ParseTblResult::Warn { tbl, .. } => {
                         if *strict {
                             panic!("There shouldn't be any warnings, but there are!");
                         } else {
@@ -55,7 +55,7 @@ fn test_read_all() {
                         }
                         tbl
                     }
-                    ReadTblResult::Err(e) => {
+                    ParseTblResult::Err(e) => {
                         log::error!("Error!");
                         panic!("{}", e);
                     }

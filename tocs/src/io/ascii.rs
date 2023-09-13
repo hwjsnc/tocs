@@ -91,7 +91,7 @@ impl<'a, const PADDING: usize> PaddedAsciiStr<'a, PADDING> {
         Ok(Self { s })
     }
 
-    pub fn to_owned(&self) -> PaddedAsciiString<PADDING> {
+    pub fn to_owned(self) -> PaddedAsciiString<PADDING> {
         _ = Self::P;
         PaddedAsciiString { s: self.s.into() }
     }

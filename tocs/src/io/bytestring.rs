@@ -105,7 +105,7 @@ impl<'a, const PADDING: usize> PaddedByteStr<'a, PADDING> {
         }
     }
 
-    pub fn to_owned(&self) -> PaddedByteString<PADDING> {
+    pub fn to_owned(self) -> PaddedByteString<PADDING> {
         _ = Self::P;
         PaddedByteString { bytes: self.bytes.into() }
     }
