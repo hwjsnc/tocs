@@ -414,27 +414,3 @@ pub fn get_nf1_for_all(schemas: &Schemas) -> Result<AtomicSchemas, NF1Error> {
     }
     Ok(res)
 }
-
-#[cfg(all(test, feature = "serde"))]
-mod test {
-    use super::Schemas;
-
-    #[test]
-    fn roundtrip_schemas_json() {
-        let game_schemas: [&Schemas; 5] = [
-            &crate::tbl::schemas::CS1 as &Schemas,
-            &crate::tbl::schemas::CS2,
-            &crate::tbl::schemas::CS3,
-            &crate::tbl::schemas::CS4,
-            &crate::tbl::schemas::CS4,
-        ];
-
-        for schemas in game_schemas {
-            let json = serde_json::to_string(schemas).unwrap();
-            let copy: Schemas = serde_json::from_slice(json.as_bytes()).unwrap();
-            assert_eq!(copy.entries, schemas.entries);
-            assert_eq!(copy.common, schemas.common);
-            assert!(super::get_nf1_for_all(&copy).is_ok());
-        }
-    }
-}

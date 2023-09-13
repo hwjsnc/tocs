@@ -108,16 +108,12 @@ pub fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::V
 }
 
 pub fn export_schemas(path: &std::path::Path, schemas: &tocs::tbl::Schemas) -> Result<(), std::io::Error> {
-    let file = std::fs::File::create(path)?;
-    let mut writer = std::io::BufWriter::new(file);
-    serde_json::to_writer_pretty(&mut writer, schemas).map_err(std::io::Error::from)?;
-    let _ = writer.into_inner().map_err(|err| err.into_error())?;
-    Ok(())
+    std::fs::write(path, tocs::tbl::schemas_to_json(schemas).as_bytes())
 }
 
 pub fn import_schemas(path: &std::path::Path) -> Result<tocs::tbl::AtomicSchemas, std::io::Error> {
     let data = std::fs::read(path)?;
-    let schemas: tocs::tbl::Schemas = serde_json::from_slice(data.as_slice()).map_err(std::io::Error::from)?;
+    let schemas: tocs::tbl::Schemas = tocs::tbl::try_schemas_from_json(data.as_slice()).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
     let atomic_schemas = tocs::tbl::get_nf1_for_all(&schemas).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
     Ok(atomic_schemas)
 }

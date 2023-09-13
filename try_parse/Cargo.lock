@@ -519,6 +519,7 @@ version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
 dependencies = [
+ "indexmap",
  "itoa",
  "ryu",
  "serde",
@@ -597,6 +598,7 @@ dependencies = [
  "lz4",
  "num-integer",
  "serde",
+ "serde_json",
  "sha2",
  "simple_logger",
  "smallvec",

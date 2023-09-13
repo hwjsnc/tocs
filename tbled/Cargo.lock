@@ -888,6 +888,7 @@ dependencies = [
  "log",
  "num-integer",
  "serde",
+ "serde_json",
  "smallvec",
 ]
 

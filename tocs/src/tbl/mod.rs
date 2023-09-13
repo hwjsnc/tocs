@@ -10,6 +10,11 @@ pub use schema::{get_nf1_for_all, AtomicAttributeValues, AtomicSchema, AtomicSch
 pub use ser::{serialize_tbl_v1, serialize_tbl_v2, SerializeError};
 pub use value_conversion::try_atomic_value_from_str;
 
+#[cfg(feature = "json")]
+mod json;
+#[cfg(feature = "json")]
+pub use json::{schemas_to_json, try_schemas_from_json};
+
 #[cfg(all(test, feature = "private-tests"))]
 mod test;
 

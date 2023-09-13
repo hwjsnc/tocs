@@ -21,9 +21,9 @@ log = { version = "0.4.17" }
 native-dialog="0.6.3"
 regex = "1.8.1"
 serde = "1.0.163, <= 1.0.171"
-serde_json = { version = "1.0.96", features = ["preserve_order"] }
+serde_json = { version = "1.0.96, <=1.0.96", features = ["preserve_order"] }
 simple_logger = { version = "4", default-features = false, features = ["stderr"] }
-tocs = { path = "../tocs", default-features = false, features = ["serde"] }
+tocs = { path = "../tocs", default-features = false, features = ["json"] }
 
 [dev-dependencies]
 hexhex = { git = "https://git.sr.ht/~quf/hexhex", version = "1.0.0" }
