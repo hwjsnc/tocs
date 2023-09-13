@@ -2,7 +2,7 @@ use ecow::{eco_format, EcoString};
 use indexmap::IndexMap;
 use smallvec::SmallVec;
 
-pub type SmallBuf = SmallVec<[u8; 16]>;
+pub type SmallBuf = SmallVec<[u8; 16]>; // TODO: replace with ecow::EcoBytes or something
 
 // Schema definition types
 

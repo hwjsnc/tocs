@@ -14,6 +14,7 @@ impl<'a> MemReader<'a> {
         self.off
     }
 
+    #[allow(dead_code)]
     pub fn set_offset(&mut self, off: usize) {
         assert!(off <= self.data.len());
         self.off = off;
@@ -80,6 +81,7 @@ impl<'a> MemReader<'a> {
         Ok(bytes)
     }
 
+    #[allow(dead_code)]
     pub fn read_padded_ascii_str<const PADDING: usize>(&mut self) -> Result<super::PaddedAsciiStr<'a, PADDING>, super::PaddedStringReadError> {
         let (ascii, _rest) = super::PaddedAsciiStr::<'_, PADDING>::read_from_slice(self.rest())?;
         self.off += ascii.len_with_padding().get();
@@ -87,6 +89,7 @@ impl<'a> MemReader<'a> {
         Ok(ascii)
     }
 
+    #[allow(dead_code)]
     pub fn read_padded_utf8_str<const PADDING: usize>(&mut self) -> Result<super::PaddedUtf8Str<'a, PADDING>, super::PaddedStringReadError> {
         let (utf8, _rest) = super::PaddedUtf8Str::<'_, PADDING>::read_from_slice(self.rest())?;
         self.off += utf8.len_with_padding().get();
@@ -94,6 +97,7 @@ impl<'a> MemReader<'a> {
         Ok(utf8)
     }
 
+    #[allow(dead_code)]
     pub fn read_padded_utf8_string_lossy<const PADDING: usize>(&mut self) -> Result<super::PaddedUtf8String<PADDING>, super::PaddedStringReadError> {
         let (bytes, _rest) = super::PaddedByteStr::<'a, PADDING>::read_from_slice(self.rest())?;
         self.off += bytes.len_with_padding().get();
@@ -105,14 +109,17 @@ impl<'a> MemReader<'a> {
         self.read_padded_byte_str::<1>()
     }
 
+    #[allow(dead_code)]
     pub fn read_c_ascii_str(&mut self) -> Result<super::PaddedAsciiStr<'a, 1>, super::PaddedStringReadError> {
         self.read_padded_ascii_str::<1>()
     }
 
+    #[allow(dead_code)]
     pub fn read_c_utf8_str(&mut self) -> Result<super::PaddedUtf8Str<'a, 1>, super::PaddedStringReadError> {
         self.read_padded_utf8_str::<1>()
     }
 
+    #[allow(dead_code)]
     pub fn read_c_utf8_string_lossy(&mut self) -> Result<super::PaddedUtf8String<1>, super::PaddedStringReadError> {
         self.read_padded_utf8_string_lossy::<1>()
     }

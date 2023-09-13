@@ -475,7 +475,7 @@ impl<'a> TblReaderAtomic<'a> {
             VersionWithoutSchema::V1 => {
                 let entry_count = self.read_tbl_header_v1()?;
                 let entries = self.read_entries(entry_count, None)?;
-                let headers = smallvec::SmallVec::new();
+                let headers = std::vec::Vec::new();
                 Ok(super::Tbl::new_2(self.version, headers, entries))
             }
             VersionWithoutSchema::V2 => {

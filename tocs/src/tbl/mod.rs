@@ -6,13 +6,10 @@ pub mod value_conversion;
 
 pub mod fixes;
 
-use smallvec::SmallVec;
-
 pub use schema::{get_nf1_for_all, AtomicAttributeValues, AtomicSchema, AtomicSchemas, AtomicType, AtomicValue, Attribute, Header, Schema, Schemas, Type, Value};
 pub use ser::{serialize_tbl_v1, serialize_tbl_v2, SerializeError};
 pub use value_conversion::try_atomic_value_from_str;
 
-// tests
 #[cfg(all(test, feature = "private-tests"))]
 mod test;
 
@@ -34,8 +31,6 @@ impl std::fmt::Display for ReadError {
 }
 
 impl std::error::Error for ReadError {}
-
-// generic load/fix/store
 
 #[derive(Clone, Copy, Debug)]
 enum VersionWithoutSchema {
@@ -106,7 +101,7 @@ impl Version {
 #[derive(Clone, Debug)]
 pub struct Tbl {
     version: VersionWithoutSchema,
-    headers: SmallVec<[Header; 6]>, // TODO: just make it a vec ffs
+    headers: std::vec::Vec<Header>,
     entries: std::vec::Vec<Entry>,
 }
 
@@ -119,7 +114,7 @@ impl Tbl {
         }
     }
 
-    fn new_2(version: VersionWithoutSchema, headers: SmallVec<[Header; 6]>, entries: std::vec::Vec<Entry>) -> Self {
+    fn new_2(version: VersionWithoutSchema, headers: std::vec::Vec<Header>, entries: std::vec::Vec<Entry>) -> Self {
         Self { version, headers, entries }
     }
 
@@ -139,8 +134,6 @@ impl Tbl {
         self.entries
     }
 }
-
-// TODO: load/store Tbl from file/data, including fixes (for specific versions)
 
 pub enum ReadTblResult {
     Ok(Tbl),
