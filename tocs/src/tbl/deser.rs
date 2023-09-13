@@ -49,6 +49,78 @@ pub struct DeserializeError {
     pub context: std::vec::Vec<DeserializeErrorPosition>,
 }
 
+impl std::fmt::Display for DeserializeErrorDetail {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            DeserializeErrorDetail::Eof => write!(f, "unexpected end of file"),
+            DeserializeErrorDetail::Ascii => write!(f, "invalid ASCII string"),
+            DeserializeErrorDetail::Utf8(e, s) => write!(f, "{} for string '{}'", e, s.escape_debug()),
+            DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum } => {
+                write!(f, "sum of entry numbers ")?;
+                if let Some(n) = sum {
+                    write!(f, "({})", n)?;
+                } else {
+                    write!(f, "(exceeds max allowed)",)?;
+                }
+                write!(f, " differs from expected number ({})", expected_total)
+            }
+            DeserializeErrorDetail::DuplicateHeader(hdr) => write!(f, "duplicate header '{}'", hdr),
+            DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing } => write!(f, "file contains entry with header '{}' which does not appear in the tbl header", missing),
+            DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual } => write!(
+                f,
+                "number of entries for header '{}' in the file ({}) differs from the count given in the tbl header ({})",
+                header, actual, expected
+            ),
+            DeserializeErrorDetail::EntryDataLengthMismatch { expected, actual } => {
+                write!(f, "length of entry data ")?;
+                if let Some(len) = actual {
+                    write!(f, "({})", len)?;
+                } else {
+                    write!(f, "(>{})", u16::MAX)?;
+                }
+                write!(f, " differs from length in table header ({})", expected)
+            }
+            DeserializeErrorDetail::UnexpectedNumberOfEntries { expected, actual } => {
+                write!(f, "number of entries ({actual}) differs from expected value ({expected})")
+            }
+            DeserializeErrorDetail::TrailingData => write!(f, "unexpected trailing data"),
+        }
+    }
+}
+
+impl std::fmt::Display for DeserializeErrorPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            DeserializeErrorPosition::Start => write!(f, "before parsing"),
+            DeserializeErrorPosition::TblHeader => write!(f, "while parsing tbl header"),
+            DeserializeErrorPosition::TblHeaderEntry { entry_number } => write!(f, "while parsing tbl header number {}", entry_number + 1),
+            DeserializeErrorPosition::Entry { number } => write!(f, "while parsing header of entry number {}", number + 1),
+            DeserializeErrorPosition::EntryHeader => write!(f, "while parsing entry header name"),
+            DeserializeErrorPosition::EntryData => write!(f, "while parsing entry data"),
+            DeserializeErrorPosition::HeaderName => write!(f, "while parsing name of a header"),
+            DeserializeErrorPosition::Value(ty) => write!(f, "while parsing a {}", ty.describe()),
+            DeserializeErrorPosition::Attribute(name) => write!(f, "while parsing attribute '{}'", name),
+            DeserializeErrorPosition::End => write!(f, "after parsing"),
+        }
+    }
+}
+
+impl std::fmt::Display for DeserializeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        let Self { detail, position, context } = self;
+        write!(f, "{detail} at offset {position} (0x{position:x})")?;
+        if !context.is_empty() {
+            write!(f, ". error occured {}", context[0])?;
+            for position in &context[1..] {
+                write!(f, "\n - {}", position)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for DeserializeError {}
+
 pub struct TblReaderAtomic<'a> {
     inner: MemReader<'a>,
     version: VersionWithoutSchema,
@@ -322,7 +394,8 @@ impl<'a> TblReaderAtomic<'a> {
                 return Err(err);
             }
         }
-        todo!()
+
+        Ok(Entry { header: header_ref.to_owned(), values: data })
     }
 
     pub fn read_entries(&mut self, expected_total_count: u16, expected_counts: Option<&IndexMap<Header, u32>>) -> Result<std::vec::Vec<Entry>, DeserializeError> {

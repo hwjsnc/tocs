@@ -127,8 +127,7 @@ pub fn check_tbl_roundtrip(path: &std::path::Path, version: &tocs::tbl::Version,
         }
         data
     };
-    let mut logger = tocs::tbl::WarningLogger::new();
-    match tocs::tbl::try_read_once::<_, /* strict = */ true, /* log = */ true>(&mut std::io::Cursor::new(&original), &mut logger, version) {
+    match tocs::tbl::read_once_new(&original, version) {
         Ok(tbl) => {
             let mut serialized: std::vec::Vec<u8> = vec![];
             match tocs::tbl::write(&mut std::io::Cursor::new(&mut serialized), &tbl) {
