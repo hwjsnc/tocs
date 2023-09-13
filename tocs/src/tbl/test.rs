@@ -113,7 +113,7 @@ fn test_strict_roundtrip_for_game(version: &crate::tbl::Version) {
                 _ = crate::tbl::fixes::fix_in_place(version, &mut raw);
                 raw
             };
-            let tbl = crate::tbl::read_once_new(&fixed, version).unwrap();
+            let tbl = crate::tbl::parse_once(&fixed, version).unwrap();
             let serialized = {
                 let mut serialized = vec![];
                 let _ = write(&mut serialized, &tbl).unwrap();

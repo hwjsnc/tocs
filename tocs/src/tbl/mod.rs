@@ -248,6 +248,12 @@ pub enum ReadTblResult {
     Err(DeserializeError),
 }
 
+pub enum ParseTblResult {
+    Ok(Tbl),
+    Warn { tbl: Tbl, warnings: std::vec::Vec<deser::DeserializeError> },
+    Err(deser::DeserializeError),
+}
+
 impl ReadTblResult {
     pub fn ignore_warnings(self) -> Result<Tbl, DeserializeError> {
         match self {
@@ -255,6 +261,19 @@ impl ReadTblResult {
             ReadTblResult::KnownFixApplied(tbl) => Ok(tbl),
             ReadTblResult::Warn { tbl, .. } => Ok(tbl),
             ReadTblResult::Err(e) => Err(e),
+        }
+    }
+}
+
+impl From<ParseTblResult> for ReadTblResult {
+    fn from(result: ParseTblResult) -> ReadTblResult {
+        match result {
+            ParseTblResult::Ok(tbl) => ReadTblResult::Ok(tbl),
+            ParseTblResult::Warn { tbl, warnings } => ReadTblResult::Warn {
+                tbl,
+                warnings: warnings.into_iter().map(new_error_to_old_error).collect(),
+            },
+            ParseTblResult::Err(err) => ReadTblResult::Err(new_error_to_old_error(err)),
         }
     }
 }
@@ -341,7 +360,7 @@ fn warnings_are_likely_fine_new(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[
 pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: &Version) -> ReadTblResult {
     let mut data = std::vec::Vec::new();
     match f.read_to_end(&mut data) {
-        Ok(_) => read_new(&data, version),
+        Ok(_) => parse(&data, version).into(),
         Err(err) => ReadTblResult::Err(DeserializeError {
             detail: DeserializeErrorDetail::Io(err),
             position: None,
@@ -397,11 +416,11 @@ fn new_error_to_old_error(err: deser::DeserializeError) -> DeserializeError {
     }
 }
 
-pub fn read_once_new(data: &[u8], version: &Version) -> Result<Tbl, deser::DeserializeError> {
+pub fn parse_once(data: &[u8], version: &Version) -> Result<Tbl, deser::DeserializeError> {
     deser::TblReaderAtomic::new(data, version).read()
 }
 
-pub fn read_once_lax_new(data: &[u8], version: &Version) -> (Result<Tbl, deser::DeserializeError>, std::vec::Vec<deser::DeserializeError>) {
+pub fn parse_once_lax(data: &[u8], version: &Version) -> (Result<Tbl, deser::DeserializeError>, std::vec::Vec<deser::DeserializeError>) {
     let mut warnings = std::vec::Vec::new();
     let result = deser::TblReaderAtomic::new_lax(data, version, &mut warnings).read();
     (result, warnings)
@@ -410,15 +429,12 @@ pub fn read_once_lax_new(data: &[u8], version: &Version) -> (Result<Tbl, deser::
 // TODO: parse (&[u8]) + read (impl std::io::Read)
 // distinct error types: parse cannot have io errors
 
-pub fn read_new(data: &[u8], version: &Version) -> ReadTblResult {
-    match read_once_new(data, version) {
-        Ok(tbl) => return ReadTblResult::Ok(tbl),
-        Err(first_error) => match read_once_lax_new(data, version) {
-            (Ok(tbl), warnings) if warnings_are_likely_fine_new(&tbl, version.schemas(), &warnings) => ReadTblResult::Warn {
-                tbl,
-                warnings: warnings.into_iter().map(new_error_to_old_error).collect(),
-            },
-            _ => ReadTblResult::Err(new_error_to_old_error(first_error)),
+pub fn parse(data: &[u8], version: &Version) -> ParseTblResult {
+    match parse_once(data, version) {
+        Ok(tbl) => return ParseTblResult::Ok(tbl),
+        Err(first_error) => match parse_once_lax(data, version) {
+            (Ok(tbl), warnings) if warnings_are_likely_fine_new(&tbl, version.schemas(), &warnings) => ParseTblResult::Warn { tbl, warnings: warnings },
+            _ => ParseTblResult::Err(first_error),
         },
     }
 }
@@ -436,10 +452,10 @@ pub fn read_file_with_fixes<P: AsRef<std::path::Path>>(path: P, version: &Versio
         }
     };
     if fixes::fix_in_place(version, &mut data).was_fixed() {
-        let tbl = read_once_new(data.as_slice(), version).expect("we applied fixes so parsing should succeed");
+        let tbl = parse_once(data.as_slice(), version).expect("we applied fixes so parsing should succeed");
         ReadTblResult::KnownFixApplied(tbl)
     } else {
-        read_new(data.as_slice(), version)
+        parse(data.as_slice(), version).into()
     }
 }
 
