@@ -25,12 +25,7 @@ impl WarningDialog {
         let mut s = String::new();
         for (i, w) in warnings.enumerate() {
             writeln!(s, "WARNING #{}: {}", i + 1, w.detail).unwrap();
-            write!(s, "  - file position: ").unwrap();
-            if let Some(pos) = w.position {
-                writeln!(s, "{pos} (0x{pos:x})").unwrap();
-            } else {
-                writeln!(s, "unknown").unwrap();
-            }
+            writeln!(s, "  - file position: {} (0x{:x})", w.position, w.position).unwrap();
             writeln!(s, "  - context:").unwrap();
             for pos in w.context.iter() {
                 writeln!(s, "    - {pos}").unwrap();

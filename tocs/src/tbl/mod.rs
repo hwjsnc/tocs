@@ -16,116 +16,24 @@ pub use value_conversion::try_atomic_value_from_str;
 #[cfg(all(test, feature = "private-tests"))]
 mod test;
 
+pub use deser::{DeserializeError, DeserializeErrorDetail, DeserializeErrorPosition};
+
 #[derive(Debug)]
-pub enum DeserializeErrorDetail {
+pub enum ReadError {
     Io(std::io::Error),
-    Ascii,
-    Utf8(std::str::Utf8Error, String),
-    SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
-    DuplicateHeader(Header),
-    EntryHeaderNotInTblHeader { missing: Header },
-    EntryCountDoesNotMatchHeaderEntry { header: Header, expected: u32, actual: usize },
-    EntryDataLengthMismatch { expected: u16, actual: Option<u16> },
-    UnexpectedNumberOfEntries { expected: u16, actual: usize },
-    TrailingData,
+    Parse(deser::DeserializeError),
 }
 
-#[derive(Clone, Debug)]
-pub enum DeserializeErrorPosition {
-    // entry numbers should start at 0 here but will be reported as starting with 1
-    Start,
-    TblHeader,
-    TblHeaderEntry { entry_number: u32 },
-    Entry { number: u16 },
-    EntryHeader,
-    EntryData,
-    HeaderName,
-    Value(AtomicType),
-    Attribute(Attribute),
-    End,
-}
-
-#[derive(Debug)]
-pub struct DeserializeError {
-    pub detail: DeserializeErrorDetail,
-    pub position: Option<u64>,                            // seek position in the file
-    pub context: std::vec::Vec<DeserializeErrorPosition>, // first element is the position of the original cause, the rest is how we got there; may be empty
-}
-
-impl std::fmt::Display for DeserializeErrorDetail {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+impl std::fmt::Display for ReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            DeserializeErrorDetail::Io(e) => write!(f, "{}", e),
-            DeserializeErrorDetail::Ascii => write!(f, "invalid ASCII string"),
-            DeserializeErrorDetail::Utf8(e, s) => write!(f, "{} for string '{}'", e, s.escape_debug()),
-            DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum } => {
-                write!(f, "sum of entry numbers ")?;
-                if let Some(n) = sum {
-                    write!(f, "({})", n)?;
-                } else {
-                    write!(f, "(exceeds max allowed)",)?;
-                }
-                write!(f, " differs from expected number ({})", expected_total)
-            }
-            DeserializeErrorDetail::DuplicateHeader(hdr) => write!(f, "duplicate header '{}'", hdr),
-            DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing } => write!(f, "file contains entry with header '{}' which does not appear in the tbl header", missing),
-            DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual } => write!(
-                f,
-                "number of entries for header '{}' in the file ({}) differs from the count given in the tbl header ({})",
-                header, actual, expected
-            ),
-            DeserializeErrorDetail::EntryDataLengthMismatch { expected, actual } => {
-                write!(f, "length of entry data ")?;
-                if let Some(len) = actual {
-                    write!(f, "({})", len)?;
-                } else {
-                    write!(f, "(>{})", u16::MAX)?;
-                }
-                write!(f, " differs from length in table header ({})", expected)
-            }
-            DeserializeErrorDetail::UnexpectedNumberOfEntries { expected, actual } => write!(f, "unexpected number of entries (expected {expected}, actual {actual})"),
-            DeserializeErrorDetail::TrailingData => write!(f, "unexpected trailing data"),
+            ReadError::Io(err) => write!(f, "couldn't read file: {err}"),
+            ReadError::Parse(err) => write!(f, "couldn't parse file: {err}"),
         }
     }
 }
 
-impl std::fmt::Display for DeserializeErrorPosition {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        match self {
-            DeserializeErrorPosition::Start => write!(f, "before parsing"),
-            DeserializeErrorPosition::TblHeader => write!(f, "while parsing tbl header"),
-            DeserializeErrorPosition::TblHeaderEntry { entry_number } => write!(f, "while parsing tbl header number {}", entry_number + 1),
-            DeserializeErrorPosition::Entry { number } => write!(f, "while parsing header of entry number {}", number + 1),
-            DeserializeErrorPosition::EntryHeader => write!(f, "while parsing entry header name"),
-            DeserializeErrorPosition::EntryData => write!(f, "while parsing entry data"),
-            DeserializeErrorPosition::HeaderName => write!(f, "while parsing name of a header"),
-            DeserializeErrorPosition::Value(ty) => write!(f, "while parsing a {}", ty.describe()),
-            DeserializeErrorPosition::Attribute(name) => write!(f, "while parsing attribute '{}'", name),
-            DeserializeErrorPosition::End => write!(f, "after parsing"),
-        }
-    }
-}
-
-impl std::fmt::Display for DeserializeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        let Self { detail, position, context } = self;
-        write!(f, "{} at ", detail)?;
-        if let Some(off) = position {
-            write!(f, "offset {} (0x{:x})", off, off)?;
-        } else {
-            write!(f, "an unknown offset")?;
-        }
-        if !context.is_empty() {
-            write!(f, ". error occured {}", context[0])?;
-            for position in &context[1..] {
-                write!(f, "\n - {}", position)?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl std::error::Error for DeserializeError {}
+impl std::error::Error for ReadError {}
 
 // generic load/fix/store
 
@@ -238,17 +146,17 @@ pub enum ReadTblResult {
     Ok(Tbl),
     KnownFixApplied(Tbl),
     Warn { tbl: Tbl, warnings: std::vec::Vec<DeserializeError> },
-    Err(DeserializeError),
+    Err(ReadError),
 }
 
 pub enum ParseTblResult {
     Ok(Tbl),
-    Warn { tbl: Tbl, warnings: std::vec::Vec<deser::DeserializeError> },
-    Err(deser::DeserializeError),
+    Warn { tbl: Tbl, warnings: std::vec::Vec<DeserializeError> },
+    Err(DeserializeError),
 }
 
 impl ReadTblResult {
-    pub fn ignore_warnings(self) -> Result<Tbl, DeserializeError> {
+    pub fn ignore_warnings(self) -> Result<Tbl, ReadError> {
         match self {
             ReadTblResult::Ok(tbl) => Ok(tbl),
             ReadTblResult::KnownFixApplied(tbl) => Ok(tbl),
@@ -262,11 +170,8 @@ impl From<ParseTblResult> for ReadTblResult {
     fn from(result: ParseTblResult) -> ReadTblResult {
         match result {
             ParseTblResult::Ok(tbl) => ReadTblResult::Ok(tbl),
-            ParseTblResult::Warn { tbl, warnings } => ReadTblResult::Warn {
-                tbl,
-                warnings: warnings.into_iter().map(new_error_to_old_error).collect(),
-            },
-            ParseTblResult::Err(err) => ReadTblResult::Err(new_error_to_old_error(err)),
+            ParseTblResult::Warn { tbl, warnings } => ReadTblResult::Warn { tbl, warnings },
+            ParseTblResult::Err(err) => ReadTblResult::Err(ReadError::Parse(err)),
         }
     }
 }
@@ -312,7 +217,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
         }
         if !is_entry_error {
             match &w.detail {
-                DeserializeErrorDetail::Io(_) => unreachable!(),
+                DeserializeErrorDetail::Eof => return false,
                 DeserializeErrorDetail::Ascii => return false,
                 DeserializeErrorDetail::Utf8(_, _) => return false,
                 DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { .. } => {} // it's probably fine
@@ -345,20 +250,11 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
     true
 }
 
-fn warnings_are_likely_fine_new(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[deser::DeserializeError]) -> bool {
-    let warnings: std::vec::Vec<_> = warnings.iter().cloned().map(new_error_to_old_error).collect();
-    warnings_are_likely_fine(tbl, schemas, &warnings)
-}
-
-pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: &Version) -> ReadTblResult {
+pub fn read<F: std::io::Read>(f: &mut F, version: &Version) -> ReadTblResult {
     let mut data = std::vec::Vec::new();
     match f.read_to_end(&mut data) {
         Ok(_) => parse(&data, version).into(),
-        Err(err) => ReadTblResult::Err(DeserializeError {
-            detail: DeserializeErrorDetail::Io(err),
-            position: None,
-            context: vec![],
-        }),
+        Err(err) => ReadTblResult::Err(ReadError::Io(err)),
     }
 }
 
@@ -371,49 +267,11 @@ pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, Serialize
     Ok(written)
 }
 
-fn new_error_to_old_error(err: deser::DeserializeError) -> DeserializeError {
-    let deser::DeserializeError { detail, position, context } = err;
-    let detail = match detail {
-        deser::DeserializeErrorDetail::Eof => DeserializeErrorDetail::Io(std::io::ErrorKind::UnexpectedEof.into()),
-        deser::DeserializeErrorDetail::Ascii => DeserializeErrorDetail::Ascii,
-        deser::DeserializeErrorDetail::Utf8(err, s) => DeserializeErrorDetail::Utf8(err, s.to_string()),
-        deser::DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum } => {
-            DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum }
-        }
-        deser::DeserializeErrorDetail::DuplicateHeader(header) => DeserializeErrorDetail::DuplicateHeader(header),
-        deser::DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing } => DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing },
-        deser::DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual } => DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual },
-        deser::DeserializeErrorDetail::EntryDataLengthMismatch { expected, actual } => DeserializeErrorDetail::EntryDataLengthMismatch { expected, actual },
-        deser::DeserializeErrorDetail::UnexpectedNumberOfEntries { expected, actual } => DeserializeErrorDetail::UnexpectedNumberOfEntries { expected, actual },
-        deser::DeserializeErrorDetail::TrailingData => DeserializeErrorDetail::TrailingData,
-    };
-    let context = context
-        .into_iter()
-        .map(|pos| match pos {
-            deser::DeserializeErrorPosition::Start => DeserializeErrorPosition::Start,
-            deser::DeserializeErrorPosition::TblHeader => DeserializeErrorPosition::TblHeader,
-            deser::DeserializeErrorPosition::TblHeaderEntry { entry_number } => DeserializeErrorPosition::TblHeaderEntry { entry_number },
-            deser::DeserializeErrorPosition::Entry { number } => DeserializeErrorPosition::Entry { number },
-            deser::DeserializeErrorPosition::EntryHeader => DeserializeErrorPosition::EntryHeader,
-            deser::DeserializeErrorPosition::EntryData => DeserializeErrorPosition::EntryData,
-            deser::DeserializeErrorPosition::HeaderName => DeserializeErrorPosition::HeaderName,
-            deser::DeserializeErrorPosition::Value(ty) => DeserializeErrorPosition::Value(ty),
-            deser::DeserializeErrorPosition::Attribute(attr) => DeserializeErrorPosition::Attribute(attr),
-            deser::DeserializeErrorPosition::End => DeserializeErrorPosition::End,
-        })
-        .collect();
-    DeserializeError {
-        detail,
-        position: Some(position as _),
-        context,
-    }
-}
-
-pub fn parse_once(data: &[u8], version: &Version) -> Result<Tbl, deser::DeserializeError> {
+pub fn parse_once(data: &[u8], version: &Version) -> Result<Tbl, DeserializeError> {
     deser::TblReaderAtomic::new(data, version).read()
 }
 
-pub fn parse_once_lax(data: &[u8], version: &Version) -> (Result<Tbl, deser::DeserializeError>, std::vec::Vec<deser::DeserializeError>) {
+pub fn parse_once_lax(data: &[u8], version: &Version) -> (Result<Tbl, DeserializeError>, std::vec::Vec<DeserializeError>) {
     let mut warnings = std::vec::Vec::new();
     let result = deser::TblReaderAtomic::new_lax(data, version, &mut warnings).read();
     (result, warnings)
@@ -426,7 +284,7 @@ pub fn parse(data: &[u8], version: &Version) -> ParseTblResult {
     match parse_once(data, version) {
         Ok(tbl) => return ParseTblResult::Ok(tbl),
         Err(first_error) => match parse_once_lax(data, version) {
-            (Ok(tbl), warnings) if warnings_are_likely_fine_new(&tbl, version.schemas(), &warnings) => ParseTblResult::Warn { tbl, warnings: warnings },
+            (Ok(tbl), warnings) if warnings_are_likely_fine(&tbl, version.schemas(), &warnings) => ParseTblResult::Warn { tbl, warnings: warnings },
             _ => ParseTblResult::Err(first_error),
         },
     }
@@ -437,11 +295,7 @@ pub fn read_file_with_fixes<P: AsRef<std::path::Path>>(path: P, version: &Versio
     let mut data = match std::fs::read(path) {
         Ok(data) => data,
         Err(err) => {
-            return ReadTblResult::Err(DeserializeError {
-                detail: DeserializeErrorDetail::Io(err),
-                position: None,
-                context: vec![],
-            });
+            return ReadTblResult::Err(ReadError::Io(err));
         }
     };
     if fixes::fix_in_place(version, &mut data).was_fixed() {
