@@ -86,7 +86,7 @@ impl<'a, const PADDING: usize> PaddedUtf8Str<'a, PADDING> {
 
     pub fn from_utf8(bytes_excluding_terminator_or_padding: &'a [u8]) -> Result<Self, PaddedStringError> {
         _ = Self::P;
-        let s = std::str::from_utf8(bytes_excluding_terminator_or_padding).unwrap();
+        let s = std::str::from_utf8(bytes_excluding_terminator_or_padding).map_err(PaddedStringError::Utf8)?;
         check_str(s)?;
         Ok(Self { s })
     }

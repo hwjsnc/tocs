@@ -395,7 +395,10 @@ impl<'a> TblReaderAtomic<'a> {
             }
         }
 
-        Ok(Entry { header: header_ref.to_owned(), values: data })
+        Ok(Entry {
+            header: header_ref.to_owned(),
+            values: data,
+        })
     }
 
     pub fn read_entries(&mut self, expected_total_count: u16, expected_counts: Option<&IndexMap<Header, u32>>) -> Result<std::vec::Vec<Entry>, DeserializeError> {
