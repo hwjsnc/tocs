@@ -49,7 +49,7 @@ pub struct DeserializeError {
     pub context: std::vec::Vec<DeserializeErrorPosition>,
 }
 
-struct TblReaderAtomic<'a> {
+pub struct TblReaderAtomic<'a> {
     inner: MemReader<'a>,
     version: VersionWithoutSchema,
     /// Warning log

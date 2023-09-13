@@ -104,9 +104,9 @@ pub enum DeserializeErrorDetail {
     Ascii,
     Utf8(std::str::Utf8Error, String),
     SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total: u16, sum: Option<u32> },
-    DuplicateHeader(Box<Header>),
-    EntryHeaderNotInTblHeader { missing: Box<Header> },
-    EntryCountDoesNotMatchHeaderEntry { header: Box<Header>, expected: u32, actual: usize },
+    DuplicateHeader(Header),
+    EntryHeaderNotInTblHeader { missing: Header },
+    EntryCountDoesNotMatchHeaderEntry { header: Header, expected: u32, actual: usize },
     EntryDataLengthMismatch { expected: u16, actual: Option<u16> },
     TrailingData,
 }
@@ -388,7 +388,7 @@ fn deserialize_header_counts<F: std::io::Read + std::io::Seek, const STRICT: boo
                 let hdr = e.key();
                 // TODO: make a macro for this pattern:
                 let err = DeserializeError {
-                    detail: DeserializeErrorDetail::DuplicateHeader(Box::new(hdr.clone())),
+                    detail: DeserializeErrorDetail::DuplicateHeader(hdr.clone()),
                     position: f.stream_position().ok(),
                     context: vec![DeserializeErrorPosition::TblHeaderEntry { entry_number: i }],
                 };
@@ -444,7 +444,7 @@ fn deserialize_entry<F: std::io::Read + std::io::Seek, const STRICT: bool, const
     if let Some(allowed) = header_counts {
         if !allowed.contains_key(&hdr) {
             let e = DeserializeError {
-                detail: DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing: Box::new(hdr.clone()) },
+                detail: DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing: hdr.clone() },
                 position: f.stream_position().ok(),
                 context: vec![],
             };
@@ -793,7 +793,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
                 DeserializeErrorDetail::DuplicateHeader(_) => {}
                 DeserializeErrorDetail::EntryHeaderNotInTblHeader { .. } => {}
                 DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, .. } => {
-                    if !schemas.contains_key(header.as_ref()) {
+                    if !schemas.contains_key(header) {
                         return false; // otherwise it's probably fine
                     }
                 }
@@ -814,6 +814,11 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
 
     // seems fine
     true
+}
+
+fn warnings_are_likely_fine_new(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[deser::DeserializeError]) -> bool {
+    let warnings: std::vec::Vec<_> = warnings.iter().cloned().map(new_error_to_old_error).collect();
+    warnings_are_likely_fine(tbl, schemas, &warnings)
 }
 
 pub fn read<F: std::io::Read + std::io::Seek>(f: &mut F, version: &Version) -> ReadTblResult {
@@ -856,6 +861,54 @@ pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, Serialize
     };
     f.flush().map_err(SerializeError::IoError)?;
     Ok(written)
+}
+
+fn new_error_to_old_error(err: deser::DeserializeError) -> DeserializeError {
+    let deser::DeserializeError { detail, position, context };
+    let detail = match err.detail {
+        deser::DeserializeErrorDetail::Eof => DeserializeErrorDetail::Io(std::io::ErrorKind::UnexpectedEof.into()),
+        deser::DeserializeErrorDetail::Ascii => DeserializeErrorDetail::Ascii,
+        deser::DeserializeErrorDetail::Utf8(err, s) => DeserializeErrorDetail::Utf8(err, s.to_string()),
+        deser::DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum } => {
+            DeserializeErrorDetail::SumOfEntryNumbersDiffersFromTotalEntryNumber { expected_total, sum }
+        }
+        deser::DeserializeErrorDetail::DuplicateHeader(header) => DeserializeErrorDetail::DuplicateHeader(header),
+        deser::DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing } => DeserializeErrorDetail::EntryHeaderNotInTblHeader { missing },
+        deser::DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual } => DeserializeErrorDetail::EntryCountDoesNotMatchHeaderEntry { header, expected, actual },
+        deser::DeserializeErrorDetail::EntryDataLengthMismatch { expected, actual } => DeserializeErrorDetail::EntryDataLengthMismatch { expected, actual },
+        deser::DeserializeErrorDetail::UnexpectedNumberOfEntries { expected, actual } => todo!(),
+        deser::DeserializeErrorDetail::TrailingData => DeserializeErrorDetail::TrailingData,
+    };
+    todo!()
+}
+
+pub fn read_once_new(data: &[u8], version: &Version) -> Result<Tbl, deser::DeserializeError> {
+    deser::TblReaderAtomic::new(data, version).read()
+}
+
+pub fn read_once_lax_new(data: &[u8], version: &Version) -> (Result<Tbl, deser::DeserializeError>, std::vec::Vec<deser::DeserializeError>) {
+    let mut warnings = std::vec::Vec::new();
+    let result = deser::TblReaderAtomic::new_lax(data, version, &mut warnings).read();
+    (result, warnings)
+}
+
+// TODO: parse (&[u8]) + read (impl std::io::Read)
+// distinct error types: parse cannot have io errors
+
+pub fn read_new(data: &[u8], version: &Version) -> ReadTblResult {
+    match read_once_new(data, version) {
+        Ok(tbl) => return ReadTblResult::Ok(tbl),
+        Err(first_error) => {
+            let mut warnings = std::vec::Vec::new();
+            match deser::TblReaderAtomic::new_lax(data, version, &mut warnings).read() {
+                Ok(tbl) if warnings_are_likely_fine_new(&tbl, version.schemas(), &warnings) => ReadTblResult::Warn {
+                    tbl,
+                    warnings: warnings.into_iter().map(new_error_to_old_error).collect(),
+                },
+                _ => ReadTblResult::Err(new_error_to_old_error(first_error)),
+            }
+        }
+    }
 }
 
 /// Read a tbl file into memory, apply known fixes, and attempt to parse it.
