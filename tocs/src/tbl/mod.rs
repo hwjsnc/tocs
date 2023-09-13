@@ -6,14 +6,7 @@ pub mod value_conversion;
 
 pub mod fixes;
 
-use indexmap::IndexMap;
 use smallvec::SmallVec;
-
-use itertools::Itertools as _;
-
-use schema::SmallBuf;
-
-use crate::io::{read_bytes, PaddedByteString};
 
 pub use schema::{get_nf1_for_all, AtomicAttributeValues, AtomicSchema, AtomicSchemas, AtomicType, AtomicValue, Attribute, Header, Schema, Schemas, Type, Value};
 pub use ser::{serialize_tbl_v1, serialize_tbl_v2, SerializeError};

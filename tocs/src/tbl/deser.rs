@@ -2,7 +2,7 @@
 // However, it would probably be a better idea to deserialize as (&Schema, Vec<val>).
 // The downside to this is the awful lifetime management in programs with long-lived `Tbl`s.
 
-use crate::io::{MemReader, PaddedAsciiStr, PaddedByteStr, PaddedUtf8Str, PaddedUtf8String};
+use crate::io::{MemReader, PaddedAsciiStr, PaddedByteStr, PaddedUtf8Str};
 
 use super::{AtomicSchemas, AtomicType, AtomicValue, Attribute, Entry, Header, Version, VersionWithoutSchema};
 use crate::tbl::schema::HeaderRef;
@@ -167,10 +167,6 @@ impl<'a> TblReaderAtomic<'a> {
         err
     }
 
-    pub fn warning(&mut self, detail: DeserializeErrorDetail) {
-        _ = self.error(detail);
-    }
-
     pub fn enter_context(&mut self, pos: DeserializeErrorPosition) {
         self.context.push(pos);
     }
@@ -223,7 +219,6 @@ impl<'a> TblReaderAtomic<'a> {
         })
     }
 
-    impl_primitive_read_via_inner! {read_byte, u8, AtomicType::U8}
     impl_primitive_read_via_inner! {read_u8, u8, AtomicType::U8}
     impl_primitive_read_via_inner! {read_i8, i8, AtomicType::I8}
 
@@ -352,7 +347,7 @@ impl<'a> TblReaderAtomic<'a> {
     pub fn read_tbl_entry_data(&mut self, schema: &IndexMap<Attribute, AtomicType>) -> Result<IndexMap<Attribute, AtomicValue>, DeserializeError> {
         self.in_context(DeserializeErrorPosition::EntryData, |this| {
             let mut values = IndexMap::with_capacity(schema.len());
-            for (i, (attr_name, attr_type)) in schema.iter().enumerate() {
+            for (attr_name, attr_type) in schema.iter() {
                 let val = this.in_context(DeserializeErrorPosition::Attribute(attr_name.clone()), |this| this.read_value(*attr_type))?;
                 let previous = values.insert(attr_name.clone(), val);
                 assert!(previous.is_none());
