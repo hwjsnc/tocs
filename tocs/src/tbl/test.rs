@@ -1,4 +1,4 @@
-use super::{read, write, AtomicSchemas, AtomicType, AtomicValue, Attribute, DeserializeError, Entry, Header, ReadTblResult, Tbl, Version, WarningLogger};
+use super::{read, write, AtomicSchemas, AtomicType, AtomicValue, Attribute, DeserializeError, Entry, Header, ReadTblResult, Tbl, Version};
 
 static INIT_LOG: std::sync::Once = std::sync::Once::new();
 
