@@ -113,13 +113,11 @@ fn test_strict_roundtrip_for_game(version: &crate::tbl::Version) {
                 _ = crate::tbl::fixes::fix_in_place(version, &mut raw);
                 raw
             };
-            let mut logger = WarningLogger::<DeserializeError>::new();
-            let tbl = crate::tbl::try_read_once::<_, /*STRICT =*/ true, /*LOG=*/ true>(&mut std::io::Cursor::new(&fixed), &mut logger, version).unwrap();
-            assert!(!logger.has_warnings());
+            let tbl = crate::tbl::read_once_new(&fixed, version).unwrap();
             let serialized = {
-                let mut serialized = std::io::Cursor::new(vec![]);
+                let mut serialized = vec![];
                 let _ = write(&mut serialized, &tbl).unwrap();
-                serialized.into_inner()
+                serialized
             };
             compare_data(&fixed, &serialized);
         }

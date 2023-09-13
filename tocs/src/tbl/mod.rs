@@ -730,7 +730,7 @@ impl ReadTblResult {
     }
 }
 
-pub fn try_read_once<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
+fn try_read_once<F: std::io::Read + std::io::Seek, const STRICT: bool, const LOG: bool>(
     f: &mut F,
     logger: &mut WarningLogger<DeserializeError>,
     version: &Version,
