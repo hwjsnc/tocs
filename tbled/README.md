@@ -58,8 +58,15 @@ You can also use the CSV import/export function for editing:
 
 When importing a CSV, the order of .tbl entries may change relative to the entries that have a different header.
 In a few `.tbl` files (e.g. `t_mstqrt.tbl` and `t_orb.tbl`) this can cause errors!
-At the moment, these files should only be edited in `tbled`, and you should not attempt to add or remove entries.
-(I plan to address this problem in a future version.)
+Do not use the CSV import functionality for these files.
+
+You can also use JSON import/export.
+This will import/export all tbl entries (not restricted to one entry type) and preserve their order.
+Only use JSON files for short-term editing, not as a long-term store.
+The JSON format will change every time the builtin schema changes.
+I will not provide any way to upgrade.
+
+In addition to JSON import/export I plan to redo the UI to expose the order of tbl entries in a future version.
 
 Search / row filters
 --------------------
@@ -106,11 +113,21 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
+### v2.0 (planned)
+
+- planned: new UI that allows proper editing of tbl files with interspersed entry types
+- planned: redo JSON stuff without `serde_json`
+- planned: drop CSV?
+
 ### v1.0 (in development)
+
+###  [v1.0-rc4](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc4/tbled-v1.0-rc4.exe)
 
 - improved schemas for CS2
 - fixed a crash condition that may occur when editing a non-existent cell
 - fixed a performance degradation by updating fltk version
+- JSON import/export for tbl files
+- simplified and improved parser code
 
 ### [v1.0-rc3](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc3/tbled-v1.0-rc3.exe)
 
@@ -175,9 +192,3 @@ Releases (downloads & changelogs)
 ### [v0.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.1/tbled.exe):
 
 - initial public version
-
-Planned features
-----------------
-
-- better (and tested) schemas for Trails into Reverie
-- make a solid manual test plan for the gui before 1.0

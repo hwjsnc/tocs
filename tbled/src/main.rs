@@ -53,6 +53,10 @@ enum Msg {
     ExportCSV,
     /// user wants to import table from csv
     ImportCSV,
+    /// user wants to export tbl to json
+    ExportJson,
+    /// user wants to import tbl from json
+    ImportJson,
     /// user wants to see warnings
     ShowWarnings,
     /// user selected a different header; update the table widget
@@ -241,7 +245,21 @@ impl App {
 
         menu.add_emit("&File/Show warnings...\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Normal, sender.clone(), Msg::ShowWarnings);
 
-        menu.add_emit("&Export/Export to csv...\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Normal, sender.clone(), Msg::ExportCSV);
+        menu.add_emit(
+            "&Export/Export table to csv...\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ExportCSV,
+        );
+
+        menu.add_emit(
+            "&Export/Export tbl to json...\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ExportJson,
+        );
 
         menu.add_emit(
             "&Import/Import from csv...\t",
@@ -249,6 +267,14 @@ impl App {
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
             Msg::ImportCSV,
+        );
+
+        menu.add_emit(
+            "&Import/Import tbl from json...\t",
+            fltk::enums::Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            sender.clone(),
+            Msg::ImportJson,
         );
 
         menu.add_emit("&Edit/Undo\t", fltk::enums::Shortcut::Ctrl | 'u', fltk::menu::MenuFlag::Inactive, sender.clone(), Msg::Undo);
@@ -490,6 +516,47 @@ impl App {
                     fltk::dialog::alert_default("no entry type selected, can't import");
                 }
                 self.update_table();
+            }
+            Some(Msg::ExportJson) => {
+                let AppData { tbl_history, tbl_version, path, .. } = &mut self.state;
+                let tbl = tocs::tbl::Tbl::new(tbl_version, tbl_history.headers().iter().cloned(), tbl_history.all_current_rows().cloned());
+                let Some(path) = misc::save_file_dialog("json", &path.with_extension("json").display().to_string()) else {
+                    return;
+                };
+                match misc::export_json(&path, &tbl) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        fltk::dialog::alert_default(&format!("error exporting to csv: {:?}", e));
+                    }
+                }
+            }
+            Some(Msg::ImportJson) => {
+                // open a file browser dialog to select the file
+                let Some(import_path) = misc::load_file_dialog("json") else { return };
+                // reset state related to tbl data
+                let AppData {
+                    tbl_history,
+                    active_entry_type: _, // handled by update_after_file_reload
+                    selected_attributes,
+                    tbl_version,
+                    path,
+                    warnings,
+                } = &mut self.state;
+                tbl_history.clear_all();
+                selected_attributes.clear();
+                warnings.clear();
+                path.clear();
+                // try loading data from file
+                match misc::import_json(&import_path, tbl_version.schemas()) {
+                    Ok(tbl) => {
+                        *tbl_history = TblStateHistory::new(tbl);
+                    }
+                    Err(e) => {
+                        fltk::dialog::alert_default(&format!("error importing data: {}", e));
+                    }
+                }
+                // we need to update other ui elements
+                self.update_after_file_reload();
             }
             Some(Msg::DifferentHeaderSelected) => {
                 self.update_table();

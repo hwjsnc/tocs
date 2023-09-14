@@ -56,6 +56,17 @@ pub fn export_csv(path: &std::path::Path, schema: &Schema, data: &[AttributeValu
     Ok(())
 }
 
+pub fn export_json(path: &std::path::Path, tbl: &tocs::tbl::Tbl) -> std::io::Result<()> {
+    log::debug!("export tbl to '{}'", path.display());
+    let data = tocs::tbl::tbl_to_json(tbl);
+    std::fs::write(path, data.as_bytes())
+}
+
+pub fn import_json(path: &std::path::Path, schemas: &tocs::tbl::AtomicSchemas) -> std::io::Result<tocs::tbl::Tbl> {
+    let data = std::fs::read(path)?;
+    tocs::tbl::try_tbl_from_json(schemas, data.as_slice()).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+}
+
 pub fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::Vec<AttributeValues>, String> {
     let mut csv = csv::ReaderBuilder::new().has_headers(true).from_path(path).map_err(|e| e.to_string())?;
 
