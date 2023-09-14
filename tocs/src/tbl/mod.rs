@@ -13,7 +13,7 @@ pub use value_conversion::try_atomic_value_from_str;
 #[cfg(feature = "json")]
 mod json;
 #[cfg(feature = "json")]
-pub use json::{schemas_to_json, try_schemas_from_json};
+pub use json::{schemas_to_json, tbl_to_json, try_schemas_from_json, try_tbl_from_json};
 
 #[cfg(all(test, feature = "private-tests"))]
 mod test;
@@ -37,7 +37,7 @@ impl std::fmt::Display for ReadError {
 
 impl std::error::Error for ReadError {}
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum VersionWithoutSchema {
     V1, // no header counts: CS1
     V2, // with header counts: CS2 onwards
@@ -256,6 +256,12 @@ pub fn write<F: std::io::Write>(f: &mut F, tbl: &Tbl) -> Result<usize, Serialize
     };
     f.flush().map_err(SerializeError::IoError)?;
     Ok(written)
+}
+
+pub fn serialize(tbl: &Tbl) -> Result<std::vec::Vec<u8>, SerializeError> {
+    let mut vec = std::vec::Vec::with_capacity(u16::MAX.into());
+    write(&mut vec, tbl)?;
+    Ok(vec)
 }
 
 pub fn parse_once(data: &[u8], version: &Version) -> Result<Tbl, DeserializeError> {
