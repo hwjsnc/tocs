@@ -48,26 +48,32 @@ pub fn parse(data: &[u8]) -> Option<AlDat> {
     let unk2 = reader.read_chunk::<4>()?;
     let script_name = reader.read_c_ascii_str().ok()?;
 
+    println!("offset after script name = 0x{:x}, table list offset = 0x{:?}", reader.offset(), table_list_offset);
+
     // read offsets of table names and data
     reader.set_offset(usize::try_from(table_list_offset).unwrap());
 
     let mut table_name_offsets = std::vec::Vec::with_capacity(n_tables);
     let mut table_data_offsets = std::vec::Vec::with_capacity(n_tables);
 
+    println!("before data offsets 0x{:x}", reader.offset());
     for _ in 0..n_tables {
         let off = reader.read_u32_le()?;
         ensure!(off % 4 == 0);
         table_data_offsets.push(off);
     }
+    println!("after data offsets 0x{:x}", reader.offset());
     for _ in 0..n_tables {
         table_name_offsets.push(reader.read_u16_le()?);
     }
+
+    println!("after name offsets 0x{:x}", reader.offset());
 
     // read table names and contents, record alignments
     let mut tables = std::vec::Vec::with_capacity(n_tables);
     let mut alignment = std::collections::BTreeMap::new();
     for i in 0..n_tables {
-        println!("start {i}");
+        println!("start {i} (name offset 0x{:x})", table_name_offsets[i]);
         let name = reader.clone_at_offset(table_name_offsets[i].try_into().unwrap()).read_c_ascii_str().ok()?;
 
         // we assume the table data is always sorted. it seems to work out.
