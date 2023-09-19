@@ -97,9 +97,7 @@ pub fn serialize(aldat: &AlDat) -> Option<std::vec::Vec<u8>> {
             let padding_len = pad_target - n % pad_target;
             assert!(padding_len > 0);
             writer.write_u8(1);
-            for i in 1..padding_len {
-                writer.write_u8(0);
-            }
+            writer.write_zeros(padding_len - 1);
         } else {
             // last entry
             writer.write_u8(1);

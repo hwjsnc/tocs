@@ -49,6 +49,10 @@ impl MemWriter {
         self.inner.extend_from_slice(s);
     }
 
+    pub fn write_zeros(&mut self, n: usize) {
+        self.inner.resize(self.inner.len() + n, 0u8);
+    }
+
     pub fn write_padded_byte_str<const PADDING: usize>(&mut self, s: PaddedByteStr<'_, PADDING>) {
         s.write_to(&mut self.inner).unwrap(); // writing to vec should not fail
     }
