@@ -5,8 +5,6 @@ use indexmap::IndexMap;
 
 use tocs::tbl::Attribute;
 
-use anyhow::Context as _;
-
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
 #[derive(Debug, Parser)]
 enum Args {
@@ -81,19 +79,16 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
         }
         Ok(())
     };
-    create_tables().context("couldn't create tables").unwrap();
+    create_tables().unwrap();
 
     for direntry in walkdir::WalkDir::new(tblpath.as_ref()).into_iter() {
-        let direntry = direntry.context("error walking directory").unwrap();
+        let direntry = direntry.unwrap();
         let path = direntry.path();
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("tbl")) {
             log::info!("reading file {}", path.display());
             let path_for_db = path.strip_prefix(tblpath.as_ref()).expect("child path should have parent as prefix").display().to_string();
-            let tbl = tocs::tbl::read_file_with_fixes(path, tbl_version)
-                .ignore_warnings()
-                .with_context(|| format!("couldn't parse tbl file {}", path.display()))
-                .unwrap();
-            for (n, entry) in tbl.get_entries().iter().enumerate() {
+            let tbl = tocs::tbl::read_file_with_fixes(path, tbl_version).ignore_warnings().unwrap();
+            for entry in tbl.get_entries().iter() {
                 let insert_result = if tbl_version.schemas().contains_key(&entry.header) {
                     sqlite_insert_unsafe(&tx, entry.header.as_str(), &path_for_db, &entry.values)
                 } else {
@@ -104,14 +99,12 @@ fn tbl_to_new_db<P: AsRef<std::path::Path>>(tblpath: P, dbpath: P, tbl_version: 
                     }
                     sqlite_insert_unsafe(&tx, "generic", &path_for_db, &values_with_header)
                 };
-                insert_result
-                    .with_context(|| format!("couldn't insert entry {} of {} into table", n + 1, tbl_version.schemas().len()))
-                    .unwrap();
+                insert_result.unwrap();
             }
         }
     }
 
-    tx.commit().context("couldn't commit database transaction").unwrap();
+    tx.commit().unwrap();
 }
 
 // WARNING: The following functions could be extremely dangerous in a general settings:
@@ -192,7 +185,7 @@ fn pka_metadata_to_new_db<P: AsRef<std::path::Path>>(pkapath: P, dbpath: P) {
         .unwrap();
     }
 
-    tx.commit().context("couldn't commit database transaction").unwrap();
+    tx.commit().unwrap();
 }
 
 fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
@@ -242,7 +235,7 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
     */
 
     for direntry in walkdir::WalkDir::new(base_path.as_ref()).into_iter() {
-        let direntry = direntry.context("error walking directory").unwrap();
+        let direntry = direntry.unwrap();
         let path = direntry.path();
         if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("dat")) {
             println!("reading file {}", path.display());
@@ -278,5 +271,5 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
         }
     }
 
-    tx.commit().context("couldn't commit database transaction").unwrap();
+    tx.commit().unwrap();
 }
