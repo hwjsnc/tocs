@@ -1,4 +1,4 @@
-use super::{ActionTableEntry, AlDat, AlDatEntry, AlgoTableEntry, ScriptNamePadding};
+use super::{ActionTableEntry, AlgoTableEntry, Script, ScriptEntry, ScriptNamePadding};
 
 use crate::io::MemReader;
 
@@ -23,7 +23,7 @@ fn remove_end_padding_from_entry_data(padded: &[u8]) -> Option<&[u8]> {
     None
 }
 
-pub fn parse(data: &[u8]) -> Option<AlDat> {
+pub fn parse(data: &[u8]) -> Option<Script> {
     let mut reader = MemReader::new(data);
 
     // check magic bytes
@@ -127,10 +127,10 @@ pub fn parse(data: &[u8]) -> Option<AlDat> {
 
         let table = match name.to_str() {
             /*
-            "ActionTable" => AlDatEntry::ActionTable(read_action_table_entries(table_data)?),
-            "AlgoTable" => AlDatEntry::ActionTable(read_action_table_entries(table_data)?),
+            "ActionTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
+            "AlgoTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
             */
-            _ => AlDatEntry::Generic {
+            _ => ScriptEntry::Generic {
                 name: name.to_owned(),
                 data: table_data.to_owned(),
             },
@@ -148,7 +148,7 @@ pub fn parse(data: &[u8]) -> Option<AlDat> {
         ensure!(table_names_end_offset == start_offset as u32 + combined_length_of_entry_names as u32);
     }
 
-    Some(AlDat {
+    Some(Script {
         unk2,
         alignment,
         name: script_name.to_owned(),

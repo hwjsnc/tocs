@@ -10,12 +10,12 @@ pub use ser::serialize;
 use crate::io::{PaddedAsciiStr, PaddedAsciiString, PaddedUtf8String};
 
 #[derive(Debug)]
-pub struct AlDat {
+pub struct Script {
     unk2: [u8; 4],
     name: PaddedAsciiString<1>,
     name_padding: ScriptNamePadding,
     alignment: std::collections::BTreeMap<PaddedAsciiString<1>, usize>, // TODO: builtin known alignments
-    entries: std::vec::Vec<AlDatEntry>,                                 // TODO: BTreeSet? (with name as key)
+    entries: std::vec::Vec<ScriptEntry>,                                // TODO: BTreeSet? (with name as key)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,27 +26,27 @@ enum ScriptNamePadding {
 }
 
 #[derive(Debug)]
-pub enum AlDatEntry {
+pub enum ScriptEntry {
     ActionTable(std::vec::Vec<ActionTableEntry>),
     AlgoTable(std::vec::Vec<AlgoTableEntry>),
     Generic { name: PaddedAsciiString<1>, data: std::vec::Vec<u8> },
 }
 
-impl AlDatEntry {
+impl ScriptEntry {
     pub fn name_len_with_padding(&self) -> usize {
         match self {
-            AlDatEntry::ActionTable { .. } => 12,
-            AlDatEntry::AlgoTable { .. } => 10,
-            AlDatEntry::Generic { name, .. } => name.len_with_padding().get(),
+            ScriptEntry::ActionTable { .. } => 12,
+            ScriptEntry::AlgoTable { .. } => 10,
+            ScriptEntry::Generic { name, .. } => name.len_with_padding().get(),
         }
     }
 
     pub fn name(&self) -> PaddedAsciiStr<'_, 1> {
         match self {
             // TODO: constify PaddedAsciiStr
-            AlDatEntry::ActionTable { .. } => PaddedAsciiStr::new("ActionTable").unwrap(),
-            AlDatEntry::AlgoTable { .. } => PaddedAsciiStr::new("AlgoTable").unwrap(),
-            AlDatEntry::Generic { name, .. } => name.as_padded_ascii_str(),
+            ScriptEntry::ActionTable { .. } => PaddedAsciiStr::new("ActionTable").unwrap(),
+            ScriptEntry::AlgoTable { .. } => PaddedAsciiStr::new("AlgoTable").unwrap(),
+            ScriptEntry::Generic { name, .. } => name.as_padded_ascii_str(),
         }
     }
 }

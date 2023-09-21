@@ -15,4 +15,4 @@ pub mod pkg;
 
 pub mod tbl;
 
-pub mod aldat;
+pub mod script;
