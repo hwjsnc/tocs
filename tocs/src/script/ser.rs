@@ -25,7 +25,6 @@ pub fn serialize(script: &Script) -> Option<std::vec::Vec<u8>> {
         ScriptNamePadding::Once => 33 + script.name.len_with_padding().get() + padding_before_table_list,
         ScriptNamePadding::Twice => 37 + script.name.len_with_padding().get() + padding_before_table_list,
     };
-    println!("ser table_list_offset = 0x{table_list_offset:x}");
     writer.write_u32_le(table_list_offset.try_into().unwrap());
 
     // redundant stuff
@@ -38,7 +37,6 @@ pub fn serialize(script: &Script) -> Option<std::vec::Vec<u8>> {
 
     // calculate table data offsets and name offsets
     let table_names_offset: usize = table_list_offset + 6 * script.entries.len();
-    dbg!(table_names_offset);
     let table_names_end_offset = table_names_offset + script.entries.iter().map(|ent| ent.name_len_with_padding()).sum::<usize>();
     let table_data_padding = if table_names_end_offset % 4 == 0 { 0 } else { 4 - table_names_end_offset % 4 };
     let table_data_offset = table_names_end_offset + table_data_padding;
