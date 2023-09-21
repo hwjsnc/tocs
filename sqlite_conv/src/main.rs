@@ -201,7 +201,6 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
     tx.execute(
         "create table scripts (
     file_name text primary key not null,
-    unk2 blob not null,
     script_name text not null,
     name_padding int not null
 ) strict;",
@@ -244,10 +243,9 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
             let aldat = tocs::script::parse(data.as_slice()).unwrap();
             assert!(tocs::script::serialize(&aldat).unwrap() == data);
             tx.execute(
-                "insert into scripts (file_name, unk2, script_name, name_padding) values (?, ?, ?, ?)",
+                "insert into scripts (file_name, script_name, name_padding) values (?, ?, ?)",
                 [
                     &path_for_db as &dyn rusqlite::types::ToSql,
-                    &aldat.unk2.as_slice() as &dyn rusqlite::types::ToSql,
                     &aldat.name.as_str() as _,
                     match aldat.name_padding {
                         tocs::script::ScriptNamePadding::None => &0,

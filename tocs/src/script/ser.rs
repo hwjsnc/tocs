@@ -42,8 +42,8 @@ pub fn serialize(script: &Script) -> Option<std::vec::Vec<u8>> {
     let table_data_offset = table_names_end_offset + table_data_padding;
     writer.write_u32_le(table_names_end_offset.try_into().unwrap());
 
-    // unknown
-    writer.write_data(script.unk2.as_slice());
+    // magic value
+    writer.write_u32_le(0xabcdef00);
 
     // script name
     writer.write_padded_ascii_str(script.name.as_padded_ascii_str());

@@ -11,7 +11,6 @@ use crate::io::{PaddedAsciiStr, PaddedAsciiString, PaddedUtf8String};
 
 #[derive(Debug)]
 pub struct Script {
-    pub unk2: [u8; 4],
     pub name: PaddedAsciiString<1>,
     pub name_padding: ScriptNamePadding,
     pub alignment: std::collections::BTreeMap<PaddedAsciiString<1>, usize>, // TODO: builtin known alignments

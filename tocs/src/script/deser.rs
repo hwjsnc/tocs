@@ -44,8 +44,10 @@ pub fn parse(data: &[u8]) -> Option<Script> {
     ensure!(n1 == 4 * n_tables_u32);
     ensure!(n2 == table_list_offset + n1);
 
-    // read more
-    let unk2 = reader.read_chunk::<4>()?;
+    // read another magic value
+    let n3 = reader.read_u32_le()?;
+    ensure!(n3 == 0xabcdef00);
+
     let script_name = reader.read_c_ascii_str().ok()?;
 
     // check padding between end of script name and start of table name offsets
@@ -128,7 +130,6 @@ pub fn parse(data: &[u8]) -> Option<Script> {
     }
 
     Some(Script {
-        unk2,
         alignment,
         name: script_name.to_owned(),
         name_padding,
