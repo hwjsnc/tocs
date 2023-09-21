@@ -126,10 +126,8 @@ pub fn parse(data: &[u8]) -> Option<Script> {
         //println!("foo {i}");
 
         let table = match name.to_str() {
-            /*
             "ActionTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
-            "AlgoTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
-            */
+            //"AlgoTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
             _ => ScriptEntry::Generic {
                 name: name.to_owned(),
                 data: table_data.to_owned(),
@@ -165,12 +163,8 @@ pub fn read_action_table_entries(data: &[u8]) -> Option<std::vec::Vec<ActionTabl
     let mut reader = MemReader::new(data);
     let mut entries = std::vec::Vec::with_capacity(data.len() / 212);
 
-    loop {
+    while !reader.at_end() {
         let id = reader.read_i16_le()?;
-        if id == 1 {
-            ensure!(reader.rest() == &[0, 0]);
-            break;
-        }
 
         let unk1 = reader.read_u16_le()?;
         let unk2 = reader.read_chunk::<4>()?;

@@ -143,8 +143,51 @@ impl ScriptEntry {
 }
 
 impl ActionTableEntry {
-    fn serialize_data(&self, vec: &mut MemWriter) -> Option<()> {
-        todo!()
+    fn serialize_data(&self, writer: &mut MemWriter) -> Option<()> {
+        let Self {
+            id,
+            unk1,
+            unk2,
+            unk3,
+            unk4,
+            unk5,
+            unk10,
+            unk11,
+            unk12,
+            unk13,
+            unk14,
+            unk15,
+            unk16,
+            unk17,
+            unk18,
+            unk19,
+            flags,
+            animation,
+            name,
+        } = self;
+        writer.write_i16_le(*id);
+        writer.write_u16_le(*unk1);
+        writer.write_data(unk2.as_slice());
+        writer.write_f32_le(*unk3);
+        writer.write_f32_le(*unk4);
+        writer.write_f32_le(*unk5);
+        writer.write_data(unk10.as_slice());
+        writer.write_u16_le(*unk11);
+        writer.write_u16_le(*unk12);
+        writer.write_u16_le(*unk13);
+        writer.write_u16_le(*unk14);
+        writer.write_u16_le(*unk15);
+        writer.write_u16_le(*unk16);
+        for x in unk17 {
+            writer.write_i32_le(*x);
+        }
+        writer.write_u16_le(*unk18);
+        writer.write_u16_le(*unk19);
+        writer.write_padded_ascii_str(flags.as_padded_ascii_str());
+        writer.write_padded_utf8_str(animation.as_padded_utf8_str());
+        writer.write_padded_utf8_str(name.as_padded_utf8_str());
+
+        Some(())
     }
 }
 
@@ -157,8 +200,8 @@ impl AlgoTableEntry {
 impl ScriptEntry {
     fn data_len(&self) -> usize {
         match self {
-            ScriptEntry::ActionTable { .. } => 212,
-            ScriptEntry::AlgoTable { .. } => 32,
+            ScriptEntry::ActionTable(entries) => 212 * entries.len(),
+            ScriptEntry::AlgoTable(entries) => 32 * entries.len(),
             ScriptEntry::Generic { name: _, data } => data.len(),
         }
     }
