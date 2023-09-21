@@ -17,6 +17,7 @@ Here's a short overview:
   - serialization and deserialization of tbl files for all Cold Steel games including Reverie.
   - packing/unpacking .pkg and .pka asset files
   - decoding BC7 textures (preliminary, barely tested)
+  - serialization and deserialization of script files for Trails into Reverie (preliminary)
 
   If you want to programmatically modify tbl or pkg/pka files in Rust, this is what you want.
 
