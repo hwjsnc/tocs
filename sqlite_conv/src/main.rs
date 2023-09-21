@@ -219,19 +219,80 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
     )
     .unwrap();
 
-    /*
-        tx.execute("create table ActionTable (
-        file_name text not null,
-        TODO
-        foreign key(file_name) references scripts(file_name)
-    ) strict;", []).unwrap();
+    tx.execute(
+        "create table ActionTable (
+    file_name text not null,
+    id int,
+    unk1 int,
+    unk2 blob,
+    unk3 real,
+    unk4 real,
+    unk5 real,
+    unk10 blob,
+    unk11 int,
+    unk12 int,
+    unk13 int,
+    unk14 int,
+    unk15 int,
+    unk16 int,
+    unk17_1 int,
+    unk17_2 int,
+    unk17_3 int,
+    unk17_4 int,
+    unk17_5 int,
+    unk17_6 int,
+    unk17_7 int,
+    unk17_8 int,
+    unk17_9 int,
+    unk17_10 int,
+    unk17_11 int,
+    unk17_12 int,
+    unk17_13 int,
+    unk17_14 int,
+    unk17_15 int,
+    unk18 int,
+    unk19 int,
+    flags text,
+    animation text,
+    name text,
+    foreign key(file_name) references scripts(file_name)
+) strict;",
+        [],
+    )
+    .unwrap();
 
-        tx.execute("create table AlgoTable (
-        file_name text not null,
-        TODO
-        foreign key(file_name) references scripts(file_name)
-    ) strict;", []).unwrap();
-    */
+    tx.execute(
+        "create table AlgoTable (
+    file_name text not null,
+    action_or_magic_id int,
+    condition int,
+    chance int,
+    use_limit int,
+    target_type int,
+    unk_byte_1 int,
+    unk_byte_2 int,
+    param_1 int,
+    param_2 int,
+    param_3 int,
+    param_4 int,
+    param_5 int,
+    param_6 int,
+    foreign key(file_name) references scripts(file_name)
+) strict;",
+        [],
+    )
+    .unwrap();
+
+    tx.execute(
+        "create table generic_entry (
+    file_name text not null,
+    name text not null,
+    data blob not null,
+    foreign key(file_name) references scripts(file_name)
+) strict;",
+        [],
+    )
+    .unwrap();
 
     for direntry in walkdir::WalkDir::new(base_path.as_ref()).into_iter() {
         let direntry = direntry.unwrap();
@@ -255,7 +316,7 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
                 ],
             )
             .unwrap();
-            for entry in aldat.entries {
+            for entry in aldat.entries.iter() {
                 tx.execute(
                     "insert into script_entries (file_name, alignment, entry_name) values (?, ?, ?)",
                     [
@@ -265,9 +326,123 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
                     ],
                 )
                 .unwrap();
+                insert_script_entry_data(&tx, &path_for_db, entry);
             }
         }
     }
 
     tx.commit().unwrap();
+}
+
+fn insert_script_entry_data(tx: &rusqlite::Transaction, script_name: &str, entry: &tocs::script::ScriptEntry) {
+    use tocs::script::{ActionTableEntry, AlgoTableEntry, ScriptEntry};
+
+    match entry {
+        ScriptEntry::ActionTable(entries) => {
+            for ActionTableEntry {
+                id,
+                unk1,
+                unk2,
+                unk3,
+                unk4,
+                unk5,
+                unk10,
+                unk11,
+                unk12,
+                unk13,
+                unk14,
+                unk15,
+                unk16,
+                unk17,
+                unk18,
+                unk19,
+                flags,
+                animation,
+                name,
+            } in entries
+            {
+                tx.execute(
+                    "insert into ActionTable values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    &[
+                        &script_name as &dyn rusqlite::types::ToSql,
+                        &id as _,
+                        &unk1 as _,
+                        &unk2 as _,
+                        &unk3 as _,
+                        &unk4 as _,
+                        &unk5 as _,
+                        &unk10 as _,
+                        &unk11 as _,
+                        &unk12 as _,
+                        &unk13 as _,
+                        &unk14 as _,
+                        &unk15 as _,
+                        &unk16 as _,
+                        &unk17[0] as _,
+                        &unk17[1] as _,
+                        &unk17[2] as _,
+                        &unk17[3] as _,
+                        &unk17[4] as _,
+                        &unk17[5] as _,
+                        &unk17[6] as _,
+                        &unk17[7] as _,
+                        &unk17[8] as _,
+                        &unk17[9] as _,
+                        &unk17[10] as _,
+                        &unk17[11] as _,
+                        &unk17[12] as _,
+                        &unk17[13] as _,
+                        &unk17[14] as _,
+                        &unk18 as _,
+                        &unk19 as _,
+                        &flags.as_str() as _,
+                        &animation.as_str() as _,
+                        &name.as_str() as _,
+                    ] as &[_],
+                )
+                .unwrap();
+            }
+        }
+        ScriptEntry::AlgoTable(entries) => {
+            for AlgoTableEntry {
+                action_or_magic_id,
+                condition,
+                chance,
+                use_limit,
+                target_type,
+                unk_byte_1,
+                unk_byte_2,
+                params,
+            } in entries
+            {
+                tx.execute(
+                    "insert into AlgoTable values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    &[
+                        &script_name as &dyn rusqlite::types::ToSql,
+                        &action_or_magic_id as _,
+                        &condition as &_,
+                        &chance as &_,
+                        &use_limit as &_,
+                        &target_type as &_,
+                        &unk_byte_1 as &_,
+                        &unk_byte_2 as &_,
+                        &params[0] as &_,
+                        &params[1] as &_,
+                        &params[2] as &_,
+                        &params[3] as &_,
+                        &params[4] as &_,
+                        &params[5] as &_,
+                    ] as &[_],
+                )
+                .unwrap();
+            }
+        }
+        ScriptEntry::Generic { name, data } => {
+            tx.execute(
+                "insert into generic_entry values (?, ?, ?)",
+                [&script_name as &dyn rusqlite::types::ToSql, &name.as_str() as _, &data.as_slice() as _],
+            )
+            .unwrap();
+        }
+    }
 }
