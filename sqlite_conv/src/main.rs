@@ -33,6 +33,15 @@ enum Args {
         #[arg(long)]
         db_path: std::path::PathBuf,
     },
+    /// Convert a folder of script files to a sqlite database (Reverie only)
+    Scripts_to_Sql {
+        /// path of the script folder
+        #[arg(long)]
+        script_path: std::path::PathBuf,
+        /// path of the new database file
+        #[arg(long)]
+        db_path: std::path::PathBuf,
+    },
 }
 
 pub fn main() {
@@ -44,6 +53,9 @@ pub fn main() {
         }
         Args::Pka_to_Sql { pka_path, db_path } => {
             pka_metadata_to_new_db(&pka_path, &db_path);
+        }
+        Args::Scripts_to_Sql { script_path, db_path } => {
+            scripts_to_new_db(&script_path, &db_path);
         }
     }
 }
@@ -178,6 +190,92 @@ fn pka_metadata_to_new_db<P: AsRef<std::path::Path>>(pkapath: P, dbpath: P) {
             rusqlite::params![hash.hash, hash.offset, hash.compressed_size, hash.decompressed_size, hash.compression.to_string()],
         )
         .unwrap();
+    }
+
+    tx.commit().context("couldn't commit database transaction").unwrap();
+}
+
+fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
+    if dbpath.as_ref().exists() {
+        panic!("database output path {} exists, refusing to overwrite.", dbpath.as_ref().display());
+    }
+
+    let mut db = rusqlite::Connection::open(dbpath).expect("opening new database file");
+    db.execute("pragma foreign_keys = on", []).unwrap();
+
+    let tx = db.transaction().unwrap();
+
+    tx.execute(
+        "create table scripts (
+    file_name text primary key not null,
+    unk2 blob not null,
+    script_name text not null,
+    name_padding int not null
+) strict;",
+        [],
+    )
+    .unwrap();
+
+    tx.execute(
+        "create table script_entries (
+    file_name text not null,
+    alignment int not null,
+    entry_name text not null,
+    foreign key(file_name) references scripts(file_name)
+) strict;",
+        [],
+    )
+    .unwrap();
+
+    /*
+        tx.execute("create table ActionTable (
+        file_name text not null,
+        TODO
+        foreign key(file_name) references scripts(file_name)
+    ) strict;", []).unwrap();
+
+        tx.execute("create table AlgoTable (
+        file_name text not null,
+        TODO
+        foreign key(file_name) references scripts(file_name)
+    ) strict;", []).unwrap();
+    */
+
+    for direntry in walkdir::WalkDir::new(base_path.as_ref()).into_iter() {
+        let direntry = direntry.context("error walking directory").unwrap();
+        let path = direntry.path();
+        if direntry.file_type().is_file() && path.extension() == Some(std::ffi::OsStr::new("dat")) {
+            println!("reading file {}", path.display());
+            let path_for_db = path.strip_prefix(base_path.as_ref()).expect("child path should have parent as prefix").display().to_string();
+            let data = std::fs::read(path).unwrap();
+            let aldat = tocs::script::parse(data.as_slice()).unwrap();
+            assert!(tocs::script::serialize(&aldat).unwrap() == data);
+            tx.execute(
+                "insert into scripts (file_name, unk2, script_name, name_padding) values (?, ?, ?, ?)",
+                [
+                    &path_for_db as &dyn rusqlite::types::ToSql,
+                    &aldat.unk2.as_slice() as &dyn rusqlite::types::ToSql,
+                    &aldat.name.as_str() as _,
+                    match aldat.name_padding {
+                        tocs::script::ScriptNamePadding::None => &0,
+                        tocs::script::ScriptNamePadding::Once => &1,
+                        tocs::script::ScriptNamePadding::Twice => &2,
+                    },
+                ],
+            )
+            .unwrap();
+            for entry in aldat.entries {
+                tx.execute(
+                    "insert into script_entries (file_name, alignment, entry_name) values (?, ?, ?)",
+                    [
+                        &path_for_db as &dyn rusqlite::types::ToSql,
+                        aldat.alignment.get(&entry.name().to_owned()).unwrap() as _,
+                        &entry.name().to_str() as _,
+                    ],
+                )
+                .unwrap();
+            }
+        }
     }
 
     tx.commit().context("couldn't commit database transaction").unwrap();

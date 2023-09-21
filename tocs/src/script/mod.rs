@@ -11,15 +11,15 @@ use crate::io::{PaddedAsciiStr, PaddedAsciiString, PaddedUtf8String};
 
 #[derive(Debug)]
 pub struct Script {
-    unk2: [u8; 4],
-    name: PaddedAsciiString<1>,
-    name_padding: ScriptNamePadding,
-    alignment: std::collections::BTreeMap<PaddedAsciiString<1>, usize>, // TODO: builtin known alignments
-    entries: std::vec::Vec<ScriptEntry>,                                // TODO: BTreeSet? (with name as key)
+    pub unk2: [u8; 4],
+    pub name: PaddedAsciiString<1>,
+    pub name_padding: ScriptNamePadding,
+    pub alignment: std::collections::BTreeMap<PaddedAsciiString<1>, usize>, // TODO: builtin known alignments
+    pub entries: std::vec::Vec<ScriptEntry>,                                // TODO: BTreeSet? (with name as key)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ScriptNamePadding {
+pub enum ScriptNamePadding {
     None,
     Once,
     Twice,
