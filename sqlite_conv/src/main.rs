@@ -7,7 +7,7 @@ use tocs::tbl::Attribute;
 
 use anyhow::Context as _;
 
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
 #[derive(Debug, Parser)]
 enum Args {
     /// Convert a folder of tbl files to a sqlite database

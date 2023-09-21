@@ -5,6 +5,7 @@ pub struct MemWriter {
 }
 
 impl MemWriter {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::with_capacity(0)
     }
@@ -28,6 +29,7 @@ impl MemWriter {
 macro_rules! write_primitive {
     ($f:ident, $t:ty) => {
         #[inline(always)]
+        #[allow(dead_code)]
         pub fn $f(&mut self, x: $t) {
             self.inner.extend_from_slice(&x.to_le_bytes());
         }
@@ -53,6 +55,7 @@ impl MemWriter {
         self.inner.resize(self.inner.len() + n, 0u8);
     }
 
+    #[allow(dead_code)]
     pub fn write_padded_byte_str<const PADDING: usize>(&mut self, s: PaddedByteStr<'_, PADDING>) {
         s.write_to(&mut self.inner).unwrap(); // writing to vec should not fail
     }
