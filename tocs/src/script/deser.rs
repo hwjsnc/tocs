@@ -127,7 +127,7 @@ pub fn parse(data: &[u8]) -> Option<Script> {
 
         let table = match name.to_str() {
             "ActionTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
-            //"AlgoTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
+            "AlgoTable" => ScriptEntry::AlgoTable(read_algo_table_entries(table_data)?),
             _ => ScriptEntry::Generic {
                 name: name.to_owned(),
                 data: table_data.to_owned(),
@@ -236,7 +236,7 @@ pub fn read_algo_table_entries(data: &[u8]) -> Option<std::vec::Vec<AlgoTableEnt
     let mut reader = MemReader::new(data);
     let mut entries = std::vec::Vec::with_capacity(data.len() / 32);
 
-    while reader.offset() + 32 < data.len() {
+    while !reader.at_end() {
         let action_or_magic_id = reader.read_i16_le()?;
         let condition = reader.read_byte()?;
         let chance = reader.read_byte()?;
@@ -260,10 +260,6 @@ pub fn read_algo_table_entries(data: &[u8]) -> Option<std::vec::Vec<AlgoTableEnt
             params,
         });
     }
-
-    // check final padding
-    ensure!(reader.read_byte()? == 1);
-    ensure!(reader.rest().iter().copied().all(|b| b == 0));
 
     Some(entries)
 }

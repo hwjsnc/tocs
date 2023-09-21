@@ -192,8 +192,28 @@ impl ActionTableEntry {
 }
 
 impl AlgoTableEntry {
-    fn serialize_data(&self, vec: &mut MemWriter) -> Option<()> {
-        todo!()
+    fn serialize_data(&self, writer: &mut MemWriter) -> Option<()> {
+        let Self {
+            action_or_magic_id,
+            condition,
+            chance,
+            use_limit,
+            target_type,
+            unk_byte_1,
+            unk_byte_2,
+            params,
+        } = self;
+        writer.write_i16_le(*action_or_magic_id);
+        writer.write_u8(*condition);
+        writer.write_u8(*chance);
+        writer.write_u8(*use_limit);
+        writer.write_u8(*target_type);
+        writer.write_u8(*unk_byte_1);
+        writer.write_u8(*unk_byte_2);
+        for x in params {
+            writer.write_u32_le(*x);
+        }
+        Some(())
     }
 }
 
