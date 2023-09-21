@@ -13,8 +13,16 @@ use crate::io::{PaddedAsciiStr, PaddedAsciiString, PaddedUtf8String};
 pub struct AlDat {
     unk2: [u8; 4],
     name: PaddedAsciiString<1>,
+    name_padding: ScriptNamePadding,
     alignment: std::collections::BTreeMap<PaddedAsciiString<1>, usize>, // TODO: builtin known alignments
     entries: std::vec::Vec<AlDatEntry>,                                 // TODO: BTreeSet? (with name as key)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptNamePadding {
+    None,
+    Once,
+    Twice,
 }
 
 #[derive(Debug)]

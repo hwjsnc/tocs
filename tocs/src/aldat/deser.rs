@@ -1,4 +1,4 @@
-use super::{ActionTableEntry, AlDat, AlDatEntry, AlgoTableEntry};
+use super::{ActionTableEntry, AlDat, AlDatEntry, AlgoTableEntry, ScriptNamePadding};
 
 use crate::io::MemReader;
 
@@ -49,6 +49,36 @@ pub fn parse(data: &[u8]) -> Option<AlDat> {
     let script_name = reader.read_c_ascii_str().ok()?;
 
     println!("offset after script name = 0x{:x}, table list offset = 0x{:?}", reader.offset(), table_list_offset);
+
+    // check padding between end of script name and start of table name offsets
+    let name_padding = {
+        let script_padding = data.get(reader.offset()..usize::try_from(table_list_offset).unwrap())?;
+        // count 0x00 bytes, 0xff bytes, other bytes
+        let mut zero = 0;
+        let mut ff = 0;
+        let mut other = 0;
+        for x in script_padding {
+            match *x {
+                0 => zero += 1,
+                0xff => ff += 1,
+                _ => other += 1,
+            }
+        }
+        // we expect one of three patterns:
+        // - null bytes, followed by 0xff (the most common case; there are at least 2 null bytes but we don't check that)
+        // - null bytes, followed by 0xff, followed by [0x00, 0x00, 0x00, 0xff]
+        // - no padding at all
+        ensure!(other == 0);
+        if ff == 0 && zero == 0 {
+            ScriptNamePadding::None
+        } else if ff == 1 {
+            ScriptNamePadding::Once
+        } else if ff == 2 && zero >= 3 {
+            ScriptNamePadding::Twice
+        } else {
+            return None;
+        }
+    };
 
     // read offsets of table names and data
     reader.set_offset(usize::try_from(table_list_offset).unwrap());
@@ -122,6 +152,7 @@ pub fn parse(data: &[u8]) -> Option<AlDat> {
         unk2,
         alignment,
         name: script_name.to_owned(),
+        name_padding,
         entries: tables,
     })
 }

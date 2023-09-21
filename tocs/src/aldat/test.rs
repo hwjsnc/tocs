@@ -12,32 +12,7 @@ fn compare_data(expected: &[u8], actual: &[u8]) {
 
 #[test]
 fn test_scripts_reverie() {
-    let roundtrip_fails: std::collections::BTreeSet<&'static str> = [
-        "ani/dat_en/chr003_mg16.dat",
-        "ani/dat_en/chr970_c00.dat",
-        "ani/dat_en/mon000s.dat",
-        "ani/dat_en/mon027_c00.dat",
-        "ani/dat_en/mon037_c00.dat",
-        "ani/dat_en/mon042_c00.dat",
-        "ani/dat_en/mon042_c01.dat",
-        "ani/dat_en/mon046_c00.dat",
-        "ani/dat_en/mon093.dat",
-        "ani/dat_en/mon426.dat",
-        "ani/dat_en/mon_171.dat",
-        "ani/dat_en/mon_template.dat",
-        "ani/dat_en/npcx00.dat",
-        "ani/dat_en/npcx02.dat",
-        "ani/dat_en/npcx03.dat",
-        "ani/dat_en/npcx04.dat",
-        "ani/dat_en/ply000.dat",
-        "ani/dat_en/rob030.dat",
-        "ani/dat_en/chr_enemy_template.dat",
-        "ani/dat_en/rob013_c00.dat",
-        "ani/dat_en/ply001.dat",
-        "scena/dat_en/a0106.dat",
-    ]
-    .into_iter()
-    .collect();
+    let roundtrip_fails: std::collections::BTreeSet<&'static str> = [].into_iter().collect();
 
     let base = std::path::Path::new("private-test-data/cs5/nisa-pc-1.0.6/scripts/");
     for script_folder_dirent in std::fs::read_dir(base).unwrap() {

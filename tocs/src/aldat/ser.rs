@@ -1,4 +1,4 @@
-use super::{ActionTableEntry, AlDat, AlDatEntry, AlgoTableEntry};
+use super::{ActionTableEntry, AlDat, AlDatEntry, AlgoTableEntry, ScriptNamePadding};
 use crate::io::MemWriter;
 
 pub fn serialize(aldat: &AlDat) -> Option<std::vec::Vec<u8>> {
@@ -8,6 +8,7 @@ pub fn serialize(aldat: &AlDat) -> Option<std::vec::Vec<u8>> {
     writer.write_data(&[0x20, 0, 0, 0, 0x20, 0, 0, 0]);
 
     // offset of the table list - the name is padded such that it is a multiple of 4
+    // Note: this value is only relevant if aldat.name_padding != None
     let padding_before_table_list = {
         // for no discernible reason, the padding is at least 3 and the last pad byte is 0xff
         let n = aldat.name.len_with_padding().get() + 1; // + 1 for the 0xff byte which is there for some reason???
@@ -19,7 +20,11 @@ pub fn serialize(aldat: &AlDat) -> Option<std::vec::Vec<u8>> {
         p
     };
 
-    let table_list_offset: usize = 33 + aldat.name.len_with_padding().get() + padding_before_table_list;
+    let table_list_offset: usize = match aldat.name_padding {
+        ScriptNamePadding::None => 32 + aldat.name.len_with_padding().get(),
+        ScriptNamePadding::Once => 33 + aldat.name.len_with_padding().get() + padding_before_table_list,
+        ScriptNamePadding::Twice => 37 + aldat.name.len_with_padding().get() + padding_before_table_list,
+    };
     println!("ser table_list_offset = 0x{table_list_offset:x}");
     writer.write_u32_le(table_list_offset.try_into().unwrap());
 
@@ -46,11 +51,18 @@ pub fn serialize(aldat: &AlDat) -> Option<std::vec::Vec<u8>> {
     writer.write_padded_ascii_str(aldat.name.as_padded_ascii_str());
 
     // padding
-    if padding_before_table_list != 0 {
-        let buf = [0u8; 8];
-        writer.write_data(&buf[..padding_before_table_list]);
+    if aldat.name_padding != ScriptNamePadding::None {
+        if padding_before_table_list != 0 {
+            let buf = [0u8; 8];
+            writer.write_data(&buf[..padding_before_table_list]);
+        }
+        writer.write_u8(0xff);
     }
-    writer.write_u8(0xff);
+    if aldat.name_padding == ScriptNamePadding::Twice {
+        writer.write_data([0, 0, 0, 0xff].as_slice());
+    }
+
+    assert_eq!(writer.len(), table_list_offset);
 
     {
         // table data offsets
