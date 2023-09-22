@@ -144,43 +144,42 @@ impl ActionTableEntry {
     fn serialize_data(&self, writer: &mut MemWriter) -> Option<()> {
         let Self {
             id,
-            unk1,
-            unk2,
-            unk3,
+            category,
+            target_type,
+            target_range,
+            target_size,
             unk4,
             unk5,
+            unk6,
+            cast_delay,
+            recovery_delay,
+            effects,
             unk10,
-            unk11,
-            unk12,
-            unk13,
-            unk14,
-            unk15,
-            unk16,
-            unk17,
             unk18,
-            unk19,
             flags,
             animation,
             name,
         } = self;
         writer.write_i16_le(*id);
-        writer.write_u16_le(*unk1);
-        writer.write_data(unk2.as_slice());
-        writer.write_f32_le(*unk3);
+        writer.write_u16_le(*category);
+        writer.write_u8(*target_type);
+        writer.write_u8(*target_range);
+        writer.write_u16_le(*target_size);
         writer.write_f32_le(*unk4);
         writer.write_f32_le(*unk5);
-        writer.write_data(unk10.as_slice());
-        writer.write_u16_le(*unk11);
-        writer.write_u16_le(*unk12);
-        writer.write_u16_le(*unk13);
-        writer.write_u16_le(*unk14);
-        writer.write_u16_le(*unk15);
-        writer.write_u16_le(*unk16);
-        for x in unk17 {
-            writer.write_i32_le(*x);
+        writer.write_f32_le(*unk6);
+        writer.write_u16_le(*cast_delay);
+        writer.write_u16_le(*recovery_delay);
+        for eff in effects.iter() {
+            writer.write_u16_le(eff.id);
         }
-        writer.write_u16_le(*unk18);
-        writer.write_u16_le(*unk19);
+        writer.write_u16_le(*unk10);
+        for eff in effects.iter() {
+            for param in eff.parameters {
+                writer.write_i32_le(param);
+            }
+        }
+        writer.write_u32_le(*unk18);
         writer.write_padded_ascii_str(flags.as_padded_ascii_str());
         writer.write_padded_utf8_str(animation.as_padded_utf8_str());
         writer.write_padded_utf8_str(name.as_padded_utf8_str());
@@ -196,21 +195,29 @@ impl AlgoTableEntry {
             condition,
             chance,
             use_limit,
-            target_type,
+            target_priority,
             unk_byte_1,
             unk_byte_2,
-            params,
+            cond_param_1,
+            cond_param_2,
+            cond_param_3,
+            target_param,
+            use_limit_after_retry,
+            unk6,
         } = self;
         writer.write_i16_le(*action_or_magic_id);
         writer.write_u8(*condition);
         writer.write_u8(*chance);
         writer.write_u8(*use_limit);
-        writer.write_u8(*target_type);
+        writer.write_u8(*target_priority);
         writer.write_u8(*unk_byte_1);
         writer.write_u8(*unk_byte_2);
-        for x in params {
-            writer.write_u32_le(*x);
-        }
+        writer.write_u32_le(*cond_param_1);
+        writer.write_u32_le(*cond_param_2);
+        writer.write_u32_le(*cond_param_3);
+        writer.write_u32_le(*target_param);
+        writer.write_u32_le(*use_limit_after_retry);
+        writer.write_u32_le(*unk6);
         Some(())
     }
 }

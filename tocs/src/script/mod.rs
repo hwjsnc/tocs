@@ -53,29 +53,32 @@ impl ScriptEntry {
 #[derive(Debug)]
 pub struct ActionTableEntry {
     pub id: i16,
-    pub unk1: u16,
-    pub unk2: [u8; 4],
-    pub unk3: f32,
+    pub category: u16,
+    pub target_type: u8,
+    pub target_range: u8,
+    pub target_size: u16,
+
     pub unk4: f32,
     pub unk5: f32,
+    pub unk6: f32,
 
-    pub unk10: [u8; 4],
+    pub cast_delay: u16,
+    pub recovery_delay: u16,
 
-    pub unk11: u16,
-    pub unk12: u16,
-    pub unk13: u16,
-    pub unk14: u16,
-    pub unk15: u16,
-    pub unk16: u16,
+    pub effects: [Effect; 5],
+    pub unk10: u16,
 
-    pub unk17: [i32; 15],
-
-    pub unk18: u16,
-    pub unk19: u16,
+    pub unk18: u32, // cost?
 
     pub flags: PaddedAsciiString<16>,
     pub animation: PaddedUtf8String<32>,
     pub name: PaddedUtf8String<64>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Effect {
+    pub id: u16,
+    pub parameters: [i32; 3],
 }
 
 #[derive(Debug)]
@@ -84,8 +87,13 @@ pub struct AlgoTableEntry {
     pub condition: u8,
     pub chance: u8,
     pub use_limit: u8,
-    pub target_type: u8,
+    pub target_priority: u8,
     pub unk_byte_1: u8,
     pub unk_byte_2: u8,
-    pub params: [u32; 6],
+    pub cond_param_1: u32,
+    pub cond_param_2: u32,
+    pub cond_param_3: u32,
+    pub target_param: u32,
+    pub use_limit_after_retry: u32,
+    pub unk6: u32,
 }

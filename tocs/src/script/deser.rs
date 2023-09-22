@@ -1,4 +1,4 @@
-use super::{ActionTableEntry, AlgoTableEntry, Script, ScriptEntry, ScriptNamePadding};
+use super::{ActionTableEntry, AlgoTableEntry, Effect, Script, ScriptEntry, ScriptNamePadding};
 
 use crate::io::MemReader;
 
@@ -147,42 +147,53 @@ pub fn read_action_table_entries(data: &[u8]) -> Option<std::vec::Vec<ActionTabl
 
     while !reader.at_end() {
         let id = reader.read_i16_le()?;
+        let category = reader.read_u16_le()?;
 
-        let unk1 = reader.read_u16_le()?;
-        let unk2 = reader.read_chunk::<4>()?;
-        let unk3 = reader.read_f32_le()?;
+        let target_type = reader.read_u8()?;
+        let target_range = reader.read_u8()?;
+        let target_size = reader.read_u16_le()?;
+
         let unk4 = reader.read_f32_le()?;
         let unk5 = reader.read_f32_le()?;
+        let unk6 = reader.read_f32_le()?;
 
-        let unk10 = reader.read_chunk::<4>()?;
+        let cast_delay = reader.read_u16_le()?;
+        let recovery_delay = reader.read_u16_le()?;
 
-        let unk11 = reader.read_u16_le()?;
-        let unk12 = reader.read_u16_le()?;
-        let unk13 = reader.read_u16_le()?;
-        let unk14 = reader.read_u16_le()?;
-        let unk15 = reader.read_u16_le()?;
-        let unk16 = reader.read_u16_le()?;
+        let mut effect_ids = <[u16; 5]>::default();
+        let mut all_parameters = <[i32; 15]>::default();
+        for id in effect_ids.iter_mut() {
+            *id = reader.read_u16_le()?;
+        }
+        let unk10 = reader.read_u16_le()?;
+        for param in all_parameters.iter_mut() {
+            *param = reader.read_i32_le()?;
+        }
 
-        let unk17: [i32; 15] = [
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
-            reader.read_i32_le()?,
+        let effects = [
+            Effect {
+                id: effect_ids[0],
+                parameters: [all_parameters[0], all_parameters[1], all_parameters[2]],
+            },
+            Effect {
+                id: effect_ids[1],
+                parameters: [all_parameters[3], all_parameters[4], all_parameters[5]],
+            },
+            Effect {
+                id: effect_ids[2],
+                parameters: [all_parameters[6], all_parameters[7], all_parameters[8]],
+            },
+            Effect {
+                id: effect_ids[3],
+                parameters: [all_parameters[9], all_parameters[10], all_parameters[11]],
+            },
+            Effect {
+                id: effect_ids[4],
+                parameters: [all_parameters[12], all_parameters[13], all_parameters[14]],
+            },
         ];
 
-        let unk18 = reader.read_u16_le()?;
-        let unk19 = reader.read_u16_le()?;
+        let unk18 = reader.read_u32_le()?;
 
         let flags = reader.read_padded_ascii_str::<16>().ok()?.to_owned();
         let animation = reader.read_padded_utf8_str::<32>().ok()?.to_owned();
@@ -190,21 +201,18 @@ pub fn read_action_table_entries(data: &[u8]) -> Option<std::vec::Vec<ActionTabl
 
         entries.push(ActionTableEntry {
             id,
-            unk1,
-            unk2,
-            unk3,
+            category,
+            target_type,
+            target_range,
+            target_size,
             unk4,
             unk5,
+            unk6,
+            cast_delay,
+            recovery_delay,
+            effects,
             unk10,
-            unk11,
-            unk12,
-            unk13,
-            unk14,
-            unk15,
-            unk16,
-            unk17,
             unk18,
-            unk19,
             flags,
             animation,
             name,
@@ -223,23 +231,30 @@ pub fn read_algo_table_entries(data: &[u8]) -> Option<std::vec::Vec<AlgoTableEnt
         let condition = reader.read_byte()?;
         let chance = reader.read_byte()?;
         let use_limit = reader.read_byte()?;
-        let target_type = reader.read_byte()?;
+        let target_priority = reader.read_byte()?;
         let unk_byte_1 = reader.read_byte()?;
         let unk_byte_2 = reader.read_byte()?;
-        let mut params = [0u32; 6];
-        for x in params.iter_mut() {
-            *x = reader.read_u32_le()?;
-        }
+        let cond_param_1 = reader.read_u32_le()?;
+        let cond_param_2 = reader.read_u32_le()?;
+        let cond_param_3 = reader.read_u32_le()?;
+        let target_param = reader.read_u32_le()?;
+        let use_limit_after_retry = reader.read_u32_le()?;
+        let unk6 = reader.read_u32_le()?;
 
         entries.push(AlgoTableEntry {
             action_or_magic_id,
             condition,
             chance,
             use_limit,
-            target_type,
+            target_priority,
             unk_byte_1,
             unk_byte_2,
-            params,
+            cond_param_1,
+            cond_param_2,
+            cond_param_3,
+            target_param,
+            use_limit_after_retry,
+            unk6,
         });
     }
 
