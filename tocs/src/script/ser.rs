@@ -1,4 +1,4 @@
-use super::{ActionTableEntry, AlgoTableEntry, Script, ScriptEntry, ScriptNamePadding, SummonTableEntry};
+use super::{ActionTableEntry, AlgoTableEntry, Script, ScriptEntry, ScriptNamePadding, SummonTableEntry, WeaponAtt};
 use crate::io::MemWriter;
 
 pub fn serialize(script: &Script) -> Option<std::vec::Vec<u8>> {
@@ -125,6 +125,7 @@ impl ScriptEntry {
             ScriptEntry::ActionTable(entries) => entries.iter().try_for_each(|entry| entry.serialize_data(writer))?,
             ScriptEntry::AlgoTable(entries) => entries.iter().try_for_each(|entry| entry.serialize_data(writer))?,
             ScriptEntry::SummonTable(entries) => entries.iter().try_for_each(|entry| entry.serialize_data(writer))?,
+            ScriptEntry::WeaponAttTable(att) => att.serialize_data(writer)?,
             ScriptEntry::Generic { name: _, data } => {
                 writer.write_data(data.as_slice());
             }
@@ -225,12 +226,24 @@ impl SummonTableEntry {
     }
 }
 
+impl WeaponAtt {
+    fn serialize_data(&self, writer: &mut MemWriter) -> Option<()> {
+        let Self { slash, thrust, pierce, strike } = self;
+        writer.write_u8(*slash);
+        writer.write_u8(*thrust);
+        writer.write_u8(*pierce);
+        writer.write_u8(*strike);
+        Some(())
+    }
+}
+
 impl ScriptEntry {
     fn data_len(&self) -> usize {
         match self {
             ScriptEntry::ActionTable(entries) => 212 * entries.len(),
             ScriptEntry::AlgoTable(entries) => 32 * entries.len(),
             ScriptEntry::SummonTable(entries) => 36 * entries.len(),
+            ScriptEntry::WeaponAttTable(_) => 4,
             ScriptEntry::Generic { name: _, data } => data.len(),
         }
     }

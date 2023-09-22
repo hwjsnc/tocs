@@ -295,14 +295,28 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
     tx.execute(
         "create table SummonTable (
     file_name text not null,
-    unk1 int,
-    unk2 int,
-    monster text,
+    unk1 int not null,
+    unk2 int not null,
+    monster text not null,
     foreign key(file_name) references scripts(file_name)
 ) strict;",
         [],
     )
     .unwrap();
+
+    tx.execute(
+        "create table WeaponAttTable (
+    file_name text not null,
+    slash int not null,
+    thrust int not null,
+    pierce int not null,
+    strike int not null,
+    foreign key(file_name) references scripts(file_name)
+) strict;",
+        [],
+    )
+    .unwrap();
+
     tx.execute(
         "create table generic_entry (
     file_name text not null,
@@ -469,6 +483,13 @@ fn insert_script_entry_data(tx: &rusqlite::Transaction, script_name: &str, entry
                 )
                 .unwrap();
             }
+        }
+        ScriptEntry::WeaponAttTable(att) => {
+            tx.execute(
+                "insert into WeaponAttTable values (?, ?, ?, ?, ?)",
+                [&script_name as &dyn rusqlite::types::ToSql, &att.slash as _, &att.thrust as _, &att.pierce as _, &att.strike as _],
+            )
+            .unwrap();
         }
         ScriptEntry::Generic { name, data } => {
             tx.execute(

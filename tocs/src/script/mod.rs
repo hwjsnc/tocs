@@ -29,6 +29,7 @@ pub enum ScriptEntry {
     ActionTable(std::vec::Vec<ActionTableEntry>),
     AlgoTable(std::vec::Vec<AlgoTableEntry>),
     SummonTable(std::vec::Vec<SummonTableEntry>),
+    WeaponAttTable(WeaponAtt),
     Generic { name: PaddedAsciiString<1>, data: std::vec::Vec<u8> },
 }
 
@@ -38,6 +39,7 @@ impl ScriptEntry {
             ScriptEntry::ActionTable { .. } => 12,
             ScriptEntry::AlgoTable { .. } => 10,
             ScriptEntry::SummonTable { .. } => 12,
+            ScriptEntry::WeaponAttTable { .. } => 15,
             ScriptEntry::Generic { name, .. } => name.len_with_padding().get(),
         }
     }
@@ -48,6 +50,7 @@ impl ScriptEntry {
             ScriptEntry::ActionTable { .. } => PaddedAsciiStr::new("ActionTable").unwrap(),
             ScriptEntry::AlgoTable { .. } => PaddedAsciiStr::new("AlgoTable").unwrap(),
             ScriptEntry::SummonTable { .. } => PaddedAsciiStr::new("SummonTable").unwrap(),
+            ScriptEntry::WeaponAttTable { .. } => PaddedAsciiStr::new("WeaponAttTable").unwrap(),
             ScriptEntry::Generic { name, .. } => name.as_padded_ascii_str(),
         }
     }
@@ -106,4 +109,12 @@ pub struct SummonTableEntry {
     pub unk1: u16,
     pub unk2: u16,
     pub monster: PaddedAsciiString<32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WeaponAtt {
+    pub slash: u8,
+    pub thrust: u8,
+    pub pierce: u8,
+    pub strike: u8,
 }

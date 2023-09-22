@@ -1,4 +1,4 @@
-use super::{ActionTableEntry, AlgoTableEntry, Effect, Script, ScriptEntry, ScriptNamePadding, SummonTableEntry};
+use super::{ActionTableEntry, AlgoTableEntry, Effect, Script, ScriptEntry, ScriptNamePadding, SummonTableEntry, WeaponAtt};
 
 use crate::io::MemReader;
 
@@ -112,6 +112,7 @@ pub fn parse(data: &[u8]) -> Option<Script> {
             "ActionTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
             "AlgoTable" => ScriptEntry::AlgoTable(read_algo_table_entries(table_data)?),
             "SummonTable" => ScriptEntry::SummonTable(read_summon_table_entries(table_data)?),
+            "WeaponAttTable" => ScriptEntry::WeaponAttTable(read_weapon_att_table(table_data)?),
             _ => ScriptEntry::Generic {
                 name: name.to_owned(),
                 data: table_data.to_owned(),
@@ -275,4 +276,11 @@ pub fn read_summon_table_entries(data: &[u8]) -> Option<std::vec::Vec<SummonTabl
     }
 
     Some(entries)
+}
+
+pub fn read_weapon_att_table(data: &[u8]) -> Option<WeaponAtt> {
+    match data {
+        &[slash, thrust, pierce, strike] => Some(WeaponAtt { slash, thrust, pierce, strike }),
+        _ => None,
+    }
 }
