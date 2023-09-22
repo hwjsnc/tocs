@@ -28,6 +28,7 @@ pub enum ScriptNamePadding {
 pub enum ScriptEntry {
     ActionTable(std::vec::Vec<ActionTableEntry>),
     AlgoTable(std::vec::Vec<AlgoTableEntry>),
+    BreakTable(std::vec::Vec<BreakTableEntry>),
     SummonTable(std::vec::Vec<SummonTableEntry>),
     WeaponAttTable(WeaponAtt),
     Generic { name: PaddedAsciiString<1>, data: std::vec::Vec<u8> },
@@ -38,6 +39,7 @@ impl ScriptEntry {
         match self {
             ScriptEntry::ActionTable { .. } => 12,
             ScriptEntry::AlgoTable { .. } => 10,
+            ScriptEntry::BreakTable { .. } => 11,
             ScriptEntry::SummonTable { .. } => 12,
             ScriptEntry::WeaponAttTable { .. } => 15,
             ScriptEntry::Generic { name, .. } => name.len_with_padding().get(),
@@ -49,6 +51,7 @@ impl ScriptEntry {
             // TODO: constify PaddedAsciiStr
             ScriptEntry::ActionTable { .. } => PaddedAsciiStr::new("ActionTable").unwrap(),
             ScriptEntry::AlgoTable { .. } => PaddedAsciiStr::new("AlgoTable").unwrap(),
+            ScriptEntry::BreakTable { .. } => PaddedAsciiStr::new("BreakTable").unwrap(),
             ScriptEntry::SummonTable { .. } => PaddedAsciiStr::new("SummonTable").unwrap(),
             ScriptEntry::WeaponAttTable { .. } => PaddedAsciiStr::new("WeaponAttTable").unwrap(),
             ScriptEntry::Generic { name, .. } => name.as_padded_ascii_str(),
@@ -102,6 +105,12 @@ pub struct AlgoTableEntry {
     pub target_param: u32,
     pub use_limit_after_retry: u32,
     pub unk6: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct BreakTableEntry {
+    pub unk1: i16,
+    pub unk2: i16,
 }
 
 #[derive(Debug, Clone)]

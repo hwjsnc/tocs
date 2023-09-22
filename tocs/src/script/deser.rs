@@ -1,4 +1,4 @@
-use super::{ActionTableEntry, AlgoTableEntry, Effect, Script, ScriptEntry, ScriptNamePadding, SummonTableEntry, WeaponAtt};
+use super::{ActionTableEntry, AlgoTableEntry, BreakTableEntry, Effect, Script, ScriptEntry, ScriptNamePadding, SummonTableEntry, WeaponAtt};
 
 use crate::io::MemReader;
 
@@ -111,6 +111,7 @@ pub fn parse(data: &[u8]) -> Option<Script> {
         let table = match name.to_str() {
             "ActionTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
             "AlgoTable" => ScriptEntry::AlgoTable(read_algo_table_entries(table_data)?),
+            "BreakTable" => ScriptEntry::BreakTable(read_break_table_entries(table_data)?),
             "SummonTable" => ScriptEntry::SummonTable(read_summon_table_entries(table_data)?),
             "WeaponAttTable" => ScriptEntry::WeaponAttTable(read_weapon_att_table(table_data)?),
             _ => ScriptEntry::Generic {
@@ -258,6 +259,20 @@ pub fn read_algo_table_entries(data: &[u8]) -> Option<std::vec::Vec<AlgoTableEnt
             use_limit_after_retry,
             unk6,
         });
+    }
+
+    Some(entries)
+}
+
+pub fn read_break_table_entries(data: &[u8]) -> Option<std::vec::Vec<BreakTableEntry>> {
+    let mut reader = MemReader::new(data);
+    let mut entries = std::vec::Vec::with_capacity(data.len() / 32);
+
+    while !reader.at_end() {
+        let unk1 = reader.read_i16_le()?;
+        let unk2 = reader.read_i16_le()?;
+
+        entries.push(BreakTableEntry { unk1, unk2 });
     }
 
     Some(entries)

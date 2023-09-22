@@ -271,6 +271,17 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
     .unwrap();
 
     tx.execute(
+        "create table BreakTable (
+    file_name text not null,
+    unk1 int not null,
+    unk2 int not null,
+    foreign key(file_name) references scripts(file_name)
+) strict;",
+        [],
+    )
+    .unwrap();
+
+    tx.execute(
         "create table AlgoTable (
     file_name text not null,
     action_or_magic_id int,
@@ -369,7 +380,7 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
 }
 
 fn insert_script_entry_data(tx: &rusqlite::Transaction, script_name: &str, entry: &tocs::script::ScriptEntry) {
-    use tocs::script::{ActionTableEntry, AlgoTableEntry, ScriptEntry, SummonTableEntry};
+    use tocs::script::{ActionTableEntry, AlgoTableEntry, BreakTableEntry, ScriptEntry, SummonTableEntry};
 
     match entry {
         ScriptEntry::ActionTable(entries) => {
@@ -473,6 +484,12 @@ fn insert_script_entry_data(tx: &rusqlite::Transaction, script_name: &str, entry
                     ] as &[_],
                 )
                 .unwrap();
+            }
+        }
+        ScriptEntry::BreakTable(entries) => {
+            for BreakTableEntry { unk1, unk2 } in entries {
+                tx.execute("insert into BreakTable values (?, ?, ?)", [&script_name as &dyn rusqlite::types::ToSql, &unk1 as _, &unk2 as _])
+                    .unwrap();
             }
         }
         ScriptEntry::SummonTable(entries) => {

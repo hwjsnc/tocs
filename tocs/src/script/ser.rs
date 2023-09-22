@@ -1,4 +1,4 @@
-use super::{ActionTableEntry, AlgoTableEntry, Script, ScriptEntry, ScriptNamePadding, SummonTableEntry, WeaponAtt};
+use super::{ActionTableEntry, AlgoTableEntry, BreakTableEntry, Script, ScriptEntry, ScriptNamePadding, SummonTableEntry, WeaponAtt};
 use crate::io::MemWriter;
 
 pub fn serialize(script: &Script) -> Option<std::vec::Vec<u8>> {
@@ -124,6 +124,7 @@ impl ScriptEntry {
         match self {
             ScriptEntry::ActionTable(entries) => entries.iter().try_for_each(|entry| entry.serialize_data(writer))?,
             ScriptEntry::AlgoTable(entries) => entries.iter().try_for_each(|entry| entry.serialize_data(writer))?,
+            ScriptEntry::BreakTable(entries) => entries.iter().try_for_each(|entry| entry.serialize_data(writer))?,
             ScriptEntry::SummonTable(entries) => entries.iter().try_for_each(|entry| entry.serialize_data(writer))?,
             ScriptEntry::WeaponAttTable(att) => att.serialize_data(writer)?,
             ScriptEntry::Generic { name: _, data } => {
@@ -131,6 +132,17 @@ impl ScriptEntry {
             }
         }
         Some(())
+    }
+
+    fn data_len(&self) -> usize {
+        match self {
+            ScriptEntry::ActionTable(entries) => 212 * entries.len(),
+            ScriptEntry::AlgoTable(entries) => 32 * entries.len(),
+            ScriptEntry::BreakTable(entries) => 4 * entries.len(),
+            ScriptEntry::SummonTable(entries) => 36 * entries.len(),
+            ScriptEntry::WeaponAttTable(_) => 4,
+            ScriptEntry::Generic { name: _, data } => data.len(),
+        }
     }
 }
 
@@ -216,6 +228,15 @@ impl AlgoTableEntry {
     }
 }
 
+impl BreakTableEntry {
+    fn serialize_data(&self, writer: &mut MemWriter) -> Option<()> {
+        let Self { unk1, unk2 } = self;
+        writer.write_i16_le(*unk1);
+        writer.write_i16_le(*unk2);
+        Some(())
+    }
+}
+
 impl SummonTableEntry {
     fn serialize_data(&self, writer: &mut MemWriter) -> Option<()> {
         let Self { unk1, unk2, monster } = self;
@@ -234,17 +255,5 @@ impl WeaponAtt {
         writer.write_u8(*pierce);
         writer.write_u8(*strike);
         Some(())
-    }
-}
-
-impl ScriptEntry {
-    fn data_len(&self) -> usize {
-        match self {
-            ScriptEntry::ActionTable(entries) => 212 * entries.len(),
-            ScriptEntry::AlgoTable(entries) => 32 * entries.len(),
-            ScriptEntry::SummonTable(entries) => 36 * entries.len(),
-            ScriptEntry::WeaponAttTable(_) => 4,
-            ScriptEntry::Generic { name: _, data } => data.len(),
-        }
     }
 }
