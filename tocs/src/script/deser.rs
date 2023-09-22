@@ -1,4 +1,4 @@
-use super::{ActionTableEntry, AlgoTableEntry, Effect, Script, ScriptEntry, ScriptNamePadding};
+use super::{ActionTableEntry, AlgoTableEntry, Effect, Script, ScriptEntry, ScriptNamePadding, SummonTableEntry};
 
 use crate::io::MemReader;
 
@@ -111,6 +111,7 @@ pub fn parse(data: &[u8]) -> Option<Script> {
         let table = match name.to_str() {
             "ActionTable" => ScriptEntry::ActionTable(read_action_table_entries(table_data)?),
             "AlgoTable" => ScriptEntry::AlgoTable(read_algo_table_entries(table_data)?),
+            "SummonTable" => ScriptEntry::SummonTable(read_summon_table_entries(table_data)?),
             _ => ScriptEntry::Generic {
                 name: name.to_owned(),
                 data: table_data.to_owned(),
@@ -256,6 +257,21 @@ pub fn read_algo_table_entries(data: &[u8]) -> Option<std::vec::Vec<AlgoTableEnt
             use_limit_after_retry,
             unk6,
         });
+    }
+
+    Some(entries)
+}
+
+pub fn read_summon_table_entries(data: &[u8]) -> Option<std::vec::Vec<SummonTableEntry>> {
+    let mut reader = MemReader::new(data);
+    let mut entries = std::vec::Vec::with_capacity(data.len() / 32);
+
+    while !reader.at_end() {
+        let unk1 = reader.read_u16_le()?;
+        let unk2 = reader.read_u16_le()?;
+        let monster = reader.read_padded_ascii_str::<32>().ok()?.to_owned();
+
+        entries.push(SummonTableEntry { unk1, unk2, monster });
     }
 
     Some(entries)

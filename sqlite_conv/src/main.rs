@@ -293,6 +293,17 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
     .unwrap();
 
     tx.execute(
+        "create table SummonTable (
+    file_name text not null,
+    unk1 int,
+    unk2 int,
+    monster text,
+    foreign key(file_name) references scripts(file_name)
+) strict;",
+        [],
+    )
+    .unwrap();
+    tx.execute(
         "create table generic_entry (
     file_name text not null,
     name text not null,
@@ -344,7 +355,7 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
 }
 
 fn insert_script_entry_data(tx: &rusqlite::Transaction, script_name: &str, entry: &tocs::script::ScriptEntry) {
-    use tocs::script::{ActionTableEntry, AlgoTableEntry, ScriptEntry};
+    use tocs::script::{ActionTableEntry, AlgoTableEntry, ScriptEntry, SummonTableEntry};
 
     match entry {
         ScriptEntry::ActionTable(entries) => {
@@ -446,6 +457,15 @@ fn insert_script_entry_data(tx: &rusqlite::Transaction, script_name: &str, entry
                         &use_limit_after_retry as _,
                         &unk6 as _,
                     ] as &[_],
+                )
+                .unwrap();
+            }
+        }
+        ScriptEntry::SummonTable(entries) => {
+            for SummonTableEntry { unk1, unk2, monster } in entries {
+                tx.execute(
+                    "insert into SummonTable values (?, ?, ?, ?)",
+                    &[&script_name as &dyn rusqlite::types::ToSql, &unk1 as _, &unk2 as _, &monster.as_str() as _] as &[_],
                 )
                 .unwrap();
             }
