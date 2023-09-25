@@ -102,7 +102,7 @@ pub struct AlgoTableEntry {
     pub cond_param_1: u32,
     pub cond_param_2: u32,
     pub cond_param_3: u32,
-    pub target_param: u32,
+    pub do_not_move: u32,
     pub use_limit_after_retry: u32,
     pub unk6: u32,
 }

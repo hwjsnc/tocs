@@ -240,7 +240,7 @@ pub fn read_algo_table_entries(data: &[u8]) -> Option<std::vec::Vec<AlgoTableEnt
         let cond_param_1 = reader.read_u32_le()?;
         let cond_param_2 = reader.read_u32_le()?;
         let cond_param_3 = reader.read_u32_le()?;
-        let target_param = reader.read_u32_le()?;
+        let do_not_move = reader.read_u32_le()?;
         let use_limit_after_retry = reader.read_u32_le()?;
         let unk6 = reader.read_u32_le()?;
 
@@ -255,7 +255,7 @@ pub fn read_algo_table_entries(data: &[u8]) -> Option<std::vec::Vec<AlgoTableEnt
             cond_param_1,
             cond_param_2,
             cond_param_3,
-            target_param,
+            do_not_move,
             use_limit_after_retry,
             unk6,
         });

@@ -60,6 +60,6 @@ select
   AlgoTable.chance,
   AlgoTable.use_limit,
   AlgoTable.target_priority,
-  AlgoTable.target_param
+  AlgoTable.do_not_move
 from scripts.AlgoTable
 ;

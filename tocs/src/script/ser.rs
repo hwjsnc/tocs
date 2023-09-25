@@ -207,7 +207,7 @@ impl AlgoTableEntry {
             cond_param_1,
             cond_param_2,
             cond_param_3,
-            target_param,
+            do_not_move,
             use_limit_after_retry,
             unk6,
         } = self;
@@ -221,7 +221,7 @@ impl AlgoTableEntry {
         writer.write_u32_le(*cond_param_1);
         writer.write_u32_le(*cond_param_2);
         writer.write_u32_le(*cond_param_3);
-        writer.write_u32_le(*target_param);
+        writer.write_u32_le(*do_not_move);
         writer.write_u32_le(*use_limit_after_retry);
         writer.write_u32_le(*unk6);
         Some(())

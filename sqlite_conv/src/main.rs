@@ -294,7 +294,7 @@ fn scripts_to_new_db<P: AsRef<std::path::Path>>(base_path: P, dbpath: P) {
     cond_param_1 int,
     cond_param_2 int,
     cond_param_3 int,
-    target_param int,
+    do_not_move int,
     use_limit_after_retry int,
     unk6 int,
     foreign key(file_name) references scripts(file_name)
@@ -459,7 +459,7 @@ fn insert_script_entry_data(tx: &rusqlite::Transaction, script_name: &str, entry
                 cond_param_1,
                 cond_param_2,
                 cond_param_3,
-                target_param,
+                do_not_move,
                 use_limit_after_retry,
                 unk6,
             } in entries
@@ -478,7 +478,7 @@ fn insert_script_entry_data(tx: &rusqlite::Transaction, script_name: &str, entry
                         &cond_param_1 as _,
                         &cond_param_2 as _,
                         &cond_param_3 as _,
-                        &target_param as _,
+                        &do_not_move as _,
                         &use_limit_after_retry as _,
                         &unk6 as _,
                     ] as &[_],
