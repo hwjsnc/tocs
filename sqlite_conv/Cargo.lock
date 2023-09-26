@@ -268,7 +268,8 @@ checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 [[package]]
 name = "hexhex"
 version = "1.0.0"
-source = "git+https://git.sr.ht/~quf/hexhex#2f42ee8968e9eeca1724ba30991f710fb201f761"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fb1ebf6a5f2918db41d6ac1a1bf3899e4fc4fc9e00a722d5d2542d029d0dc91"
 dependencies = [
  "hexhex_impl",
  "hexhex_macros",
@@ -277,7 +278,8 @@ dependencies = [
 [[package]]
 name = "hexhex_impl"
 version = "0.1.0"
-source = "git+https://git.sr.ht/~quf/hexhex#2f42ee8968e9eeca1724ba30991f710fb201f761"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "130a1dcc2b7ea73d9a4818f208db6f022ff4402be5fe7a3db5d8178c62cf5f2e"
 dependencies = [
  "fallible-iterator",
 ]
@@ -285,7 +287,8 @@ dependencies = [
 [[package]]
 name = "hexhex_macros"
 version = "1.0.0"
-source = "git+https://git.sr.ht/~quf/hexhex#2f42ee8968e9eeca1724ba30991f710fb201f761"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4be14289347b0bcff5e279a8fd723e9f3f4a313f75220a297c1bab66dd7a30b"
 dependencies = [
  "hexhex_impl",
 ]
