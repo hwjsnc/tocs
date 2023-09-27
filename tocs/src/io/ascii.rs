@@ -47,12 +47,17 @@ impl<const PADDING: usize> PaddedAsciiString<PADDING> {
         })
     }
 
-    pub fn from_eco_string(str_excluding_terminator_or_padding: &ecow::EcoString) -> Result<Self, PaddedStringError> {
+    pub fn from_eco_string(str_excluding_terminator_or_padding: ecow::EcoString) -> Result<Self, PaddedStringError> {
         _ = Self::P;
         check_str(str_excluding_terminator_or_padding.as_str())?;
         Ok(PaddedAsciiString {
             s: str_excluding_terminator_or_padding.clone(),
         })
+    }
+
+    /// Convert data to an ecostring. The result will not be null-terminated or padded.
+    pub fn to_eco_string(&self) -> ecow::EcoString {
+        self.s.clone()
     }
 
     pub fn from_ascii(bytes_excluding_terminator_or_padding: &[u8]) -> Result<Self, PaddedStringError> {

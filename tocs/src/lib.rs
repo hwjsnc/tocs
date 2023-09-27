@@ -2,6 +2,8 @@
 
 mod io;
 
+pub use io::{PaddedAsciiStr, PaddedAsciiString, PaddedByteStr, PaddedByteString, PaddedUtf8Str, PaddedUtf8String};
+
 #[cfg(feature = "compression")]
 pub mod compression;
 

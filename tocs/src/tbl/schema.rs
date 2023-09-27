@@ -348,6 +348,86 @@ impl AtomicValue {
             AtomicValue::X(data) => AtomicType::X(data.len()),
         }
     }
+
+    /// Get value as `i8`. Panics if the type doesn't match.
+    pub fn expect_i8(&self) -> i8 {
+        match self {
+            AtomicValue::I8(x) => *x,
+            _ => panic!("expected i8, but got a {:?}", self.r#type()),
+        }
+    }
+
+    /// Get value as `i16`. Panics if the type doesn't match.
+    pub fn expect_i16(&self) -> i16 {
+        match self {
+            AtomicValue::I16(x) => *x,
+            _ => panic!("expected i16, but got a {:?}", self.r#type()),
+        }
+    }
+
+    /// Get value as `i32`. Panics if the type doesn't match.
+    pub fn expect_i32(&self) -> i32 {
+        match self {
+            AtomicValue::I32(x) => *x,
+            _ => panic!("expected i32, but got a {:?}", self.r#type()),
+        }
+    }
+
+    /// Get value as `u8`. Panics if the type doesn't match.
+    pub fn expect_u8(&self) -> u8 {
+        match self {
+            AtomicValue::U8(x) => *x,
+            _ => panic!("expected u8, but got a {:?}", self.r#type()),
+        }
+    }
+
+    /// Get value as `u16`. Panucs if the type doesn't match.
+    pub fn expect_u16(&self) -> u16 {
+        match self {
+            AtomicValue::U16(x) => *x,
+            _ => panic!("expected u16, but got a {:?}", self.r#type()),
+        }
+    }
+
+    /// Get value as `u32`. Panics if the type doesn't match.
+    pub fn expect_u32(&self) -> u32 {
+        match self {
+            AtomicValue::U32(x) => *x,
+            _ => panic!("expected u32, but got a {:?}", self.r#type()),
+        }
+    }
+
+    /// Get value as `f32`. Panics if the type doesn't match.
+    pub fn expect_f32(&self) -> f32 {
+        match self {
+            AtomicValue::F32(x) => *x,
+            _ => panic!("expected f32, but got a {:?}", self.r#type()),
+        }
+    }
+
+    /// Get value as a string. Panics if the type doesn't match.
+    pub fn expect_c_utf8(self) -> ecow::EcoString {
+        match self {
+            AtomicValue::CUtf8(s) => s,
+            _ => panic!("expected utf8 string, but got a {:?}", self.r#type()),
+        }
+    }
+
+    /// Get value reference as a string. Panics if the type doesn't match.
+    pub fn expect_c_utf8_as_ref(&self) -> &str {
+        match self {
+            AtomicValue::CUtf8(s) => s.as_str(),
+            _ => panic!("expected utf8 string, but got a {:?}", self.r#type()),
+        }
+    }
+
+    /// Get value reference as hex data. Panics if the type doesn't match.
+    pub fn expect_data_as_ref(&self) -> &[u8] {
+        match self {
+            AtomicValue::X(data) => data.as_slice(),
+            _ => panic!("expected data slice, but got a {:?}", self.r#type()),
+        }
+    }
 }
 
 // "Flatten" the schema by unrolling sequences and dereferencing references

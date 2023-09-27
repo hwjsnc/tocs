@@ -153,6 +153,16 @@ pub enum ParseTblResult {
     Err(DeserializeError),
 }
 
+impl ParseTblResult {
+    pub fn ignore_warnings(self) -> Result<Tbl, DeserializeError> {
+        match self {
+            ParseTblResult::Ok(tbl) => Ok(tbl),
+            ParseTblResult::Warn { tbl, .. } => Ok(tbl),
+            ParseTblResult::Err(e) => Err(e),
+        }
+    }
+}
+
 impl ReadTblResult {
     pub fn ignore_warnings(self) -> Result<Tbl, ReadError> {
         match self {
