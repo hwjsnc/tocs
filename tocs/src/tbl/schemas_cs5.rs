@@ -94,11 +94,24 @@
         ("unknown_data", Type::X(4)),
     ]),
     */
+    ("CharData", &[
+        ("id", Type::U16),
+        ("unknown_shorts", Type::Repeat(2, Box::new(Type::U16))),
+        ("unknown_floats", Type::Repeat(9, Box::new(Type::F32))),
+        ("check_equip_flags", Type::U32),
+        ("unknown_short", Type::U16),
+        ("unknown_float", Type::F32),
+        ("unknown_string", Type::CUtf8),
+    ]),
     ("CharGroup", &[
         ("unknown_short_1", Type::I16),
         ("characters", Type::Repeat(6, Box::new(Type::I16))),
         ("unknown_data", Type::X(14)),
         ("name", Type::CUtf8),
+    ]),
+    ("CheckEquipFlag", &[
+        ("character_restriction", Type::U16),
+        ("flag", Type::U32),
     ]),
     ("CompHelpData", &[
         ("type", Type::I16),

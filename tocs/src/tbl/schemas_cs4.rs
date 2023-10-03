@@ -48,7 +48,8 @@
         ("item_type", Type::U16),
         ("unknown_short", Type::U16),
         ("item_id", Type::U16),
-        ("unknown_data", Type::X(18)),
+        ("unknown_data", Type::X(14)),
+        ("s_craft_cutin_id", Type::I32),
         ("pkg_name", Type::CUtf8),
         ("model", Type::CUtf8),
         ("attach_point", Type::CUtf8),
@@ -93,9 +94,22 @@
         ("unknown_string_1", Type::CUtf8),
         ("unknown_string_2", Type::CUtf8),
     ]),
+    ("CharData", &[
+        ("id", Type::U16),
+        ("unknown_shorts", Type::Repeat(2, Box::new(Type::U16))),
+        ("unknown_floats", Type::Repeat(8, Box::new(Type::F32))),
+        ("check_equip_flags", Type::U32),
+        ("unknown_short", Type::U16),
+        ("unknown_float", Type::F32),
+        ("unknown_string", Type::CUtf8),
+    ]),
     ("char_revise", &[
         ("char", Type::CUtf8),
         ("unknown_shorts", Type::Repeat(9, Box::new(Type::U16))),
+    ]),
+    ("CheckEquipFlag", &[
+        ("character_restriction", Type::U16),
+        ("flag", Type::U32),
     ]),
     ("dlc", &[
         ("dlc_id", Type::I16),
