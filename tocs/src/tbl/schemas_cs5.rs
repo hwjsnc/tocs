@@ -65,7 +65,7 @@
         ("id", Type::U16),
         ("track", Type::CUtf8),
         ("unknown_data", Type::X(2)),
-        ("unknown_float", Type::F32),
+        ("volume", Type::F32),
     ]),
     ("BtlWinLinkChr", &[
         ("id", Type::U16),
