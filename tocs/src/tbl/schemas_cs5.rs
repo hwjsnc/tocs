@@ -551,6 +551,12 @@
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
     ]),
+    ("MapBgmTableData", &[
+        ("unknown_int", Type::U32),
+        ("bgm_id", Type::U16),
+        ("unknown_int1", Type::U16),
+        ("unknown_int2", Type::U16),
+    ]),
     ("MapJumpData", &[
         ("unknown_data_1", Type::X(10)),
         ("name", Type::CUtf8),
