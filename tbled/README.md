@@ -2,12 +2,7 @@ tbled
 =====
 
 `tbled` is an editor for `.tbl` files for the Trails of Cold Steel games.
-
-`tbled` is a complex program.
-To ensure you don't lose any data due to possible bugs, I recommend to BACK UP ALL DATA FREQUENTLY.
-If you notice any issues with data integrity, please do report them.
-
-`tbled` currently supports the following versions of the games:
+The following versions of the games are supported:
 
 - Trails of Cold Steel (XSeed PC version, English language only)
 - Trails of Cold Steel II (XSeed PC version, English language only)
@@ -32,9 +27,9 @@ Usage
 
 First off, load a set of tbl schemas from the "Schemas" menu.
 You can select one of the builtin schemas (one for each supported game), or import your own (see more below).
-Make sure to select the right version or loading the `.tbl` files will likely fail.
+Make sure to select the right version, otherwise loading the `.tbl` files will likely fail.
 
-Then, load a tbl file under "Load" and select a `.tbl` file.
+Afterwards, load a tbl file under "Load" and select a `.tbl` file.
 These files are located in the `data\text` folders relative to the installation path.
 If loading was successful, choose an entry type on the right to see all entries of that type in the loaded file.
 
