@@ -1219,6 +1219,15 @@
         ("name", Type::CUtf8),
         ("description", Type::CUtf8),
     ]),
+    ("ShopItem", &[
+        ("shop_id", Type::U16),
+        ("item_id", Type::U16),
+        ("unknown_short_1", Type::U16),
+        ("availability", Type::U16),
+        ("unknown_data", Type::X(5)),
+        ("unknown_short_2", Type::I16),
+        ("unknown_short_3", Type::U16),
+    ]),
     ("SlotCost", &[
         ("slot_position", Type::I16),
         ("level", Type::I16),
