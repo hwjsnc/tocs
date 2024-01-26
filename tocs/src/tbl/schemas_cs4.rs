@@ -50,7 +50,7 @@
         ("item_id", Type::U16),
         ("unknown_data", Type::X(14)),
         ("s_craft_cutin_id", Type::I32),
-        ("pkg_name", Type::CUtf8),
+        ("sprite", Type::CUtf8),
         ("model", Type::CUtf8),
         ("attach_point", Type::CUtf8),
     ]),
