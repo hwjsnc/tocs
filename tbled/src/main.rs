@@ -14,6 +14,8 @@ use fltk::prelude::MenuExt as _;
 use fltk::prelude::WidgetBase as _;
 use fltk::prelude::WidgetExt as _;
 
+use camino::Utf8PathBuf;
+
 use clap::Parser;
 
 use tblstate::{Change, TblStateHistory};
@@ -23,7 +25,7 @@ struct CliArgs {
     #[arg(short, long)]
     game_version: Option<tocs::tbl::Version>,
     #[arg(short, long)]
-    file: Option<std::path::PathBuf>,
+    file: Option<Utf8PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -92,7 +94,7 @@ struct Widgets {
 pub struct AppData {
     tbl_history: TblStateHistory,
     tbl_version: tocs::tbl::Version,
-    path: std::path::PathBuf,
+    path: Utf8PathBuf,
     active_entry_type: Option<tocs::tbl::Header>,
     selected_attributes: std::collections::HashMap<tocs::tbl::Header, indexmap::IndexSet<tocs::tbl::Attribute>>, // which attributes should be shown in which order for a given header?
     warnings: std::vec::Vec<tocs::tbl::DeserializeError>,
@@ -423,7 +425,7 @@ impl App {
                     }
                     tocs::tbl::ReadTblResult::Err(e) => {
                         fltk::dialog::alert_default(&format!("error loading file: {}", e));
-                        *path = std::path::PathBuf::new();
+                        *path = Utf8PathBuf::new();
                     }
                 }
                 // we need to update other ui elements
@@ -443,7 +445,7 @@ impl App {
                             Ok(schema) if v == SchemaVersion::CustomV2 => tocs::tbl::Version::V2(schema),
                             Ok(_) => unreachable!(),
                             Err(e) => {
-                                fltk::dialog::alert_default(&format!("error importing schema {}: {}", path.display(), e));
+                                fltk::dialog::alert_default(&format!("error importing schema {}: {}", path, e));
                                 return;
                             }
                         }
@@ -466,7 +468,7 @@ impl App {
                 match misc::export_schemas(&path, schemas) {
                     Ok(()) => {} // ok
                     Err(e) => {
-                        fltk::dialog::alert_default(&format!("error saving to {}: {:?}", path.display(), e));
+                        fltk::dialog::alert_default(&format!("error saving to {}: {:?}", path, e));
                     }
                 }
             }
@@ -474,7 +476,7 @@ impl App {
                 self.save_tbl_to_file(None);
             }
             Some(Msg::SelectAndSaveFile) => {
-                let Some(path) = misc::save_file_dialog("tbl", &format!("{}", self.state.path.display())) else {
+                let Some(path) = misc::save_file_dialog("tbl", &format!("{}", self.state.path)) else {
                     return;
                 };
                 self.save_tbl_to_file(Some(path));
@@ -520,7 +522,7 @@ impl App {
             Some(Msg::ExportJson) => {
                 let AppData { tbl_history, tbl_version, path, .. } = &mut self.state;
                 let tbl = tocs::tbl::Tbl::new(tbl_version, tbl_history.headers().iter().cloned(), tbl_history.all_current_rows().cloned());
-                let Some(path) = misc::save_file_dialog("json", &path.with_extension("json").display().to_string()) else {
+                let Some(path) = misc::save_file_dialog("json", path.with_extension("json").as_str()) else {
                     return;
                 };
                 match misc::export_json(&path, &tbl) {
@@ -749,7 +751,7 @@ impl App {
         }
     }
 
-    fn save_tbl_to_file(&mut self, path: Option<std::path::PathBuf>) {
+    fn save_tbl_to_file(&mut self, path: Option<Utf8PathBuf>) {
         // try saving data to file
         let version = &self.state.tbl_version;
         let headers = self.state.tbl_history.headers().iter().cloned();
@@ -764,7 +766,7 @@ impl App {
                 }
             }
             Err(e) => {
-                fltk::dialog::alert_default(&format!("error saving to {}: {:?}", new_path.display(), e));
+                fltk::dialog::alert_default(&format!("error saving to {}: {:?}", new_path, e));
             }
         }
     }
@@ -777,7 +779,7 @@ fn main() {
 
     let appstate = match (game_version, file) {
         (Some(version), Some(path)) => {
-            log::debug!("parsing {} as a {:?} file", path.display(), version);
+            log::debug!("parsing {} as a {:?} file", path, version);
             // try loading data from file
             match tocs::tbl::read_file_with_fixes(&path, &version) {
                 tocs::tbl::ReadTblResult::Ok(tbl) | tocs::tbl::ReadTblResult::KnownFixApplied(tbl) => AppData {
@@ -811,7 +813,7 @@ fn main() {
             active_entry_type: None,
             selected_attributes: [].into_iter().collect(),
             tbl_version: tocs::tbl::Version::CS1En,
-            path: std::path::PathBuf::new(),
+            path: Utf8PathBuf::new(),
             warnings: vec![],
         },
     };

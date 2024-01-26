@@ -114,7 +114,10 @@ Releases (downloads & changelogs)
 - planned: redo JSON stuff without `serde_json`
 - planned: drop CSV?
 
-### v1.0 (in development)
+### [v1.0](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0/tbled-v1.0.exe)
+
+- dropped support for non-UTF-8 paths
+- minor changes to schemas
 
 ###  [v1.0-rc4](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc4/tbled-v1.0-rc4.exe)
 

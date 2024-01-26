@@ -4,7 +4,9 @@ use tocs::tbl::AtomicAttributeValues as AttributeValues;
 use tocs::tbl::AtomicSchema as Schema;
 use tocs::tbl::Header;
 
-pub fn load_file_dialog(filetype: &str) -> Option<std::path::PathBuf> {
+use camino::{Utf8Path, Utf8PathBuf};
+
+pub fn load_file_dialog(filetype: &str) -> Option<Utf8PathBuf> {
     // open a file browser dialog to select the file
     let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseFile);
     diag.set_title(&format!("Select .{} file to load ...", filetype));
@@ -13,11 +15,11 @@ pub fn load_file_dialog(filetype: &str) -> Option<std::path::PathBuf> {
     if path.as_os_str().is_empty() {
         None
     } else {
-        Some(path)
+        path.try_into().ok()
     }
 }
 
-pub fn save_file_dialog(filetype: &str, preset: &str) -> Option<std::path::PathBuf> {
+pub fn save_file_dialog(filetype: &str, preset: &str) -> Option<Utf8PathBuf> {
     // open a file browser dialog to select the file
     let mut diag = fltk::dialog::FileDialog::new(fltk::dialog::FileDialogType::BrowseSaveFile);
     diag.set_title(&format!("Select .{} file to save to ...", filetype));
@@ -27,12 +29,12 @@ pub fn save_file_dialog(filetype: &str, preset: &str) -> Option<std::path::PathB
     if path.as_os_str().is_empty() {
         None
     } else {
-        Some(path)
+        path.try_into().ok()
     }
 }
 
-pub fn export_csv(path: &std::path::Path, schema: &Schema, data: &[AttributeValues]) -> std::io::Result<()> {
-    log::debug!("export data as CSV to '{}'", path.display());
+pub fn export_csv(path: &Utf8Path, schema: &Schema, data: &[AttributeValues]) -> std::io::Result<()> {
+    log::debug!("export data as CSV to '{}'", path);
     let mut csv = csv::WriterBuilder::new().quote_style(csv::QuoteStyle::Always).from_path(path)?;
 
     log::debug!("writing csv header");
@@ -56,18 +58,18 @@ pub fn export_csv(path: &std::path::Path, schema: &Schema, data: &[AttributeValu
     Ok(())
 }
 
-pub fn export_json(path: &std::path::Path, tbl: &tocs::tbl::Tbl) -> std::io::Result<()> {
-    log::debug!("export tbl to '{}'", path.display());
+pub fn export_json(path: &Utf8Path, tbl: &tocs::tbl::Tbl) -> std::io::Result<()> {
+    log::debug!("export tbl to '{}'", path);
     let data = tocs::tbl::tbl_to_json(tbl);
     std::fs::write(path, data.as_bytes())
 }
 
-pub fn import_json(path: &std::path::Path, schemas: &tocs::tbl::AtomicSchemas) -> std::io::Result<tocs::tbl::Tbl> {
+pub fn import_json(path: &Utf8Path, schemas: &tocs::tbl::AtomicSchemas) -> std::io::Result<tocs::tbl::Tbl> {
     let data = std::fs::read(path)?;
     tocs::tbl::try_tbl_from_json(schemas, data.as_slice()).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
 }
 
-pub fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::Vec<AttributeValues>, String> {
+pub fn import_csv(path: &Utf8Path, schema: &Schema) -> Result<std::vec::Vec<AttributeValues>, String> {
     let mut csv = csv::ReaderBuilder::new().has_headers(true).from_path(path).map_err(|e| e.to_string())?;
 
     // read headers and compare to the expected schema
@@ -118,11 +120,11 @@ pub fn import_csv(path: &std::path::Path, schema: &Schema) -> Result<std::vec::V
     Ok(result)
 }
 
-pub fn export_schemas(path: &std::path::Path, schemas: &tocs::tbl::Schemas) -> Result<(), std::io::Error> {
+pub fn export_schemas(path: &Utf8Path, schemas: &tocs::tbl::Schemas) -> Result<(), std::io::Error> {
     std::fs::write(path, tocs::tbl::schemas_to_json(schemas).as_bytes())
 }
 
-pub fn import_schemas(path: &std::path::Path) -> Result<tocs::tbl::AtomicSchemas, std::io::Error> {
+pub fn import_schemas(path: &Utf8Path) -> Result<tocs::tbl::AtomicSchemas, std::io::Error> {
     let data = std::fs::read(path)?;
     let schemas: tocs::tbl::Schemas = tocs::tbl::try_schemas_from_json(data.as_slice()).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
     let atomic_schemas = tocs::tbl::get_nf1_for_all(&schemas).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
