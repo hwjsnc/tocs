@@ -12,6 +12,7 @@ const TBL_TEST_FOLDERS: &[(
     ("private-test-data/cs2/nisa-pc-1.4.1/data/text/dat_us/", Version::CS2En, false, true),
     ("private-test-data/cs3/nisa-pc-1.0.5/data/text/", Version::CS3, false, false),
     ("private-test-data/cs3/softbrilliant-mod-1.0.6/data/text/", Version::CS3, false, false),
+    ("private-test-data/cs3/softbrilliant-mod-1.0.7/data/text/", Version::CS3, false, false),
     ("private-test-data/cs4/nisa-switch-1.0.0/text/", Version::CS4, true, true),
     ("private-test-data/cs4/softbrilliant-mod-1.0.7/data/text/", Version::CS4, false, false),
     ("private-test-data/cs5/nisa-pc-1.0.2/text/", Version::CS5, true, true),
