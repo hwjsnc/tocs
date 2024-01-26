@@ -15,7 +15,7 @@
         ("character", Type::U16),
         ("unknown_data", Type::X(20)),
         ("model", Type::CUtf8),
-        ("unknown_string", Type::CUtf8),
+        ("attach_point", Type::CUtf8),
     ]),
     ("BaseList", &[
         ("character", Type::I16),
