@@ -205,7 +205,7 @@ fn warnings_are_likely_fine(tbl: &Tbl, schemas: &AtomicSchemas, warnings: &[Dese
                 DeserializeErrorPosition::TblHeaderEntry { .. } => {}
                 DeserializeErrorPosition::Entry { number } => {
                     let entries = tbl.get_entries();
-                    let number: usize = (*number).try_into().unwrap();
+                    let number: usize = (*number).into();
                     let header: &Header = &entries[number].header;
                     if !schemas.contains_key(header) {
                         return false;

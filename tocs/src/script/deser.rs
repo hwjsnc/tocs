@@ -99,7 +99,7 @@ pub fn parse(data: &[u8]) -> Option<Script> {
     let mut tables = std::vec::Vec::with_capacity(n_tables);
     let mut alignment = std::collections::BTreeMap::new();
     for i in 0..n_tables {
-        let name = reader.clone_at_offset(table_name_offsets[i].try_into().unwrap()).read_c_ascii_str().ok()?;
+        let name = reader.clone_at_offset(table_name_offsets[i].into()).read_c_ascii_str().ok()?;
 
         // we assume the table data is always sorted. it seems to work out.
         let data_start = usize::try_from(table_data_offsets[i]).unwrap();

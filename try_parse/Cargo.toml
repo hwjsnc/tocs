@@ -12,6 +12,6 @@ clap = { version = "4.0.26", features = ["derive"] }
 hexhex = { git = "https://git.sr.ht/~quf/hexhex", version = "1.0.0" }
 log = { version = "0.4.17" }
 serde_json = "1.0.96"
-simple_logger = { version = "4", default-features = false, features = [] }
+simple_logger = { version = "4.3.3", default-features = false, features = [] }
 tocs = { path = "../tocs", features = ["serde"] }
 walkdir = "2.3.2"

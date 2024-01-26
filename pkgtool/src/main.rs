@@ -425,7 +425,7 @@ fn pkg_unpack<P: AsRef<std::path::Path>, S: AsRef<str>>(force: bool, raw: bool, 
             match file_by_name.get(file.as_ref().as_bytes()) {
                 Some(entry) => extract(entry)?,
                 None => {
-                    return Err(anyhow::Error::msg(format!("pkg '{}' does not contain file '{}'", pkg.as_ref().display(), file.as_ref())))?;
+                    return Err(anyhow::Error::msg(format!("pkg '{}' does not contain file '{}'", pkg.as_ref().display(), file.as_ref())));
                 }
             }
         }
@@ -599,9 +599,11 @@ fn pka_check<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<()> {
 
     let blob_hashes: std::collections::HashSet<_> = blobs.iter().map(|blob| blob.hash).collect();
     let file_hashes: std::collections::HashSet<_> = pkgs.iter().flat_map(|pkg| pkg.files.iter().map(|file| file.hash)).collect();
+    #[allow(clippy::never_loop)]
     for hash in blob_hashes.difference(&file_hashes) {
         panic!("blob hash with no associated file: {}", hexhex::Hex::new(hash));
     }
+    #[allow(clippy::never_loop)]
     for hash in file_hashes.difference(&blob_hashes) {
         panic!("file hash with no associated data: {}", hexhex::Hex::new(hash));
     }

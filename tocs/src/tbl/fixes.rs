@@ -89,7 +89,7 @@ fn get_fix_for(version: &Version, data: &[u8]) -> Option<&'static FixFun> {
         return None;
     }
 
-    let hash: [u8; 64] = blake2::Blake2b512::digest(data).try_into().unwrap();
+    let hash: [u8; 64] = blake2::Blake2b512::digest(data).into();
 
     static FIXES: &[(Version, [u8; 64], &FixFun)] = &[
         fix_fun!(

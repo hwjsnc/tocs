@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+ahash = { version = "0.8.7", default-features = false } # avoid zerocopy to avoid syn
 anyhow = "1.0.66"
 clap = { version = "4.0.26", features = ["derive"] }
 tocs = { path = "../tocs" }

@@ -289,7 +289,7 @@ impl<'a> TblReaderAtomic<'a> {
         self.in_context(DeserializeErrorPosition::TblHeader, |this| {
             let number_of_entries = this.read_u16_le()?;
             let number_of_headers = this.read_u32_le()?;
-            let mut entry_counts = IndexMap::with_capacity(number_of_entries.try_into().unwrap());
+            let mut entry_counts = IndexMap::with_capacity(number_of_entries.into());
             for i in 0..number_of_headers {
                 this.in_context(DeserializeErrorPosition::TblHeaderEntry { entry_number: i }, |this| {
                     let hdr = this.read_header_name()?.to_owned(); // TODO: clone an existing known header (if there is one)
