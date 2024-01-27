@@ -122,7 +122,8 @@ fn get_files_paths() -> Option<RecentFilesPaths> {
         "huellenoperator", // organization
         "tbled",           // application
     )?;
-    let base: &Utf8Path = project_dirs.state_dir()?.try_into().ok()?;
+    let base: &Utf8Path = project_dirs.data_local_dir().try_into().ok()?;
+    log::debug!("cache dir: {base}");
     std::fs::create_dir_all(&base).ok()?;
     Some(RecentFilesPaths {
         schemas_v1: base.join("recent_schemas_v1.dat"),
