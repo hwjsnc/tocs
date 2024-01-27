@@ -3,6 +3,7 @@
 
 mod filter;
 mod misc;
+mod recent_files;
 mod select_cols;
 mod table_widget;
 mod tblstate;
@@ -37,6 +38,7 @@ pub enum SchemaVersion {
     CS5,
     CustomV1,
     CustomV2,
+    RecentV1(usize), // index into the "most recent schemas (v1) queue"
 }
 
 #[derive(Clone, Debug)]
@@ -99,10 +101,12 @@ pub struct AppData {
     selected_attributes: std::collections::HashMap<tocs::tbl::Header, indexmap::IndexSet<tocs::tbl::Attribute>>, // which attributes should be shown in which order for a given header?
     warnings: std::vec::Vec<tocs::tbl::DeserializeError>,
     //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
+    recent_schemas_v1: recent_files::RecentFiles,
 }
 
 struct App {
     app: fltk::app::App,
+    sender: fltk::app::Sender<Msg>,
     receiver: fltk::app::Receiver<Msg>,
     widgets: Widgets,
     state: AppData,
@@ -227,6 +231,10 @@ impl App {
             Msg::SetVersion(SchemaVersion::CustomV2),
         );
 
+        menu.add("&Schemas/Import/Recent (CS1)\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
+
+        menu.add("&Schemas/Import/Recent (CS2 onward)\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
+
         menu.add_emit(
             "&File/Load tbl with current schema\t",
             fltk::enums::Shortcut::None,
@@ -348,7 +356,7 @@ impl App {
         flex.fixed(&flex_row, 26);
 
         let mut table = table_widget::FilteredTable::new();
-        table.emit(sender, Msg::TableEvent);
+        table.emit(sender.clone(), Msg::TableEvent);
 
         flex.end();
 
@@ -358,6 +366,7 @@ impl App {
 
         let mut this = Self {
             app,
+            sender,
             receiver,
             widgets: Widgets {
                 menu,
@@ -369,6 +378,9 @@ impl App {
             state,
         };
 
+        this.update_recent_schemas_v1_menu();
+        this.update_recent_schemas_v2_menu();
+        this.update_recent_tbl_menu();
         this.update_after_file_reload();
 
         this
@@ -397,6 +409,7 @@ impl App {
                     tbl_version,
                     path,
                     warnings,
+                    recent_schemas_v1: _,
                 } = &mut self.state;
                 tbl_history.clear_all();
                 selected_attributes.clear();
@@ -450,6 +463,7 @@ impl App {
                             }
                         }
                     }
+                    SchemaVersion::RecentV1(_) => todo!(),
                 };
                 self.state.tbl_version = new_version;
                 self.state.tbl_history.clear_all(); // we don't want a file incompatible with the new schema
@@ -462,7 +476,7 @@ impl App {
                     SchemaVersion::CS3 => ("cs3.json", &tocs::tbl::schemas::CS3),
                     SchemaVersion::CS4 => ("cs4.json", &tocs::tbl::schemas::CS4),
                     SchemaVersion::CS5 => ("cs5.json", &tocs::tbl::schemas::CS5),
-                    SchemaVersion::CustomV1 | SchemaVersion::CustomV2 => unreachable!("not present in menu"),
+                    SchemaVersion::CustomV1 | SchemaVersion::CustomV2 | SchemaVersion::RecentV1(_) => unreachable!("not present in menu"),
                 };
                 let Some(path) = misc::save_file_dialog("json", name) else { return };
                 match misc::export_schemas(&path, schemas) {
@@ -543,6 +557,7 @@ impl App {
                     tbl_version,
                     path,
                     warnings,
+                    recent_schemas_v1: _,
                 } = &mut self.state;
                 tbl_history.clear_all();
                 selected_attributes.clear();
@@ -650,6 +665,42 @@ impl App {
         }
     }
 
+    fn update_recent_schemas_v1_menu(&mut self) {
+        let i = self.widgets.menu.find_index("&Schemas/Import/Recent (CS1)\t");
+        self.widgets.menu.clear_submenu(i).unwrap();
+        let mut recent_menu = self.widgets.menu.at(i).unwrap();
+        if self.state.recent_schemas_v1.is_empty() {
+            recent_menu.deactivate();
+        } else {
+            recent_menu.activate();
+        }
+        drop(recent_menu);
+        for (i, path) in self.state.recent_schemas_v1.iter().enumerate() {
+            self.widgets.menu.add_emit(
+                &format!("&Schemas/Import/Recent (CS1)\t/{} (DO NOT CLICK)", misc::QuotedFltkMenuLabel::new(path.as_str())),
+                fltk::enums::Shortcut::None,
+                fltk::menu::MenuFlag::Normal,
+                self.sender.clone(),
+                Msg::SetVersion(SchemaVersion::RecentV1(i)),
+            );
+        }
+    }
+
+    fn update_recent_schemas_v2_menu(&mut self) {
+        let i = self.widgets.menu.find_index("&Schemas/Import/Recent (CS2 onward)\t");
+        let mut recent_menu = self.widgets.menu.at(i).unwrap();
+        recent_menu.deactivate();
+    }
+
+    fn update_recent_tbl_menu(&mut self) {
+        // TODO
+    }
+
+    fn update_to_schemas_v1(&mut self) {
+        // TODO: update menu
+        // TODO: save
+    }
+
     fn update_table(&mut self) {
         // get active entry type from header selector
         self.state.active_entry_type = self.widgets.header_selector.value().and_then(|hdr| {
@@ -687,6 +738,7 @@ impl App {
             path: _,
             tbl_history,
             warnings,
+            recent_schemas_v1: _,
         } = &mut self.state;
 
         // if there are warnings, show button to display them
@@ -789,6 +841,7 @@ fn main() {
                     tbl_version: version,
                     path,
                     warnings: vec![],
+                    recent_schemas_v1: recent_files::load_recent_schemas_v1(),
                 },
                 tocs::tbl::ReadTblResult::Warn { tbl, warnings } => AppData {
                     tbl_history: TblStateHistory::new(tbl),
@@ -797,6 +850,7 @@ fn main() {
                     tbl_version: version,
                     path,
                     warnings,
+                    recent_schemas_v1: recent_files::load_recent_schemas_v1(),
                 },
                 tocs::tbl::ReadTblResult::Err(e) => {
                     log::error!("Unable to read file: {e}");
@@ -815,6 +869,7 @@ fn main() {
             tbl_version: tocs::tbl::Version::CS1En,
             path: Utf8PathBuf::new(),
             warnings: vec![],
+            recent_schemas_v1: recent_files::load_recent_schemas_v1(),
         },
     };
 

@@ -139,3 +139,28 @@ pub fn schema_for_header<'a>(header: &Header, schemas: &'a indexmap::IndexMap<He
     };
     schemas.get(header).unwrap_or(&GENERIC)
 }
+
+pub struct QuotedFltkMenuLabel<'a> {
+    raw: &'a str,
+}
+
+impl<'a> QuotedFltkMenuLabel<'a> {
+    pub fn new(s: &'a str) -> Self {
+        Self { raw: s }
+    }
+}
+
+impl<'a> std::fmt::Display for QuotedFltkMenuLabel<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use std::fmt::Write as _;
+
+        const SPECIAL: [char; 4] = ['\\', '/', '&', '_'];
+        for c in self.raw.chars() {
+            if SPECIAL.contains(&c) {
+                f.write_char('\\')?;
+            }
+            f.write_char(c)?;
+        }
+        Ok(())
+    }
+}

@@ -13,6 +13,7 @@ lto = true
 camino = "1.1.6"
 clap = { version = "4.0.26", features = ["derive"] }
 csv = { version = "1.1.6" }
+directories = { version = "5.0.1" }
 indexmap = "1.9.2"
 ecow = { version = "0.1.2", default-features = false }
 fltk = { version = "1.4.11", features = ["no-images", "no-pango"] }
