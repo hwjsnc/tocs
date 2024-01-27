@@ -412,58 +412,11 @@ impl App {
         log::debug!("update: {msg:?}");
         match msg {
             Some(Msg::LoadFile) => {
-                // open a file browser dialog to select the file
-                let Some(new_path) = misc::load_file_dialog("tbl") else { return };
-                // reset state related to tbl data
-                let AppData {
-                    tbl_history,
-                    active_entry_type: _, // handled by update_after_file_reload
-                    selected_attributes,
-                    tbl_version,
-                    path,
-                    warnings,
-                    recent_schemas_v1: _,
-                    recent_schemas_v2: _,
-                    recent_tbls: _,
-                } = &mut self.state;
-                tbl_history.clear_all();
-                selected_attributes.clear();
-                warnings.clear();
-                // try loading data from file
-                match tocs::tbl::read_file_with_fixes(&new_path, tbl_version) {
-                    tocs::tbl::ReadTblResult::Ok(tbl) | tocs::tbl::ReadTblResult::KnownFixApplied(tbl) => {
-                        *tbl_history = TblStateHistory::new(tbl);
-                        *path = new_path;
-                    }
-                    tocs::tbl::ReadTblResult::Warn { tbl, warnings: w } => {
-                        *warnings = w;
-                        *tbl_history = TblStateHistory::new(tbl);
-                        *path = new_path;
-                        // if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
-                        let schemas = tbl_version.schemas();
-                        if tbl_history.all_current_rows().all(|entry| schemas.contains_key(&entry.header))
-                            && warnings.iter().all(|w| matches!(w.detail, tocs::tbl::DeserializeErrorDetail::EntryDataLengthMismatch { .. }))
-                        {
-                            // it's fine
-                        } else {
-                            fltk::dialog::alert_default(
-                                "Warning: Some errors/inconsistencies in the file were detected. Please look at them under the Warnings menu option and ensure that they are harmless",
-                            );
-                        }
-                    }
-                    tocs::tbl::ReadTblResult::Err(e) => {
-                        fltk::dialog::alert_default(&format!("error loading file: {}", e));
-                        *path = Utf8PathBuf::new();
-                    }
+                if let Some(path) = misc::load_file_dialog("tbl") {
+                    self.load_tbl_from_file(path);
                 }
-                self.state.recent_tbls.mark_as_updated(&self.state.path);
-                recent_files::save_recent_tbls(&self.state.recent_tbls);
-                self.update_after_file_reload();
-                self.update_menu_recent_tbls();
             }
-            Some(Msg::LoadRecentTbl(_)) => {
-                todo!()
-            }
+            Some(Msg::LoadRecentTbl(i)) => self.load_tbl_from_file(self.state.recent_tbls.get(i).unwrap().to_owned()),
             Some(Msg::SetBuiltinVersion(v)) => {
                 self.state.tbl_version = match v {
                     BuiltinSchemaVersion::CS1En => tocs::tbl::Version::CS1En,
@@ -770,7 +723,7 @@ impl App {
         drop(recent_menu);
         for (i, path) in self.state.recent_tbls.iter().enumerate() {
             self.widgets.menu.add_emit(
-                &format!("&File/Load recently used tbl\t/{} (DO NOT USE YET)", misc::QuotedFltkMenuLabel::new(path.as_str())),
+                &format!("&File/Load recently used tbl\t/{}", misc::QuotedFltkMenuLabel::new(path.as_str())),
                 fltk::enums::Shortcut::None,
                 fltk::menu::MenuFlag::Normal,
                 self.sender.clone(),
@@ -881,6 +834,53 @@ impl App {
             redo_item.set_label("Redo\t");
             redo_item.deactivate();
         }
+    }
+
+    fn load_tbl_from_file(&mut self, new_path: Utf8PathBuf) {
+        // reset state related to tbl data
+        let AppData {
+            tbl_history,
+            active_entry_type: _, // handled by update_after_file_reload
+            selected_attributes,
+            tbl_version,
+            path,
+            warnings,
+            recent_schemas_v1: _,
+            recent_schemas_v2: _,
+            recent_tbls: _,
+        } = &mut self.state;
+        tbl_history.clear_all();
+        selected_attributes.clear();
+        warnings.clear();
+        // try loading data from file
+        match tocs::tbl::read_file_with_fixes(&new_path, tbl_version) {
+            tocs::tbl::ReadTblResult::Ok(tbl) | tocs::tbl::ReadTblResult::KnownFixApplied(tbl) => {
+                *tbl_history = TblStateHistory::new(tbl);
+                *path = new_path;
+            }
+            tocs::tbl::ReadTblResult::Warn { tbl, warnings: w } => {
+                *warnings = w;
+                *tbl_history = TblStateHistory::new(tbl);
+                *path = new_path;
+                // if errors are harmless (e.g. all length bytes & all headers are in the schema), don't alert
+                let schemas = tbl_version.schemas();
+                if tbl_history.all_current_rows().all(|entry| schemas.contains_key(&entry.header))
+                    && warnings.iter().all(|w| matches!(w.detail, tocs::tbl::DeserializeErrorDetail::EntryDataLengthMismatch { .. }))
+                {
+                    // it's fine
+                } else {
+                    fltk::dialog::alert_default("Warning: Some errors/inconsistencies in the file were detected. Please look at them under the Warnings menu option and ensure that they are harmless");
+                }
+            }
+            tocs::tbl::ReadTblResult::Err(e) => {
+                fltk::dialog::alert_default(&format!("error loading file: {}", e));
+                *path = Utf8PathBuf::new();
+            }
+        }
+        self.state.recent_tbls.mark_as_updated(&self.state.path);
+        recent_files::save_recent_tbls(&self.state.recent_tbls);
+        self.update_after_file_reload();
+        self.update_menu_recent_tbls();
     }
 
     fn save_tbl_to_file(&mut self, path: Option<Utf8PathBuf>) {
