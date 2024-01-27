@@ -27,6 +27,10 @@ impl RecentFiles {
         }
     }
 
+    pub fn get(&self, i: usize) -> Option<&Utf8Path> {
+        self.paths.get(i).map(|path| path.as_ref())
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Utf8Path> {
         self.paths.iter().map(|path| path.as_ref())
     }

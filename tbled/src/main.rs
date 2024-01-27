@@ -30,23 +30,29 @@ struct CliArgs {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SchemaVersion {
+pub enum BuiltinSchemaVersion {
     CS1En,
     CS2En,
     CS3,
     CS4,
     CS5,
-    CustomV1,
-    CustomV2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CustomSchemaVersion {
+    V1,              // CS1
+    V2,              // CS2-5
     RecentV1(usize), // index into the "most recent schemas (v1) queue"
 }
 
 #[derive(Clone, Debug)]
 enum Msg {
-    /// user wants to change schemas
-    SetVersion(SchemaVersion),
+    /// user wants to change to a set of builtin schemas
+    SetBuiltinVersion(BuiltinSchemaVersion),
+    /// user wants to import custom schemas
+    SetCustomVersion(CustomSchemaVersion),
     /// user wants to export a builtin schema
-    ExportSchemas(SchemaVersion),
+    ExportSchemas(BuiltinSchemaVersion),
     /// user wants to load a file
     LoadFile,
     /// user wants to save to the same file
@@ -140,7 +146,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersion(SchemaVersion::CS1En),
+            Msg::SetBuiltinVersion(BuiltinSchemaVersion::CS1En),
         );
 
         menu.add_emit(
@@ -148,7 +154,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersion(SchemaVersion::CS2En),
+            Msg::SetBuiltinVersion(BuiltinSchemaVersion::CS2En),
         );
 
         menu.add_emit(
@@ -156,7 +162,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersion(SchemaVersion::CS3),
+            Msg::SetBuiltinVersion(BuiltinSchemaVersion::CS3),
         );
 
         menu.add_emit(
@@ -164,7 +170,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersion(SchemaVersion::CS4),
+            Msg::SetBuiltinVersion(BuiltinSchemaVersion::CS4),
         );
 
         menu.add_emit(
@@ -172,7 +178,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersion(SchemaVersion::CS5),
+            Msg::SetBuiltinVersion(BuiltinSchemaVersion::CS5),
         );
 
         menu.add_emit(
@@ -180,7 +186,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::ExportSchemas(SchemaVersion::CS1En),
+            Msg::ExportSchemas(BuiltinSchemaVersion::CS1En),
         );
 
         menu.add_emit(
@@ -188,7 +194,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::ExportSchemas(SchemaVersion::CS2En),
+            Msg::ExportSchemas(BuiltinSchemaVersion::CS2En),
         );
 
         menu.add_emit(
@@ -196,7 +202,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::ExportSchemas(SchemaVersion::CS3),
+            Msg::ExportSchemas(BuiltinSchemaVersion::CS3),
         );
 
         menu.add_emit(
@@ -204,7 +210,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::ExportSchemas(SchemaVersion::CS4),
+            Msg::ExportSchemas(BuiltinSchemaVersion::CS4),
         );
 
         menu.add_emit(
@@ -212,7 +218,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::ExportSchemas(SchemaVersion::CS5),
+            Msg::ExportSchemas(BuiltinSchemaVersion::CS5),
         );
 
         menu.add_emit(
@@ -220,7 +226,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersion(SchemaVersion::CustomV1),
+            Msg::SetCustomVersion(CustomSchemaVersion::V1),
         );
 
         menu.add_emit(
@@ -228,7 +234,7 @@ impl App {
             fltk::enums::Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             sender.clone(),
-            Msg::SetVersion(SchemaVersion::CustomV2),
+            Msg::SetCustomVersion(CustomSchemaVersion::V2),
         );
 
         menu.add("&Schemas/Import/Recent (CS1)\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
@@ -378,9 +384,9 @@ impl App {
             state,
         };
 
-        this.update_recent_schemas_v1_menu();
-        this.update_recent_schemas_v2_menu();
-        this.update_recent_tbl_menu();
+        this.update_menu_recent_schemas_v1();
+        this.update_menu_recent_schemas_v2();
+        this.update_menu_recent_tbls();
         this.update_after_file_reload();
 
         this
@@ -444,43 +450,67 @@ impl App {
                 // we need to update other ui elements
                 self.update_after_file_reload();
             }
-            Some(Msg::SetVersion(v)) => {
-                let new_version = match v {
-                    SchemaVersion::CS1En => tocs::tbl::Version::CS1En,
-                    SchemaVersion::CS2En => tocs::tbl::Version::CS2En,
-                    SchemaVersion::CS3 => tocs::tbl::Version::CS3,
-                    SchemaVersion::CS4 => tocs::tbl::Version::CS4,
-                    SchemaVersion::CS5 => tocs::tbl::Version::CS5,
-                    SchemaVersion::CustomV1 | SchemaVersion::CustomV2 => {
-                        let Some(path) = misc::load_file_dialog("json") else { return };
-                        match misc::import_schemas(&path) {
-                            Ok(schema) if v == SchemaVersion::CustomV1 => tocs::tbl::Version::V1(schema),
-                            Ok(schema) if v == SchemaVersion::CustomV2 => tocs::tbl::Version::V2(schema),
-                            Ok(_) => unreachable!(),
-                            Err(e) => {
-                                fltk::dialog::alert_default(&format!("error importing schema {}: {}", path, e));
-                                return;
-                            }
-                        }
-                    }
-                    SchemaVersion::RecentV1(_) => todo!(),
+            Some(Msg::SetBuiltinVersion(v)) => {
+                self.state.tbl_version = match v {
+                    BuiltinSchemaVersion::CS1En => tocs::tbl::Version::CS1En,
+                    BuiltinSchemaVersion::CS2En => tocs::tbl::Version::CS2En,
+                    BuiltinSchemaVersion::CS3 => tocs::tbl::Version::CS3,
+                    BuiltinSchemaVersion::CS4 => tocs::tbl::Version::CS4,
+                    BuiltinSchemaVersion::CS5 => tocs::tbl::Version::CS5,
                 };
-                self.state.tbl_version = new_version;
                 self.state.tbl_history.clear_all(); // we don't want a file incompatible with the new schema
+                self.update_after_file_reload();
+            }
+            Some(Msg::SetCustomVersion(v)) => {
+                let path = match v {
+                    CustomSchemaVersion::V1 | CustomSchemaVersion::V2 => {
+                        let Some(path) = misc::load_file_dialog("json") else { return };
+                        path
+                    }
+                    CustomSchemaVersion::RecentV1(i) => self.state.recent_schemas_v1.get(i).unwrap().to_owned(),
+                };
+                let raw_schemas = match misc::import_schemas(&path) {
+                    Ok(s) => s,
+                    Err(err) => {
+                        fltk::dialog::alert_default(&format!("error importing schema {path}: {err}"));
+                        return;
+                    }
+                };
+                match v {
+                    CustomSchemaVersion::V1 | CustomSchemaVersion::RecentV1(_) => {
+                        self.state.tbl_version = tocs::tbl::Version::V1(raw_schemas);
+                        self.state.recent_schemas_v1.mark_as_updated(&path);
+                        recent_files::save_recent_schemas_v1(&self.state.recent_schemas_v1);
+                        self.update_menu_recent_schemas_v1();
+                    }
+                    CustomSchemaVersion::V2 => {
+                        //| CustomSchemaVersion::RecentV2(_) => {
+                        todo!()
+                    }
+                }
+                self.state.tbl_history.clear_all();
                 self.update_after_file_reload();
             }
             Some(Msg::ExportSchemas(v)) => {
                 let (name, schemas): (&str, &tocs::tbl::Schemas) = match v {
-                    SchemaVersion::CS1En => ("cs1.json", &tocs::tbl::schemas::CS1),
-                    SchemaVersion::CS2En => ("cs2.json", &tocs::tbl::schemas::CS2),
-                    SchemaVersion::CS3 => ("cs3.json", &tocs::tbl::schemas::CS3),
-                    SchemaVersion::CS4 => ("cs4.json", &tocs::tbl::schemas::CS4),
-                    SchemaVersion::CS5 => ("cs5.json", &tocs::tbl::schemas::CS5),
-                    SchemaVersion::CustomV1 | SchemaVersion::CustomV2 | SchemaVersion::RecentV1(_) => unreachable!("not present in menu"),
+                    BuiltinSchemaVersion::CS1En => ("cs1.json", &tocs::tbl::schemas::CS1),
+                    BuiltinSchemaVersion::CS2En => ("cs2.json", &tocs::tbl::schemas::CS2),
+                    BuiltinSchemaVersion::CS3 => ("cs3.json", &tocs::tbl::schemas::CS3),
+                    BuiltinSchemaVersion::CS4 => ("cs4.json", &tocs::tbl::schemas::CS4),
+                    BuiltinSchemaVersion::CS5 => ("cs5.json", &tocs::tbl::schemas::CS5),
                 };
                 let Some(path) = misc::save_file_dialog("json", name) else { return };
                 match misc::export_schemas(&path, schemas) {
-                    Ok(()) => {} // ok
+                    Ok(()) => match v {
+                        BuiltinSchemaVersion::CS1En => {
+                            self.state.recent_schemas_v1.mark_as_updated(&path);
+                            recent_files::save_recent_schemas_v1(&self.state.recent_schemas_v1);
+                            self.update_menu_recent_schemas_v1();
+                        }
+                        _ => {
+                            todo!()
+                        }
+                    }, // ok
                     Err(e) => {
                         fltk::dialog::alert_default(&format!("error saving to {}: {:?}", path, e));
                     }
@@ -665,7 +695,7 @@ impl App {
         }
     }
 
-    fn update_recent_schemas_v1_menu(&mut self) {
+    fn update_menu_recent_schemas_v1(&mut self) {
         let i = self.widgets.menu.find_index("&Schemas/Import/Recent (CS1)\t");
         self.widgets.menu.clear_submenu(i).unwrap();
         let mut recent_menu = self.widgets.menu.at(i).unwrap();
@@ -677,28 +707,23 @@ impl App {
         drop(recent_menu);
         for (i, path) in self.state.recent_schemas_v1.iter().enumerate() {
             self.widgets.menu.add_emit(
-                &format!("&Schemas/Import/Recent (CS1)\t/{} (DO NOT CLICK)", misc::QuotedFltkMenuLabel::new(path.as_str())),
+                &format!("&Schemas/Import/Recent (CS1)\t/{}", misc::QuotedFltkMenuLabel::new(path.as_str())),
                 fltk::enums::Shortcut::None,
                 fltk::menu::MenuFlag::Normal,
                 self.sender.clone(),
-                Msg::SetVersion(SchemaVersion::RecentV1(i)),
+                Msg::SetCustomVersion(CustomSchemaVersion::RecentV1(i)),
             );
         }
     }
 
-    fn update_recent_schemas_v2_menu(&mut self) {
+    fn update_menu_recent_schemas_v2(&mut self) {
         let i = self.widgets.menu.find_index("&Schemas/Import/Recent (CS2 onward)\t");
         let mut recent_menu = self.widgets.menu.at(i).unwrap();
         recent_menu.deactivate();
     }
 
-    fn update_recent_tbl_menu(&mut self) {
+    fn update_menu_recent_tbls(&mut self) {
         // TODO
-    }
-
-    fn update_to_schemas_v1(&mut self) {
-        // TODO: update menu
-        // TODO: save
     }
 
     fn update_table(&mut self) {
