@@ -10,7 +10,7 @@ artifacts:
   - tocs/tbled/target/x86_64-pc-windows-gnu/release/tbled.exe
   - tocs/pkgtool/target/x86_64-pc-windows-gnu/release/pkgtool.exe
 tasks:
- - install-install-toolchain: |
+ - install-toolchain: |
     rustup install stable
     rustup target add x86_64-pc-windows-gnu
  - build-tbled: |
