@@ -56,6 +56,8 @@ enum Msg {
     ExportSchemas(BuiltinSchemaVersion),
     /// user wants to load a file
     LoadFile,
+    /// user wants to load a recently used tbl
+    LoadRecentTbl(usize),
     /// user wants to save to the same file
     SaveFile,
     /// user wants to save a file
@@ -103,13 +105,14 @@ struct Widgets {
 pub struct AppData {
     tbl_history: TblStateHistory,
     tbl_version: tocs::tbl::Version,
-    path: Utf8PathBuf,
+    path: Utf8PathBuf, // TODO: remove
     active_entry_type: Option<tocs::tbl::Header>,
     selected_attributes: std::collections::HashMap<tocs::tbl::Header, indexmap::IndexSet<tocs::tbl::Attribute>>, // which attributes should be shown in which order for a given header?
     warnings: std::vec::Vec<tocs::tbl::DeserializeError>,
     //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
     recent_schemas_v1: recent_files::RecentFiles,
     recent_schemas_v2: recent_files::RecentFiles,
+    recent_tbls: recent_files::RecentFiles,
 }
 
 struct App {
@@ -239,9 +242,9 @@ impl App {
             Msg::SetCustomVersion(CustomSchemaVersion::V2),
         );
 
-        menu.add("&Schemas/Import/Recent (CS1)\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
+        menu.add("&Schemas/Import/Recently used (CS1)\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
 
-        menu.add("&Schemas/Import/Recent (CS2 onward)\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
+        menu.add("&Schemas/Import/Recently used (CS2 onward)\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
 
         menu.add_emit(
             "&File/Load tbl with current schema\t",
@@ -250,6 +253,8 @@ impl App {
             sender.clone(),
             Msg::LoadFile,
         );
+
+        menu.add("&File/Load recently used tbl\t", fltk::enums::Shortcut::None, fltk::menu::MenuFlag::Submenu, |_| {});
 
         menu.add_emit("&File/Save\t", fltk::enums::Shortcut::Ctrl | 's', fltk::menu::MenuFlag::Normal, sender.clone(), Msg::SaveFile);
 
@@ -419,6 +424,7 @@ impl App {
                     warnings,
                     recent_schemas_v1: _,
                     recent_schemas_v2: _,
+                    recent_tbls: _,
                 } = &mut self.state;
                 tbl_history.clear_all();
                 selected_attributes.clear();
@@ -450,8 +456,13 @@ impl App {
                         *path = Utf8PathBuf::new();
                     }
                 }
-                // we need to update other ui elements
+                self.state.recent_tbls.mark_as_updated(&self.state.path);
+                recent_files::save_recent_tbls(&self.state.recent_tbls);
                 self.update_after_file_reload();
+                self.update_menu_recent_tbls();
+            }
+            Some(Msg::LoadRecentTbl(_)) => {
+                todo!()
             }
             Some(Msg::SetBuiltinVersion(v)) => {
                 self.state.tbl_version = match v {
@@ -597,6 +608,7 @@ impl App {
                     warnings,
                     recent_schemas_v1: _,
                     recent_schemas_v2: _,
+                    recent_tbls: _,
                 } = &mut self.state;
                 tbl_history.clear_all();
                 selected_attributes.clear();
@@ -705,7 +717,7 @@ impl App {
     }
 
     fn update_menu_recent_schemas_v1(&mut self) {
-        let i = self.widgets.menu.find_index("&Schemas/Import/Recent (CS1)\t");
+        let i = self.widgets.menu.find_index("&Schemas/Import/Recently used (CS1)\t");
         self.widgets.menu.clear_submenu(i).unwrap();
         let mut recent_menu = self.widgets.menu.at(i).unwrap();
         if self.state.recent_schemas_v1.is_empty() {
@@ -716,7 +728,7 @@ impl App {
         drop(recent_menu);
         for (i, path) in self.state.recent_schemas_v1.iter().enumerate() {
             self.widgets.menu.add_emit(
-                &format!("&Schemas/Import/Recent (CS1)\t/{}", misc::QuotedFltkMenuLabel::new(path.as_str())),
+                &format!("&Schemas/Import/Recently used (CS1)\t/{}", misc::QuotedFltkMenuLabel::new(path.as_str())),
                 fltk::enums::Shortcut::None,
                 fltk::menu::MenuFlag::Normal,
                 self.sender.clone(),
@@ -726,7 +738,7 @@ impl App {
     }
 
     fn update_menu_recent_schemas_v2(&mut self) {
-        let i = self.widgets.menu.find_index("&Schemas/Import/Recent (CS2 onward)\t");
+        let i = self.widgets.menu.find_index("&Schemas/Import/Recently used (CS2 onward)\t");
         self.widgets.menu.clear_submenu(i).unwrap();
         let mut recent_menu = self.widgets.menu.at(i).unwrap();
         if self.state.recent_schemas_v2.is_empty() {
@@ -737,7 +749,7 @@ impl App {
         drop(recent_menu);
         for (i, path) in self.state.recent_schemas_v2.iter().enumerate() {
             self.widgets.menu.add_emit(
-                &format!("&Schemas/Import/Recent (CS2 onward)\t/{}", misc::QuotedFltkMenuLabel::new(path.as_str())),
+                &format!("&Schemas/Import/Recently used (CS2 onward)\t/{}", misc::QuotedFltkMenuLabel::new(path.as_str())),
                 fltk::enums::Shortcut::None,
                 fltk::menu::MenuFlag::Normal,
                 self.sender.clone(),
@@ -747,7 +759,24 @@ impl App {
     }
 
     fn update_menu_recent_tbls(&mut self) {
-        // TODO
+        let i = self.widgets.menu.find_index("&File/Load recently used tbl\t");
+        self.widgets.menu.clear_submenu(i).unwrap();
+        let mut recent_menu = self.widgets.menu.at(i).unwrap();
+        if self.state.recent_tbls.is_empty() {
+            recent_menu.deactivate();
+        } else {
+            recent_menu.activate();
+        }
+        drop(recent_menu);
+        for (i, path) in self.state.recent_tbls.iter().enumerate() {
+            self.widgets.menu.add_emit(
+                &format!("&File/Load recently used tbl\t/{} (DO NOT USE YET)", misc::QuotedFltkMenuLabel::new(path.as_str())),
+                fltk::enums::Shortcut::None,
+                fltk::menu::MenuFlag::Normal,
+                self.sender.clone(),
+                Msg::LoadRecentTbl(i),
+            );
+        }
     }
 
     fn update_table(&mut self) {
@@ -789,6 +818,7 @@ impl App {
             warnings,
             recent_schemas_v1: _,
             recent_schemas_v2: _,
+            recent_tbls: _,
         } = &mut self.state;
 
         // if there are warnings, show button to display them
@@ -865,6 +895,9 @@ impl App {
             Ok(_) => {
                 if let Some(new_path) = path {
                     self.state.path = new_path;
+                    self.state.recent_tbls.mark_as_updated(&self.state.path);
+                    self.update_menu_recent_tbls();
+                    recent_files::save_recent_tbls(&self.state.recent_tbls);
                 }
             }
             Err(e) => {
@@ -893,6 +926,7 @@ fn main() {
                     warnings: vec![],
                     recent_schemas_v1: recent_files::load_recent_schemas_v1(),
                     recent_schemas_v2: recent_files::load_recent_schemas_v2(),
+                    recent_tbls: recent_files::load_recent_tbls(),
                 },
                 tocs::tbl::ReadTblResult::Warn { tbl, warnings } => AppData {
                     tbl_history: TblStateHistory::new(tbl),
@@ -903,6 +937,7 @@ fn main() {
                     warnings,
                     recent_schemas_v1: recent_files::load_recent_schemas_v1(),
                     recent_schemas_v2: recent_files::load_recent_schemas_v2(),
+                    recent_tbls: recent_files::load_recent_tbls(),
                 },
                 tocs::tbl::ReadTblResult::Err(e) => {
                     log::error!("Unable to read file: {e}");
@@ -923,6 +958,7 @@ fn main() {
             warnings: vec![],
             recent_schemas_v1: recent_files::load_recent_schemas_v1(),
             recent_schemas_v2: recent_files::load_recent_schemas_v2(),
+            recent_tbls: recent_files::load_recent_tbls(),
         },
     };
 
