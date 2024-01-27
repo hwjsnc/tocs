@@ -150,3 +150,11 @@ pub fn load_recent_schemas_v1() -> RecentFiles {
 pub fn save_recent_schemas_v1(recent_files: &RecentFiles) -> Option<()> {
     PATHS.as_ref().and_then(|p| recent_files.write_to_file(&p.schemas_v1).ok())
 }
+
+pub fn load_recent_schemas_v2() -> RecentFiles {
+    load_file(PATHS.as_ref().map(|p| p.schemas_v2.as_ref()))
+}
+
+pub fn save_recent_schemas_v2(recent_files: &RecentFiles) -> Option<()> {
+    PATHS.as_ref().and_then(|p| recent_files.write_to_file(&p.schemas_v2).ok())
+}

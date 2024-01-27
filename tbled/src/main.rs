@@ -43,6 +43,7 @@ pub enum CustomSchemaVersion {
     V1,              // CS1
     V2,              // CS2-5
     RecentV1(usize), // index into the "most recent schemas (v1) queue"
+    RecentV2(usize), // same but v2
 }
 
 #[derive(Clone, Debug)]
@@ -108,6 +109,7 @@ pub struct AppData {
     warnings: std::vec::Vec<tocs::tbl::DeserializeError>,
     //edited: std::collections::HashSet<(i32, i32)>, // edited since last save
     recent_schemas_v1: recent_files::RecentFiles,
+    recent_schemas_v2: recent_files::RecentFiles,
 }
 
 struct App {
@@ -416,6 +418,7 @@ impl App {
                     path,
                     warnings,
                     recent_schemas_v1: _,
+                    recent_schemas_v2: _,
                 } = &mut self.state;
                 tbl_history.clear_all();
                 selected_attributes.clear();
@@ -468,6 +471,7 @@ impl App {
                         path
                     }
                     CustomSchemaVersion::RecentV1(i) => self.state.recent_schemas_v1.get(i).unwrap().to_owned(),
+                    CustomSchemaVersion::RecentV2(i) => self.state.recent_schemas_v2.get(i).unwrap().to_owned(),
                 };
                 let raw_schemas = match misc::import_schemas(&path) {
                     Ok(s) => s,
@@ -483,9 +487,11 @@ impl App {
                         recent_files::save_recent_schemas_v1(&self.state.recent_schemas_v1);
                         self.update_menu_recent_schemas_v1();
                     }
-                    CustomSchemaVersion::V2 => {
-                        //| CustomSchemaVersion::RecentV2(_) => {
-                        todo!()
+                    CustomSchemaVersion::V2 | CustomSchemaVersion::RecentV2(_) => {
+                        self.state.tbl_version = tocs::tbl::Version::V2(raw_schemas);
+                        self.state.recent_schemas_v2.mark_as_updated(&path);
+                        recent_files::save_recent_schemas_v2(&self.state.recent_schemas_v2);
+                        self.update_menu_recent_schemas_v2();
                     }
                 }
                 self.state.tbl_history.clear_all();
@@ -508,11 +514,13 @@ impl App {
                             self.update_menu_recent_schemas_v1();
                         }
                         _ => {
-                            todo!()
+                            self.state.recent_schemas_v2.mark_as_updated(&path);
+                            recent_files::save_recent_schemas_v2(&self.state.recent_schemas_v2);
+                            self.update_menu_recent_schemas_v2();
                         }
                     }, // ok
                     Err(e) => {
-                        fltk::dialog::alert_default(&format!("error saving to {}: {:?}", path, e));
+                        fltk::dialog::alert_default(&format!("error saving to {path}: {e:?}"));
                     }
                 }
             }
@@ -588,6 +596,7 @@ impl App {
                     path,
                     warnings,
                     recent_schemas_v1: _,
+                    recent_schemas_v2: _,
                 } = &mut self.state;
                 tbl_history.clear_all();
                 selected_attributes.clear();
@@ -718,8 +727,23 @@ impl App {
 
     fn update_menu_recent_schemas_v2(&mut self) {
         let i = self.widgets.menu.find_index("&Schemas/Import/Recent (CS2 onward)\t");
+        self.widgets.menu.clear_submenu(i).unwrap();
         let mut recent_menu = self.widgets.menu.at(i).unwrap();
-        recent_menu.deactivate();
+        if self.state.recent_schemas_v2.is_empty() {
+            recent_menu.deactivate();
+        } else {
+            recent_menu.activate();
+        }
+        drop(recent_menu);
+        for (i, path) in self.state.recent_schemas_v2.iter().enumerate() {
+            self.widgets.menu.add_emit(
+                &format!("&Schemas/Import/Recent (CS2 onward)\t/{}", misc::QuotedFltkMenuLabel::new(path.as_str())),
+                fltk::enums::Shortcut::None,
+                fltk::menu::MenuFlag::Normal,
+                self.sender.clone(),
+                Msg::SetCustomVersion(CustomSchemaVersion::RecentV2(i)),
+            );
+        }
     }
 
     fn update_menu_recent_tbls(&mut self) {
@@ -764,6 +788,7 @@ impl App {
             tbl_history,
             warnings,
             recent_schemas_v1: _,
+            recent_schemas_v2: _,
         } = &mut self.state;
 
         // if there are warnings, show button to display them
@@ -867,6 +892,7 @@ fn main() {
                     path,
                     warnings: vec![],
                     recent_schemas_v1: recent_files::load_recent_schemas_v1(),
+                    recent_schemas_v2: recent_files::load_recent_schemas_v2(),
                 },
                 tocs::tbl::ReadTblResult::Warn { tbl, warnings } => AppData {
                     tbl_history: TblStateHistory::new(tbl),
@@ -876,6 +902,7 @@ fn main() {
                     path,
                     warnings,
                     recent_schemas_v1: recent_files::load_recent_schemas_v1(),
+                    recent_schemas_v2: recent_files::load_recent_schemas_v2(),
                 },
                 tocs::tbl::ReadTblResult::Err(e) => {
                     log::error!("Unable to read file: {e}");
@@ -895,6 +922,7 @@ fn main() {
             path: Utf8PathBuf::new(),
             warnings: vec![],
             recent_schemas_v1: recent_files::load_recent_schemas_v1(),
+            recent_schemas_v2: recent_files::load_recent_schemas_v2(),
         },
     };
 
