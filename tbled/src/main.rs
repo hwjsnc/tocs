@@ -875,6 +875,7 @@ impl App {
             tocs::tbl::ReadTblResult::Err(e) => {
                 fltk::dialog::alert_default(&format!("error loading file: {}", e));
                 *path = Utf8PathBuf::new();
+                return;
             }
         }
         self.state.recent_tbls.mark_as_updated(&self.state.path);
