@@ -124,7 +124,7 @@ fn get_files_paths() -> Option<RecentFilesPaths> {
     )?;
     let base: &Utf8Path = project_dirs.data_local_dir().try_into().ok()?;
     log::debug!("cache dir: {base}");
-    std::fs::create_dir_all(&base).ok()?;
+    std::fs::create_dir_all(base).ok()?;
     Some(RecentFilesPaths {
         schemas_v1: base.join("recent_schemas_v1.dat"),
         schemas_v2: base.join("recent_schemas_v2.dat"),
