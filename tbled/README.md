@@ -44,24 +44,21 @@ If you want to save your changes, select "Save" to overwrite the current file or
 
 ![A screenshot of `tbled` in action. Some UI elements are labeled](screenshot.png)
 
-You can also use the CSV import/export function for editing:
+You can also use the JSON import/export function for editing:
 
-- Load a .tbl, export a table (all entries with a given header) to CSV
-- Edit the CSV in your favourite spreadsheet editor
-- Import the updated CSV
+- Load a .tbl, export the file to JSON
+- Edit the JSON with your favourite tool
+- Import the updated JSON
 - Save the updated .tbl file
 
-When importing a CSV, the order of .tbl entries may change relative to the entries that have a different header.
-In a few `.tbl` files (e.g. `t_mstqrt.tbl` and `t_orb.tbl`) this can cause errors!
-Do not use the CSV import functionality for these files.
-
-You can also use JSON import/export.
-This will import/export all tbl entries (not restricted to one entry type) and preserve their order.
 Only use JSON files for short-term editing, not as a long-term store.
 The JSON format will change every time the builtin schema changes.
-I will not provide any way to upgrade.
+There is no way to upgrade.
 
-In addition to JSON import/export I plan to redo the UI to expose the order of tbl entries in a future version.
+You can export and import single tables (entries with the same header) to/from CSV.
+However when doing this, the order of entries may change relative to the entries that have a different header.
+In a few `.tbl` files (e.g. `t_mstqrt.tbl` and `t_orb.tbl`) this can cause errors!
+CSV support will likely be removed in a future version.
 
 Search / row filters
 --------------------
@@ -91,7 +88,7 @@ Custom schemas
 The format for custom schemas is a subset of JSON.
 The recommended way to make custom schemas is to export one of the builtins via the "Schemas" menu, edit the file, and then load the edited Schemas from the "Schemas" menu.
 The exact format is not documented, but it should be easy enough to figure out.
-If you find out something about fields which are unknown/opaque in the builtin schemas, do let me know so I can amend the builtins.
+If you find out something about fields which are unknown/opaque in the builtin schemas, consider sharing your findings.
 
 
 Warnings
@@ -108,11 +105,13 @@ If there are warnings when loading files that have previously been written with 
 Releases (downloads & changelogs)
 ---------------------------------
 
-### v2.0 (planned)
+### v2.0 (on hold)
+
+development is on hold indefinitely.
 
 - planned: new UI that allows proper editing of tbl files with interspersed entry types
 - planned: redo JSON stuff without `serde_json`
-- planned: drop CSV?
+- planned: drop CSV
 
 ### [v1.0](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0/tbled-v1.0.exe)
 
@@ -159,7 +158,7 @@ Releases (downloads & changelogs)
   - allows hiding and reordering columns
 - Better looking table, monospaced font for numeric and hex data
 
-### [v0.4](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.4/tbled-v0.4.exe)
+### v0.4
 
 - warning popup will not be shown anymore in cases where the warnings are very minor
 - fixed a bug where "Save As" would overwrite the wrong file
@@ -168,17 +167,17 @@ Releases (downloads & changelogs)
 - cleanup of code used to read/write and related code
 - CSV import
 
-### [v0.3.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.3.1/tbled-v0.3.1.exe)
+### v0.3.1
 
 - Fixed a bug that prevented saving files
 
-### [v0.3](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.3/tbled-v0.3.exe):
+### v0.3
 
 - schemas for CS4
 - improved handling of slightly-inconsistent files
 - improved warning reporting
 
-### [v0.2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.2/tbled-v0.2.exe):
+### v0.2
 
 - improved UI
 - improved performance
@@ -188,6 +187,6 @@ Releases (downloads & changelogs)
 - CSV export
 - allow duplicating & removing entries
 
-### [v0.1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.1/tbled.exe):
+### v0.1
 
 - initial public version

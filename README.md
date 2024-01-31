@@ -3,6 +3,8 @@ trails of corroded steel
 
 a rusty toolbox for handling data from the trails of cold steel games.
 
+development is on hold indefinitely.
+
 for an introduction to modding trails games, see https://github.com/Trails-Research-Group
 
 overview
