@@ -36,9 +36,9 @@ Related projects / information
 - [Description of pka file structure by CeruleanSky](https://github.com/Sewer56/Sen-no-Kiseki-PKG-Sharp/pull/4/files)
 - [Discussion of asset compression by Durante](https://steamcommunity.com/games/991270/announcements/detail/1806446683762590792)
 
-Releases (downloads & changelogs)
----------------------------------
+Releases & changelogs
+---------------------
 
-### [v1.0.0](https://git.sr.ht/~quf/tocs/refs/download/pkgtool-v1.0.0/pkgtool-v1.0.0.exe)
+### v1.0.0
 
 - initial public version

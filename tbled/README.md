@@ -102,8 +102,10 @@ If there are warnings, it is your responsibility to check every warning and deci
 
 If there are warnings when loading files that have previously been written with this tool, that's a bug (unless you edited a field with hex content and changed its length).
 
-Releases (downloads & changelogs)
----------------------------------
+Releases & changelogs
+---------------------
+
+For releases, see https://github.com/hwjsnc/tocs/releases/.
 
 ### v2.0 (on hold)
 
@@ -113,13 +115,13 @@ development is on hold indefinitely.
 - planned: redo JSON stuff without `serde_json`
 - planned: drop CSV
 
-### [v1.0](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0/tbled-v1.0.exe)
+### v1.0
 
 - support loading from the most recently used schema and tbl files
 - dropped support for non-UTF-8 paths
 - minor changes to schemas
 
-###  [v1.0-rc4](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc4/tbled-v1.0-rc4.exe)
+### v1.0-rc4
 
 - improved schemas for CS2
 - fixed a crash condition that may occur when editing a non-existent cell
@@ -127,15 +129,15 @@ development is on hold indefinitely.
 - JSON import/export for tbl files
 - simplified and improved parser code
 
-### [v1.0-rc3](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc3/tbled-v1.0-rc3.exe)
+### v1.0-rc3
 
 - improved schemas for every game
 
-### [v1.0-rc2](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc2/tbled-v1.0-rc2.exe)
+### v1.0-rc2
 
 - Preliminary support for Trails into Reverie
 
-### [v1.0-rc1](https://git.sr.ht/~quf/tocs/refs/download/tbled-v1.0-rc1/tbled-v1.0-rc1.exe)
+### v1.0-rc1
 
 - Warning: This release has not been tested as thoroughly as the others.
 - Show warning dialog automatically (if there are warnings) when a file is loaded.
@@ -146,7 +148,7 @@ development is on hold indefinitely.
   - allow restricting substring search to a single attribute
   - add comparison search (specific attribute value has to equal/exceed/subceed search value)
 
-### [v0.5](https://git.sr.ht/~quf/tocs/refs/download/tbled-v0.5/tbled-v0.5.exe)
+### v0.5
 
 - Reduced size of the release binary
 - Added tooltips to UI elements whose function isn't immediately obvious
